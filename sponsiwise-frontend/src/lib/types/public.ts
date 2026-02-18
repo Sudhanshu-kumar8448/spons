@@ -56,6 +56,13 @@ export interface PublicCompany {
     sponsored_events?: PublicEvent[];
 }
 
+export interface PublicCompaniesResponse {
+    data: PublicCompany[];
+    total: number;
+    page: number;
+    page_size: number;
+}
+
 // ─── Platform Stats ────────────────────────────────────────────────────
 
 export interface PlatformStats {

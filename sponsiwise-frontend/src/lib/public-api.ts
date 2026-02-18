@@ -2,6 +2,7 @@ import { ApiError } from "@/lib/api-client";
 import type {
   PlatformStats,
   PublicCompany,
+  PublicCompaniesResponse,
   PublicEvent,
   PublicEventsResponse,
 } from "@/lib/types/public";
@@ -73,6 +74,26 @@ export async function fetchPublicEventBySlug(
 
 export async function fetchPublicCompany(slug: string): Promise<PublicCompany> {
   return publicFetch<PublicCompany>(`/public/companies/${slug}`);
+}
+
+// ─── Companies ─────────────────────────────────────────────────────────
+
+export async function fetchPublicCompanies(params?: {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  industry?: string;
+}): Promise<PublicCompaniesResponse> {
+  const qs = new URLSearchParams();
+  if (params?.page) qs.set("page", String(params.page));
+  if (params?.page_size) qs.set("page_size", String(params.page_size));
+  if (params?.search) qs.set("search", params.search);
+  if (params?.industry) qs.set("industry", params.industry);
+
+  const query = qs.toString();
+  return publicFetch<PublicCompaniesResponse>(
+    `/public/companies${query ? `?${query}` : ""}`,
+  );
 }
 
 // ─── Platform stats (landing page) ────────────────────────────────────

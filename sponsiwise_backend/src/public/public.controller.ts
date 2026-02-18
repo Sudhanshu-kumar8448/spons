@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { PublicService } from './public.service';
-import { PublicEventsQueryDto } from './dto';
+import { PublicEventsQueryDto, PublicCompaniesQueryDto } from './dto';
 
 /**
  * PublicController — unauthenticated, read-only endpoints for public pages.
@@ -22,6 +22,18 @@ export class PublicController {
   @Get('events')
   async getPublicEvents(@Query() query: PublicEventsQueryDto) {
     return this.publicService.getPublicEvents(query);
+  }
+
+  /**
+   * GET /public/companies
+   *
+   * Returns paginated list of public companies.
+   * Only companies that are ACTIVE + VERIFIED.
+   * Supports optional search and industry filters.
+   */
+  @Get('companies')
+  async getPublicCompanies(@Query() query: PublicCompaniesQueryDto) {
+    return this.publicService.getPublicCompanies(query);
   }
 
   /**

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { EventStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../common/providers/prisma.service';
 import { CacheService } from '../common/providers/cache.service';
-import type { PublicEventsQueryDto } from './dto';
+import type { PublicEventsQueryDto, PublicCompaniesQueryDto } from './dto';
 
 // ─── Cache keys & TTLs ──────────────────────────────────────────────────
 
@@ -179,6 +179,75 @@ export class PublicService {
 
     await this.cache.set(cacheKey, result, EVENTS_LIST_TTL);
     return result;
+  }
+
+  // ─── GET /public/companies ─────────────────────────────────
+
+  async getPublicCompanies(query: PublicCompaniesQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.page_size ?? 12;
+    const skip = (page - 1) * pageSize;
+
+    // Build cache key from stable params
+    const cacheKey = `${CACHE_PREFIX}:companies:p${page}:s${pageSize}:q${query.search ?? ''}:i${query.industry ?? ''}`;
+    const cached = await this.cache.get<{ data: unknown[]; total: number }>(cacheKey);
+    if (cached) {
+      return { data: cached.data, total: cached.total, page, page_size: pageSize };
+    }
+
+    // Build where clause — only public-safe companies
+    const where: Record<string, unknown> = {
+      isActive: true,
+      verificationStatus: VerificationStatus.VERIFIED,
+    };
+
+    if (query.search) {
+      where.OR = [
+        { name: { contains: query.search, mode: 'insensitive' } },
+        { description: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    // industry filter not implemented in schema yet - silently ignored
+
+    const [companies, total] = await Promise.all([
+      this.prisma.company.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          logoUrl: true,
+          website: true,
+          type: true,
+        },
+      }),
+      this.prisma.company.count({ where }),
+    ]);
+
+    // Map to public response shape (matches frontend PublicCompany type)
+    const data = companies.map((c) => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      type: c.type,
+      description: c.description ?? '',
+      logo_url: c.logoUrl,
+      website: c.website,
+      industry: null,
+      location: null,
+      founded_year: null,
+      social_links: {},
+      sponsored_events: [],
+    }));
+
+    await this.cache.set(cacheKey, { data, total }, COMPANY_TTL);
+
+    return { data, total, page, page_size: pageSize };
   }
 
   // ─── GET /companies/public/:slug ─────────────────────────
