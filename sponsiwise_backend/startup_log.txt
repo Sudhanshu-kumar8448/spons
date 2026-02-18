@@ -1,0 +1,6 @@
+
+> sponsiwise_backend@0.0.1 start:dev
+> nest start --watch
+
+[2J[3J[H[[90m7:30:28 PM[0m] Starting compilation in watch mode...
+
