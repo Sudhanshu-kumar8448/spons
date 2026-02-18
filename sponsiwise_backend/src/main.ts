@@ -20,31 +20,52 @@ async function bootstrap() {
   // Parse cookies so @Req().cookies works
   app.use(cookieParser());
 
-  // CSRF Protection: Verify Origin matches allowed domain for mutating requests
-  app.use((req: any, res: any, next: any) => {
-    const method = req.method;
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-      const origin = req.headers['origin'];
-      const allowedOrigin = appConfig?.corsOrigin;
+// Parse allowed origins from env (comma-separated)
+const allowedOrigins =
+  appConfig?.corsOrigin?.split(',').map(o => o.trim()) ?? [];
 
-      // Only enforce if allowedOrigin is configured (Production)
-      if (allowedOrigin && origin && origin !== allowedOrigin) {
-        return res.status(403).json({
-          statusCode: 403,
-          message: 'Cross-Site Request Forgery (CSRF) protection: Origin mismatch'
-        });
-      }
+// CSRF Protection: Verify Origin matches allowed domain for mutating requests
+app.use((req: any, res: any, next: any) => {
+  const method = req.method;
+
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const origin = req.headers['origin'];
+
+    if (
+      allowedOrigins.length > 0 &&
+      origin &&
+      !allowedOrigins.includes(origin)
+    ) {
+      return res.status(403).json({
+        statusCode: 403,
+        message:
+          'Cross-Site Request Forgery (CSRF) protection: Origin mismatch',
+      });
     }
-    next();
-  });
+  }
 
-  // Enable CORS with strict origin
-  app.enableCors({
-    origin: appConfig?.corsOrigin, // Strict: undefined if not set, no hardcoded fallback
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
-  });
+  next();
+});
+
+// Enable dynamic CORS
+app.enableCors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // allow Postman/server-to-server
+
+    if (allowedOrigins.length === 0) {
+      return callback(null, true); // no restriction if not configured
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+});
 
   // Enable global validation pipe
   app.useGlobalPipes(
@@ -69,4 +90,3 @@ async function bootstrap() {
   logger.log(`Application running on port ${port}`);
 }
 bootstrap();
-
