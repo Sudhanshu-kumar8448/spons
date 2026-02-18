@@ -49,7 +49,7 @@ app.use((req: any, res: any, next: any) => {
 
 // Enable dynamic CORS
 app.enableCors({
-  origin: (origin, callback) => {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     if (!origin) return callback(null, true); // allow Postman/server-to-server
 
     if (allowedOrigins.length === 0) {
