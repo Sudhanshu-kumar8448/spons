@@ -77,6 +77,7 @@ export class OnboardingController {
 
     private setAccessTokenCookie(res: Response, accessToken: string): void {
         const isProduction = this.isProduction();
+        const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
 
         res.cookie('access_token', accessToken, {
             httpOnly: true,
@@ -84,11 +85,13 @@ export class OnboardingController {
             sameSite: 'lax',
             maxAge: 15 * 60 * 1000, // 15 minutes
             path: '/',
+            domain: cookieDomain,
         });
     }
 
     private setRefreshTokenCookie(res: Response, refreshToken: string): void {
         const isProduction = this.isProduction();
+        const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
         const jwtConfig = this.configService.get<JwtConfig>('jwt');
         const refreshExpiresIn = jwtConfig?.refreshExpiresIn || '7d';
 
@@ -98,6 +101,7 @@ export class OnboardingController {
             sameSite: 'lax',
             maxAge: this.parseDurationMs(refreshExpiresIn),
             path: '/auth',
+            domain: cookieDomain,
         });
     }
 

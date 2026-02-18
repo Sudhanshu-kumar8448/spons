@@ -22,7 +22,12 @@ async function bootstrap() {
 
 // Parse allowed origins from env (comma-separated)
 const allowedOrigins =
-  appConfig?.corsOrigin?.split(',').map(o => o.trim()) ?? [];
+  appConfig?.corsOrigin?.split(',').map(o => o.trim()) ?? [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://sponsiwise.app',
+    'https://www.sponsiwise.app',
+  ];
 
 // CSRF Protection: Verify Origin matches allowed domain for mutating requests
 app.use((req: any, res: any, next: any) => {

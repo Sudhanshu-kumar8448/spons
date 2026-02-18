@@ -120,9 +120,11 @@ export class AuthController {
   /**
    * Set access token as HTTP-only cookie.
    * path: '/' — available for all routes.
+   * domain: '.sponsiwise.app' — works across subdomains (api.sponsiwise.app, sponsiwise.app, www.sponsiwise.app)
    */
   private setAccessTokenCookie(res: Response, accessToken: string): void {
     const isProduction = this.isProduction();
+    const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
 
     res.cookie('access_token', accessToken, {
       httpOnly: true,
@@ -130,6 +132,7 @@ export class AuthController {
       sameSite: 'lax',
       maxAge: 15 * 60 * 1000, // 15 minutes
       path: '/',
+      domain: cookieDomain,
     });
   }
 
@@ -137,9 +140,11 @@ export class AuthController {
    * Set refresh token as HTTP-only cookie.
    * path: '/auth' — sent to both /auth/refresh and /auth/logout,
    * minimizing exposure on every request.
+   * domain: '.sponsiwise.app' — works across subdomains
    */
   private setRefreshTokenCookie(res: Response, refreshToken: string): void {
     const isProduction = this.isProduction();
+    const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
     const jwtConfig = this.configService.get<JwtConfig>('jwt');
     const refreshExpiresIn = jwtConfig?.refreshExpiresIn || '7d';
 
@@ -149,6 +154,7 @@ export class AuthController {
       sameSite: 'lax',
       maxAge: this.parseDurationMs(refreshExpiresIn),
       path: '/auth',
+      domain: cookieDomain,
     });
   }
 
@@ -198,12 +204,14 @@ export class AuthController {
 
     // Clear both cookies regardless
     const isProduction = this.isProduction();
+    const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
 
     res.clearCookie('access_token', {
       httpOnly: true,
       secure: isProduction,
       sameSite: 'lax',
       path: '/',
+      domain: cookieDomain,
     });
 
     res.clearCookie('refresh_token', {
@@ -211,6 +219,7 @@ export class AuthController {
       secure: isProduction,
       sameSite: 'lax',
       path: '/auth',
+      domain: cookieDomain,
     });
 
     return { message: 'Logged out successfully' };
