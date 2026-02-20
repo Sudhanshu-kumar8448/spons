@@ -76,8 +76,9 @@ export class OnboardingController {
     // ─── PRIVATE HELPERS (duplicated from AuthController for now) ───
 
     private setAccessTokenCookie(res: Response, accessToken: string): void {
+        // Always use 'none' in production when frontend and backend are on different domains
+        // This is needed because the frontend (www.sponsiwise.app) and backend (sponsiwise.onrender.com) are on different domains
         const isProduction = this.isProduction();
-        // Use 'none' in production to allow cookies with client-side navigation (router.push)
         const sameSite = isProduction ? 'none' : 'lax';
 
         const cookieOptions: any = {
@@ -88,16 +89,18 @@ export class OnboardingController {
             path: '/',
         };
 
-        if (isProduction) {
-            // cookieOptions.domain = '.sponsiwise.app';
+        // For development, also set the domain to ensure cookies work across subdomains if needed
+        if (!isProduction) {
+            cookieOptions.domain = 'localhost';
         }
 
         res.cookie('access_token', accessToken, cookieOptions);
     }
 
     private setRefreshTokenCookie(res: Response, refreshToken: string): void {
+        // Always use 'none' in production when frontend and backend are on different domains
+        // This is needed because the frontend (www.sponsiwise.app) and backend (sponsiwise.onrender.com) are on different domains
         const isProduction = this.isProduction();
-        // Use 'none' in production to allow cookies with client-side navigation (router.push)
         const sameSite = isProduction ? 'none' : 'lax';
         const jwtConfig = this.configService.get<JwtConfig>('jwt');
         const refreshExpiresIn = jwtConfig?.refreshExpiresIn || '7d';
@@ -110,16 +113,24 @@ export class OnboardingController {
             path: '/auth',
         };
 
-        if (isProduction) {
-            // cookieOptions.domain = '.sponsiwise.app';
+        // For development, also set the domain to ensure cookies work across subdomains if needed
+        if (!isProduction) {
+            cookieOptions.domain = 'localhost';
         }
 
         res.cookie('refresh_token', refreshToken, cookieOptions);
     }
 
     private isProduction(): boolean {
+        // Check multiple ways to determine if we're in production
         const appConfig = this.configService.get<AppConfig>('app');
-        return appConfig?.nodeEnv === 'production';
+        const nodeEnv = appConfig?.nodeEnv || process.env.NODE_ENV;
+        
+        // Also check if we're deployed on known production domains
+        const isOnRender = process.env.RENDER === 'true' || process.env.RENDER_EXTERNAL_URL !== undefined;
+        const isOnVercel = process.env.VERCEL === '1';
+        
+        return nodeEnv === 'production' || isOnRender || isOnVercel;
     }
 
     private parseDurationMs(duration: string): number {

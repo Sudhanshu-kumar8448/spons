@@ -123,10 +123,9 @@ export class AuthController {
    * domain: '.sponsiwise.app' — works across subdomains (api.sponsiwise.app, sponsiwise.app, www.sponsiwise.app)
    */
   private setAccessTokenCookie(res: Response, accessToken: string): void {
+    // Always use 'none' in production when frontend and backend are on different domains
+    // This is needed because the frontend (www.sponsiwise.app) and backend (sponsiwise.onrender.com) are on different domains
     const isProduction = this.isProduction();
-    // In production, don't set domain - let browser handle it for same-site cookies
-    // Only set domain if frontend and backend are on same domain/subdomain
-    // Use 'none' in production to allow cookies with client-side navigation (router.push)
     const sameSite = isProduction ? 'none' : 'lax';
 
     const cookieOptions: any = {
@@ -137,11 +136,9 @@ export class AuthController {
       path: '/',
     };
 
-    // Only set domain in production if you're sure frontend and backend share the same root domain
-    // Otherwise, let the browser handle the default behavior
-    if (isProduction) {
-      // Uncomment the line below if your backend is on api.sponsiwise.app and frontend on www.sponsiwise.app
-      // cookieOptions.domain = '.sponsiwise.app';
+    // For development, also set the domain to ensure cookies work across subdomains if needed
+    if (!isProduction) {
+      cookieOptions.domain = 'localhost';
     }
 
     res.cookie('access_token', accessToken, cookieOptions);
@@ -154,9 +151,9 @@ export class AuthController {
    * domain: '.sponsiwise.app' — works across subdomains
    */
   private setRefreshTokenCookie(res: Response, refreshToken: string): void {
+    // Always use 'none' in production when frontend and backend are on different domains
+    // This is needed because the frontend (www.sponsiwise.app) and backend (sponsiwise.onrender.com) are on different domains
     const isProduction = this.isProduction();
-    // In production, don't set domain - let browser handle it for same-site cookies
-    // Use 'none' in production to allow cookies with client-side navigation (router.push)
     const sameSite = isProduction ? 'none' : 'lax';
     const jwtConfig = this.configService.get<JwtConfig>('jwt');
     const refreshExpiresIn = jwtConfig?.refreshExpiresIn || '7d';
@@ -169,17 +166,24 @@ export class AuthController {
       path: '/auth',
     };
 
-    // Only set domain in production if you're sure frontend and backend share the same root domain
-    if (isProduction) {
-      // cookieOptions.domain = '.sponsiwise.app';
+    // For development, also set the domain to ensure cookies work across subdomains if needed
+    if (!isProduction) {
+      cookieOptions.domain = 'localhost';
     }
 
     res.cookie('refresh_token', refreshToken, cookieOptions);
   }
 
   private isProduction(): boolean {
+    // Check multiple ways to determine if we're in production
     const appConfig = this.configService.get<AppConfig>('app');
-    return appConfig?.nodeEnv === 'production';
+    const nodeEnv = appConfig?.nodeEnv || process.env.NODE_ENV;
+    
+    // Also check if we're deployed on known production domains
+    const isOnRender = process.env.RENDER === 'true' || process.env.RENDER_EXTERNAL_URL !== undefined;
+    const isOnVercel = process.env.VERCEL === '1';
+    
+    return nodeEnv === 'production' || isOnRender || isOnVercel;
   }
 
   /**
