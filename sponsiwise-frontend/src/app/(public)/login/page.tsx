@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { Suspense, useState, FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { Mail, Lock } from "lucide-react";
 import Image from "next/image";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl");
@@ -176,3 +176,38 @@ export default function LoginPage() {
     </div>
   );
 }
+
+function LoginFormFallback() {
+  return (
+    <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4 py-12">
+      <div className="w-full max-w-[960px] overflow-hidden rounded-2xl border border-border-light shadow-2xl shadow-brand-500/5 sm:grid sm:grid-cols-2">
+        <div className="hidden sm:flex relative flex-col items-center justify-center bg-gradient-to-br from-brand-600 via-brand-500 to-brand-400 p-10 text-white">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10" />
+          <div className="pointer-events-none absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-white/5" />
+          <div className="relative text-center">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
+              <Image src="/images/logo-icon.svg" alt="SponsiWise" width={40} height={40} />
+            </div>
+            <h2 className="text-3xl font-bold">Welcome Back</h2>
+            <p className="mt-3 text-base text-blue-100/80 leading-relaxed">
+              Sign in to manage your sponsorships, track proposals, and connect
+              with the community.
+            </p>
+          </div>
+        </div>
+        <div className="bg-white p-8 sm:p-10 flex items-center justify-center">
+          <div className="animate-pulse">Loading...</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFormFallback />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
