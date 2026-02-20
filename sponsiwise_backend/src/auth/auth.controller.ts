@@ -124,19 +124,27 @@ export class AuthController {
    */
   private setAccessTokenCookie(res: Response, accessToken: string): void {
     const isProduction = this.isProduction();
-    const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
+    // In production, don't set domain - let browser handle it for same-site cookies
+    // Only set domain if frontend and backend are on same domain/subdomain
     // Use 'none' in production to allow cookies with client-side navigation (router.push)
-    // This is required when frontend and backend are on different domains/subdomains
     const sameSite = isProduction ? 'none' : 'lax';
 
-    res.cookie('access_token', accessToken, {
+    const cookieOptions: any = {
       httpOnly: true,
       secure: isProduction,
       sameSite,
       maxAge: 15 * 60 * 1000, // 15 minutes
       path: '/',
-      domain: cookieDomain,
-    });
+    };
+
+    // Only set domain in production if you're sure frontend and backend share the same root domain
+    // Otherwise, let the browser handle the default behavior
+    if (isProduction) {
+      // Uncomment the line below if your backend is on api.sponsiwise.app and frontend on www.sponsiwise.app
+      // cookieOptions.domain = '.sponsiwise.app';
+    }
+
+    res.cookie('access_token', accessToken, cookieOptions);
   }
 
   /**
@@ -147,21 +155,26 @@ export class AuthController {
    */
   private setRefreshTokenCookie(res: Response, refreshToken: string): void {
     const isProduction = this.isProduction();
-    const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
+    // In production, don't set domain - let browser handle it for same-site cookies
     // Use 'none' in production to allow cookies with client-side navigation (router.push)
-    // This is required when frontend and backend are on different domains/subdomains
     const sameSite = isProduction ? 'none' : 'lax';
     const jwtConfig = this.configService.get<JwtConfig>('jwt');
     const refreshExpiresIn = jwtConfig?.refreshExpiresIn || '7d';
 
-    res.cookie('refresh_token', refreshToken, {
+    const cookieOptions: any = {
       httpOnly: true,
       secure: isProduction,
       sameSite,
       maxAge: this.parseDurationMs(refreshExpiresIn),
       path: '/auth',
-      domain: cookieDomain,
-    });
+    };
+
+    // Only set domain in production if you're sure frontend and backend share the same root domain
+    if (isProduction) {
+      // cookieOptions.domain = '.sponsiwise.app';
+    }
+
+    res.cookie('refresh_token', refreshToken, cookieOptions);
   }
 
   private isProduction(): boolean {
@@ -210,7 +223,6 @@ export class AuthController {
 
     // Clear both cookies regardless
     const isProduction = this.isProduction();
-    const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
     const sameSite = isProduction ? 'none' : 'lax';
 
     res.clearCookie('access_token', {
@@ -218,7 +230,6 @@ export class AuthController {
       secure: isProduction,
       sameSite,
       path: '/',
-      domain: cookieDomain,
     });
 
     res.clearCookie('refresh_token', {
@@ -226,7 +237,6 @@ export class AuthController {
       secure: isProduction,
       sameSite,
       path: '/auth',
-      domain: cookieDomain,
     });
 
     return { message: 'Logged out successfully' };

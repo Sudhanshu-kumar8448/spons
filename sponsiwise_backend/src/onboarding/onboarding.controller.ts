@@ -77,32 +77,44 @@ export class OnboardingController {
 
     private setAccessTokenCookie(res: Response, accessToken: string): void {
         const isProduction = this.isProduction();
-        const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
+        // Use 'none' in production to allow cookies with client-side navigation (router.push)
+        const sameSite = isProduction ? 'none' : 'lax';
 
-        res.cookie('access_token', accessToken, {
+        const cookieOptions: any = {
             httpOnly: true,
             secure: isProduction,
-            sameSite: 'lax',
+            sameSite,
             maxAge: 15 * 60 * 1000, // 15 minutes
             path: '/',
-            domain: cookieDomain,
-        });
+        };
+
+        if (isProduction) {
+            // cookieOptions.domain = '.sponsiwise.app';
+        }
+
+        res.cookie('access_token', accessToken, cookieOptions);
     }
 
     private setRefreshTokenCookie(res: Response, refreshToken: string): void {
         const isProduction = this.isProduction();
-        const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
+        // Use 'none' in production to allow cookies with client-side navigation (router.push)
+        const sameSite = isProduction ? 'none' : 'lax';
         const jwtConfig = this.configService.get<JwtConfig>('jwt');
         const refreshExpiresIn = jwtConfig?.refreshExpiresIn || '7d';
 
-        res.cookie('refresh_token', refreshToken, {
+        const cookieOptions: any = {
             httpOnly: true,
             secure: isProduction,
-            sameSite: 'lax',
+            sameSite,
             maxAge: this.parseDurationMs(refreshExpiresIn),
             path: '/auth',
-            domain: cookieDomain,
-        });
+        };
+
+        if (isProduction) {
+            // cookieOptions.domain = '.sponsiwise.app';
+        }
+
+        res.cookie('refresh_token', refreshToken, cookieOptions);
     }
 
     private isProduction(): boolean {
