@@ -125,7 +125,8 @@ export class AuthController {
   private setAccessTokenCookie(res: Response, accessToken: string): void {
     // Always use 'none' in production when frontend and backend are on different domains
     // This is needed because the frontend (www.sponsiwise.app) and backend (sponsiwise.onrender.com) are on different domains
-    const isProduction = this.isProduction();
+    // We assume production if NOT running on localhost
+    const isProduction = this.isProduction() || !this.isLocalhost();
     const sameSite = isProduction ? 'none' : 'lax';
 
     const cookieOptions: any = {
@@ -136,11 +137,13 @@ export class AuthController {
       path: '/',
     };
 
-    // For development, also set the domain to ensure cookies work across subdomains if needed
+    // For development/localhost, also set the domain to ensure cookies work
     if (!isProduction) {
       cookieOptions.domain = 'localhost';
     }
 
+    console.log('[AUTH] Setting access_token cookie:', { isProduction, sameSite, secure: isProduction, domain: cookieOptions.domain });
+    
     res.cookie('access_token', accessToken, cookieOptions);
   }
 
@@ -152,8 +155,8 @@ export class AuthController {
    */
   private setRefreshTokenCookie(res: Response, refreshToken: string): void {
     // Always use 'none' in production when frontend and backend are on different domains
-    // This is needed because the frontend (www.sponsiwise.app) and backend (sponsiwise.onrender.com) are on different domains
-    const isProduction = this.isProduction();
+    // We assume production if NOT running on localhost
+    const isProduction = this.isProduction() || !this.isLocalhost();
     const sameSite = isProduction ? 'none' : 'lax';
     const jwtConfig = this.configService.get<JwtConfig>('jwt');
     const refreshExpiresIn = jwtConfig?.refreshExpiresIn || '7d';
@@ -166,10 +169,12 @@ export class AuthController {
       path: '/auth',
     };
 
-    // For development, also set the domain to ensure cookies work across subdomains if needed
+    // For development/localhost, also set the domain to ensure cookies work
     if (!isProduction) {
       cookieOptions.domain = 'localhost';
     }
+
+    console.log('[AUTH] Setting refresh_token cookie:', { isProduction, sameSite, secure: isProduction, domain: cookieOptions.domain });
 
     res.cookie('refresh_token', refreshToken, cookieOptions);
   }
@@ -184,6 +189,11 @@ export class AuthController {
     const isOnVercel = process.env.VERCEL === '1';
     
     return nodeEnv === 'production' || isOnRender || isOnVercel;
+  }
+
+  private isLocalhost(): boolean {
+    const host = process.env.HOST || process.env.HOSTNAME || '';
+    return host.includes('localhost') || host.includes('127.0.0.1') || process.env.NODE_ENV === 'development';
   }
 
   /**
@@ -226,7 +236,7 @@ export class AuthController {
     }
 
     // Clear both cookies regardless
-    const isProduction = this.isProduction();
+    const isProduction = this.isProduction() || !this.isLocalhost();
     const sameSite = isProduction ? 'none' : 'lax';
 
     res.clearCookie('access_token', {
