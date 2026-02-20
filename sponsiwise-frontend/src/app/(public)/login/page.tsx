@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { Mail, Lock } from "lucide-react";
@@ -9,6 +9,8 @@ import Image from "next/image";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -22,8 +24,16 @@ export default function LoginPage() {
     try {
       const result = await apiClient.post<{ user: { role: string; companyId?: string | null; organizerId?: string | null } }>("/auth/login", { email, password });
 
-      // Role-aware redirect
+      // Role-aware redirect - use callbackUrl if provided
       const { role, companyId } = result.user;
+      
+      // If callbackUrl is provided, use it for redirect (after validation)
+      if (callbackUrl && typeof callbackUrl === 'string') {
+        router.push(callbackUrl);
+        return;
+      }
+      
+      // Default role-based redirect
       if (role === "USER") {
         if (companyId) {
           // User has a pending sponsor application
