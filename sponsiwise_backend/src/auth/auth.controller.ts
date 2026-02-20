@@ -137,8 +137,10 @@ export class AuthController {
       path: '/',
     };
 
-    // For development/localhost, also set the domain to ensure cookies work
-    if (!isProduction) {
+    // For production (cross-subdomain), set domain to share cookies across subdomains
+    if (isProduction) {
+      cookieOptions.domain = '.sponsiwise.app';
+    } else {
       cookieOptions.domain = 'localhost';
     }
 
@@ -169,8 +171,10 @@ export class AuthController {
       path: '/auth',
     };
 
-    // For development/localhost, also set the domain to ensure cookies work
-    if (!isProduction) {
+    // For production (cross-subdomain), set domain to share cookies across subdomains
+    if (isProduction) {
+      cookieOptions.domain = '.sponsiwise.app';
+    } else {
       cookieOptions.domain = 'localhost';
     }
 
@@ -238,12 +242,14 @@ export class AuthController {
     // Clear both cookies regardless
     const isProduction = this.isProduction() || !this.isLocalhost();
     const sameSite = isProduction ? 'none' : 'lax';
+    const domain = isProduction ? '.sponsiwise.app' : 'localhost';
 
     res.clearCookie('access_token', {
       httpOnly: true,
       secure: isProduction,
       sameSite,
       path: '/',
+      domain,
     });
 
     res.clearCookie('refresh_token', {
@@ -251,6 +257,7 @@ export class AuthController {
       secure: isProduction,
       sameSite,
       path: '/auth',
+      domain,
     });
 
     return { message: 'Logged out successfully' };

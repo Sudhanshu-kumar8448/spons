@@ -77,8 +77,7 @@ export class OnboardingController {
 
     private setAccessTokenCookie(res: Response, accessToken: string): void {
         // Always use 'none' in production when frontend and backend are on different domains
-        // This is needed because the frontend (www.sponsiwise.app) and backend (sponsiwise.onrender.com) are on different domains
-        // We assume production if NOT running on localhost
+        // This is needed because the frontend (www.sponsiwise.app) and backend (api.sponsiwise.app) are on different subdomains
         const isProduction = this.isProduction() || !this.isLocalhost();
         const sameSite = isProduction ? 'none' : 'lax';
 
@@ -90,8 +89,10 @@ export class OnboardingController {
             path: '/',
         };
 
-        // For development/localhost, also set the domain to ensure cookies work
-        if (!isProduction) {
+        // For production (cross-subdomain), set domain to share cookies across subdomains
+        if (isProduction) {
+            cookieOptions.domain = '.sponsiwise.app';
+        } else {
             cookieOptions.domain = 'localhost';
         }
 
@@ -102,7 +103,6 @@ export class OnboardingController {
 
     private setRefreshTokenCookie(res: Response, refreshToken: string): void {
         // Always use 'none' in production when frontend and backend are on different domains
-        // We assume production if NOT running on localhost
         const isProduction = this.isProduction() || !this.isLocalhost();
         const sameSite = isProduction ? 'none' : 'lax';
         const jwtConfig = this.configService.get<JwtConfig>('jwt');
@@ -116,8 +116,10 @@ export class OnboardingController {
             path: '/auth',
         };
 
-        // For development/localhost, also set the domain to ensure cookies work
-        if (!isProduction) {
+        // For production (cross-subdomain), set domain to share cookies across subdomains
+        if (isProduction) {
+            cookieOptions.domain = '.sponsiwise.app';
+        } else {
             cookieOptions.domain = 'localhost';
         }
 
@@ -155,3 +157,4 @@ export class OnboardingController {
         return parseInt(match[1], 10) * units[match[2]];
     }
 }
+
