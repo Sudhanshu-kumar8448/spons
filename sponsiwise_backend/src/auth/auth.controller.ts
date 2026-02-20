@@ -125,11 +125,14 @@ export class AuthController {
   private setAccessTokenCookie(res: Response, accessToken: string): void {
     const isProduction = this.isProduction();
     const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
+    // Use 'none' in production to allow cookies with client-side navigation (router.push)
+    // This is required when frontend and backend are on different domains/subdomains
+    const sameSite = isProduction ? 'none' : 'lax';
 
     res.cookie('access_token', accessToken, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite,
       maxAge: 15 * 60 * 1000, // 15 minutes
       path: '/',
       domain: cookieDomain,
@@ -145,13 +148,16 @@ export class AuthController {
   private setRefreshTokenCookie(res: Response, refreshToken: string): void {
     const isProduction = this.isProduction();
     const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
+    // Use 'none' in production to allow cookies with client-side navigation (router.push)
+    // This is required when frontend and backend are on different domains/subdomains
+    const sameSite = isProduction ? 'none' : 'lax';
     const jwtConfig = this.configService.get<JwtConfig>('jwt');
     const refreshExpiresIn = jwtConfig?.refreshExpiresIn || '7d';
 
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite,
       maxAge: this.parseDurationMs(refreshExpiresIn),
       path: '/auth',
       domain: cookieDomain,
@@ -205,11 +211,12 @@ export class AuthController {
     // Clear both cookies regardless
     const isProduction = this.isProduction();
     const cookieDomain = isProduction ? '.sponsiwise.app' : undefined;
+    const sameSite = isProduction ? 'none' : 'lax';
 
     res.clearCookie('access_token', {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite,
       path: '/',
       domain: cookieDomain,
     });
@@ -217,7 +224,7 @@ export class AuthController {
     res.clearCookie('refresh_token', {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite,
       path: '/auth',
       domain: cookieDomain,
     });
