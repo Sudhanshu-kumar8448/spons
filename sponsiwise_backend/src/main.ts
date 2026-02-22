@@ -27,6 +27,7 @@ const allowedOrigins =
     'http://localhost:3001',
     'https://sponsiwise.app',
     'https://www.sponsiwise.app',
+    'https://api.sponsiwise.app',
   ];
 
 // CSRF Protection: Verify Origin matches allowed domain for mutating requests
@@ -41,6 +42,7 @@ app.use((req: any, res: any, next: any) => {
       origin &&
       !allowedOrigins.includes(origin)
     ) {
+      console.log(`[CORS] Origin "${origin}" not allowed. Allowed: ${allowedOrigins.join(', ')}`);
       return res.status(403).json({
         statusCode: 403,
         message:
@@ -65,6 +67,7 @@ app.enableCors({
       return callback(null, true);
     }
 
+    console.log(`[CORS] Rejecting origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,

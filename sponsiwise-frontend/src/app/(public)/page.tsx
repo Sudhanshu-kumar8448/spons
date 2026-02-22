@@ -121,72 +121,64 @@ export default function LandingPage() {
     <div className="overflow-hidden">
       {/* ── Hero — Dark Bold ──────────────────────────────── */}
       <section className="relative min-h-[600px] overflow-hidden lg:min-h-[700px]">
-        {/* Background image */}
-        <div className="absolute inset-0">
-          <Image
-            src="/images/hero-conference.jpg"
-            alt="Conference event with audience"
-            fill
-            priority
-            className="object-cover"
-            sizes="100vw"
-          />
-          <div className="hero-overlay absolute inset-0" />
-        </div>
+        
+        
 
         {/* Decorative floating elements */}
         <div className="pointer-events-none absolute -left-40 top-20 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -right-40 bottom-20 h-96 w-96 rounded-full bg-blue-400/10 blur-3xl" />
 
-        <div className="relative mx-auto flex max-w-7xl items-center px-4 py-20 sm:px-6 sm:py-28 lg:px-8 lg:py-36">
+<div className="relative mx-auto grid max-w-7xl grid-cols-1 items-center gap-8 px-4 py-16 lg:grid-cols-2 lg:gap-12 lg:px-8 lg:py-24">
           <div className="max-w-2xl">
-            <MotionWrapper>
+
+            {/* here we have write something else */}
+            {/* <MotionWrapper>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-400/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-300">
                 <Zap className="h-3.5 w-3.5" />
                 Sponsorship made simple
               </span>
-            </MotionWrapper>
+            </MotionWrapper> */}
 
             <MotionWrapper delay={0.1}>
               <h1 className="mt-6 text-4xl font-black leading-[1.05] tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
-                Connect{" "}
-                <span className="gradient-text-bold">Sponsors</span>
+                
+                <span className="gradient-text-bold"> Connect Sponsors</span>
                 <br />
-                with{" "}
-                <span className="gradient-text-bold">Events</span>
+                
+                <span className="gradient-text-bold">With Events</span>
               </h1>
             </MotionWrapper>
 
-            <MotionWrapper delay={0.2}>
-              <p className="mt-6 max-w-xl text-lg font-medium leading-relaxed text-slate-300 sm:text-xl">
+            <MotionWrapper delay={0.1}>
+              <p className="mt-4 text-base font-medium leading-relaxed text-black-600 sm:mt-6 sm:text-lg">
                 Sponsiwise is the trusted platform that makes sponsorship
                 management effortless. Find events to sponsor, or attract
                 sponsors to your events — all in one place.
               </p>
             </MotionWrapper>
 
-            <MotionWrapper delay={0.3}>
-              <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+            <MotionWrapper delay={0.2}>
+              <div className="mt-8 flex flex-col gap-4 sm:mt-10 sm:flex-row">
                 <Link
                   href="/register"
                   className="group inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-8 py-4 text-base font-bold text-white shadow-lg shadow-blue-600/30 transition-all duration-300 hover:-translate-y-0.5 hover:bg-blue-500 hover:shadow-xl hover:shadow-blue-500/40"
                 >
-                  Get Started Free
+                  Connect with us
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
                 <Link
-                  href="/events"
-                  className="group inline-flex items-center justify-center gap-2 rounded-xl border-2 border-white/20 bg-white/5 px-8 py-4 text-base font-bold text-white backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-white/40 hover:bg-white/10"
+                  href="/register"
+                  className="group inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-8 py-4 text-base font-bold text-white shadow-lg shadow-blue-600/30 transition-all duration-300 hover:-translate-y-0.5 hover:bg-blue-500 hover:shadow-xl hover:shadow-blue-500/40"
                 >
                   Explore Events
-                  <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
               </div>
             </MotionWrapper>
 
             {/* Trust indicators */}
             <MotionWrapper delay={0.4}>
-              <div className="mt-12 flex flex-wrap items-center gap-6 text-sm font-semibold text-slate-400">
+              <div className="mt-8 flex flex-wrap items-center gap-4 text-sm font-semibold text-slate-400 sm:mt-12 sm:gap-6">
                 <span className="flex items-center gap-1.5">
                   <Shield className="h-4 w-4 text-emerald-400" /> Verified
                   Partners
@@ -199,6 +191,20 @@ export default function LandingPage() {
                 </span>
               </div>
             </MotionWrapper>
+          </div>
+          
+          {/* Video Section */}
+          <div className="w-full">
+            <video
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="w-full rounded-2xl shadow-2xl shadow-blue-500/20 ring-1 ring-white/10"
+            >
+              <source src="/videos/chintu.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
           </div>
         </div>
       </section>
