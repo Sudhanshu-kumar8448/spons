@@ -1,6 +1,22 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 /**
+ * Get the API base URL - uses proxy path for browser requests
+ */
+function getBaseUrl(): string {
+    // For browser requests, use the proxy path to avoid CORS issues
+    if (typeof window !== 'undefined') {
+        return '/api';
+    }
+    
+    // Server-side: use the full URL from env
+    if (!API_BASE_URL) {
+        throw new Error("NEXT_PUBLIC_API_BASE_URL is not defined");
+    }
+    return API_BASE_URL;
+}
+
+/**
  * ApiError — typed error for non-OK HTTP responses.
  */
 export class ApiError extends Error {
@@ -28,9 +44,10 @@ async function clientFetch<T>(
     body?: unknown,
     options?: RequestInit,
 ): Promise<T> {
-    if (!API_BASE_URL) {
-        throw new Error("NEXT_PUBLIC_API_BASE_URL is not defined");
-    }
+    const baseUrl = getBaseUrl();
+    
+    // Ensure endpoint starts with /
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
 
     const headers: HeadersInit = {
         "Content-Type": "application/json",
@@ -50,7 +67,7 @@ async function clientFetch<T>(
     // Include credentials (cookies) in client-side requests
     config.credentials = "include";
 
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    const res = await fetch(`${baseUrl}${normalizedEndpoint}`, config);
 
     if (!res.ok) {
         let detail: string | undefined;
@@ -97,3 +114,4 @@ export const apiClient = {
     delete: <T>(endpoint: string, options?: RequestInit) =>
         clientFetch<T>(endpoint, "DELETE", undefined, options),
 };
+

@@ -10,7 +10,7 @@ import ProposalStatusBadge from "@/components/shared/ProposalStatusBadge";
 const statusFilters: { label: string; value: string }[] = [
   { label: "All", value: "" },
   { label: "Submitted", value: ProposalStatus.SUBMITTED },
-  { label: "Under Review", value: ProposalStatus.UNDER_REVIEW },
+  { label: "Under Review", value: ProposalStatus.UNDER_MANAGER_REVIEW },
   { label: "Approved", value: ProposalStatus.APPROVED },
   { label: "Rejected", value: ProposalStatus.REJECTED },
 ];

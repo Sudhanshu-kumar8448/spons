@@ -3,16 +3,15 @@ import { Role } from '@prisma/client';
 import { UserRepository } from './user.repository';
 import type { SafeUser } from './user.repository';
 import { UpdateUserDto, ListUsersQueryDto } from './dto';
+import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * UserService — business logic for user management.
  *
- * Rules:
- *  - Users belong to exactly one tenant (tenantId immutable)
- *  - ADMIN can manage users within their own tenant
- *  - SUPER_ADMIN can manage users across all tenants
- *  - No cross-tenant access for non-super-admins
- *  - ADMIN cannot escalate to SUPER_ADMIN
+ * AFTER SOFT-DISABLE MULTI-TENANCY:
+ * - All operations use GLOBAL_TENANT_ID internally
+ * - Tenant isolation is handled at the guard level
+ * - Role checks remain for authorization (ADMIN, SUPER_ADMIN, etc.)
  */
 @Injectable()
 export class UserService {

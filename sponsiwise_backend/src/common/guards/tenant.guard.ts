@@ -11,26 +11,18 @@ import type { Request } from 'express';
 import type { JwtPayloadWithClaims } from '../../auth/interfaces';
 import { TENANT_KEY } from '../decorators';
 import type { TenantAccessOptions } from '../decorators';
+import { GLOBAL_TENANT_ID } from '../constants/global-tenant.constants';
 
 /**
  * TenantGuard — enforces tenant isolation.
- *
- * Reads configuration from the @TenantAccess() decorator metadata
- * to know where to find the tenant identifier in the request
- * (route param, body, or query).
- *
- * Compares the request tenant_id against `req.user.tenant_id`
- * (set by AuthGuard).
+ * 
+ * AFTER SOFT-DISABLE MULTI-TENANCY:
+ * - This guard now automatically attaches GLOBAL_TENANT_ID to the request
+ * - Tenant validation is bypassed - all users work within the global tenant
+ * - Authentication logic is preserved
+ * - For future re-enablement: revert to original implementation
  *
  * Execution order: AuthGuard → RoleGuard → ③ TenantGuard
- *
- * Behaviour:
- *  - SUPER_ADMIN bypasses tenant checks (cross-tenant access allowed)
- *  - If no @TenantAccess() decorator → skip (no tenant restriction)
- *  - If decorator is present → request tenant must match JWT tenant_id
- *
- * Throws:
- *  - 403 if tenant identifiers do not match
  */
 @Injectable()
 export class TenantGuard implements CanActivate {
@@ -39,28 +31,36 @@ export class TenantGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest<Request>();
+    const user = request.user as JwtPayloadWithClaims | undefined;
+
+    // Attach GLOBAL_TENANT_ID to user for consistent internal usage
+    // This ensures all services use the global tenant
+    if (user) {
+      (user as any).tenant_id = GLOBAL_TENANT_ID;
+    }
+
+    // Check for @TenantAccess() decorator (legacy - for future use)
     const tenantOptions = this.reflector.getAllAndOverride<TenantAccessOptions | undefined>(
       TENANT_KEY,
       [context.getHandler(), context.getClass()],
     );
 
-    // No @TenantAccess() decorator → no tenant restriction
+    // No @TenantAccess() decorator → no tenant restriction (always true now)
     if (!tenantOptions) {
       return true;
     }
-
-    const request = context.switchToHttp().getRequest<Request>();
-    const user = request.user as JwtPayloadWithClaims | undefined;
 
     if (!user) {
       throw new ForbiddenException('User context not found');
     }
 
-    // SUPER_ADMIN can access any tenant
+    // SUPER_ADMIN bypasses tenant checks (legacy - kept for compatibility)
     if (user.role === Role.SUPER_ADMIN) {
       return true;
     }
 
+    // Tenant validation is now always passed - using GLOBAL_TENANT_ID
     const { source = 'param', field = 'tenantId' } = tenantOptions;
     const requestTenantId = this.extractTenantId(request, source, field);
 
@@ -69,9 +69,9 @@ export class TenantGuard implements CanActivate {
       throw new ForbiddenException('Tenant identifier missing from request');
     }
 
-    if (requestTenantId !== user.tenant_id) {
+    if (requestTenantId !== GLOBAL_TENANT_ID) {
       this.logger.warn(
-        `Tenant mismatch: JWT=${user.tenant_id}, request=${requestTenantId} (user=${user.sub})`,
+        `Tenant mismatch: Request=${requestTenantId}, Global=${GLOBAL_TENANT_ID}`,
       );
       throw new ForbiddenException('Cross-tenant access is not allowed');
     }

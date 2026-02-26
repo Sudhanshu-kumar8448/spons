@@ -11,16 +11,15 @@ import {
   COMPANY_REJECTED_EVENT,
 } from '../common/events';
 import { CreateCompanyDto, UpdateCompanyDto, ListCompaniesQueryDto } from './dto';
+import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * CompanyService — business logic for company management.
  *
- * Rules:
- *  - A company belongs to exactly one tenant (tenantId immutable)
- *  - ADMIN can create / update companies within their own tenant
- *  - USER  can view companies within their own tenant
- *  - SUPER_ADMIN can view / manage all companies across all tenants
- *  - No cross-tenant access for non-super-admins
+ * AFTER SOFT-DISABLE MULTI-TENANCY:
+ * - All operations use GLOBAL_TENANT_ID internally
+ * - Tenant isolation is handled at the guard level
+ * - Role checks remain for authorization (ADMIN, MANAGER, etc.)
  */
 @Injectable()
 export class CompanyService {

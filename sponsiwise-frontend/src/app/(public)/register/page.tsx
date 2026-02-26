@@ -21,6 +21,8 @@ export default function RegisterPage() {
 
     try {
       await apiClient.post("/auth/register", { email, password });
+      // Force Next.js to re-fetch server components with the new cookies
+      router.refresh();
       router.push("/onboarding");
     } catch (err) {
       if (err instanceof ApiError) {

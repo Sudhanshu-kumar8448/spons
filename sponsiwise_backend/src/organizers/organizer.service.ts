@@ -3,17 +3,15 @@ import type { Organizer } from '@prisma/client';
 import { Role } from '@prisma/client';
 import { OrganizerRepository } from './organizer.repository';
 import { CreateOrganizerDto, UpdateOrganizerDto, ListOrganizersQueryDto } from './dto';
+import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * OrganizerService — business logic for organizer management.
  *
- * Rules:
- *  - An organizer belongs to exactly one tenant (tenantId immutable)
- *  - Organizer is a domain entity, NOT a user — no auth logic
- *  - ADMIN can create / update organizers within their own tenant
- *  - USER  can view organizers within their own tenant
- *  - SUPER_ADMIN can view / manage all organizers across all tenants
- *  - No cross-tenant access for non-super-admins
+ * AFTER SOFT-DISABLE MULTI-TENANCY:
+ * - All operations use GLOBAL_TENANT_ID internally
+ * - Tenant isolation is handled at the guard level
+ * - Role checks remain for authorization (ADMIN, MANAGER, etc.)
  */
 @Injectable()
 export class OrganizerService {

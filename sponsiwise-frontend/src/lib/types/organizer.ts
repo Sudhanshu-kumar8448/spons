@@ -13,7 +13,87 @@ export interface OrganizerDashboardStats {
     currency: string;
 }
 
+// ─── Event Status ───────────────────────────────────────────────────────
+
+export type EventStatus =
+    | "DRAFT"
+    | "UNDER_MANAGER_REVIEW"
+    | "VERIFIED"
+    | "REJECTED"
+    | "PUBLISHED"
+    | "CANCELLED"
+    | "COMPLETED";
+
+export const EventStatus = {
+    DRAFT: "DRAFT" as EventStatus,
+    UNDER_MANAGER_REVIEW: "UNDER_MANAGER_REVIEW" as EventStatus,
+    VERIFIED: "VERIFIED" as EventStatus,
+    REJECTED: "REJECTED" as EventStatus,
+    PUBLISHED: "PUBLISHED" as EventStatus,
+    CANCELLED: "CANCELLED" as EventStatus,
+    COMPLETED: "COMPLETED" as EventStatus,
+} as const;
+
+// ─── Tier Type ─────────────────────────────────────────────────────────
+
+export type TierType =
+    | "TITLE"
+    | "PRESENTING"
+    | "POWERED_BY"
+    | "GOLD"
+    | "SILVER";
+
+export const TierType = {
+    TITLE: "TITLE" as TierType,
+    PRESENTING: "PRESENTING" as TierType,
+    POWERED_BY: "POWERED_BY" as TierType,
+    GOLD: "GOLD" as TierType,
+    SILVER: "SILVER" as TierType,
+} as const;
+
+// ─── Proposal Status ───────────────────────────────────────────────────
+
+export type ProposalStatus =
+    | "DRAFT"
+    | "SUBMITTED"
+    | "UNDER_MANAGER_REVIEW"
+    | "FORWARDED_TO_ORGANIZER"
+    | "APPROVED"
+    | "REJECTED"
+    | "REQUEST_CHANGES"
+    | "WITHDRAWN";
+
+export const ProposalStatus = {
+    DRAFT: "DRAFT" as ProposalStatus,
+    SUBMITTED: "SUBMITTED" as ProposalStatus,
+    UNDER_MANAGER_REVIEW: "UNDER_MANAGER_REVIEW" as ProposalStatus,
+    FORWARDED_TO_ORGANIZER: "FORWARDED_TO_ORGANIZER" as ProposalStatus,
+    APPROVED: "APPROVED" as ProposalStatus,
+    REJECTED: "REJECTED" as ProposalStatus,
+    REQUEST_CHANGES: "REQUEST_CHANGES" as ProposalStatus,
+    WITHDRAWN: "WITHDRAWN" as ProposalStatus,
+} as const;
+
 // ─── Organizer Events ──────────────────────────────────────────────────
+
+export interface SponsorshipTier {
+    id: string;
+    tenantId: string;
+    eventId: string;
+    tierType: TierType;
+    askingPrice: number;
+    totalSlots: number;
+    soldSlots: number;
+    isLocked: boolean;
+    isActive: boolean;
+    name?: string;
+    description?: string;
+    benefits?: string[];
+    currency?: string;
+    amount?: number;
+    slots_total?: number;
+    slots_available?: number;
+}
 
 export interface OrganizerEvent {
     id: string;
@@ -29,7 +109,7 @@ export interface OrganizerEvent {
     start_date: string;
     endDate: string;
     end_date: string;
-    status: string;
+    status: EventStatus;
     website?: string | null;
     logoUrl?: string | null;
     logo_url?: string | null;
@@ -46,16 +126,7 @@ export interface OrganizerEvent {
     pending_proposals: number;
     total_sponsorship_amount: number;
     currency: string;
-    sponsorship_tiers: {
-        id: string;
-        name: string;
-        currency: string;
-        amount: number;
-        description: string;
-        benefits: string[];
-        slots_available: number;
-        slots_total: number;
-    }[];
+    tiers: SponsorshipTier[];
 }
 
 export interface OrganizerEventsResponse {
@@ -71,7 +142,8 @@ export interface IncomingProposal {
     id: string;
     tenantId: string;
     sponsorshipId: string;
-    status: string;
+    tierId?: string | null;
+    status: ProposalStatus;
     title: string;
     amount: number;
     currency: string;
@@ -132,4 +204,23 @@ export interface CreateEventPayload {
     website?: string;
     logoUrl?: string;
     category?: string;
+    address?: {
+        addressLine1: string;
+        addressLine2?: string;
+        city: string;
+        state: string;
+        country: string;
+        postalCode: string;
+    };
+    contactPhone?: string;
+    contactEmail?: string;
+    pptDeckUrl?: string;
+    tiers?: {
+        tierType: TierType | "CUSTOM";
+        customName?: string;
+        askingPrice: number;
+        totalSlots?: number;
+        benefits?: string[];
+        id?: string;
+    }[];
 }

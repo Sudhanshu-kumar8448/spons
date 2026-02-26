@@ -2,13 +2,15 @@ import {
   Controller,
   Get,
   Post,
+  Put,
+  Patch,
   Param,
   Query,
   Body,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Role, TierType } from '@prisma/client';
 import { AuthGuard, RoleGuard } from '../common/guards';
 import { Roles, CurrentUser } from '../common/decorators';
 import type { JwtPayloadWithClaims } from '../auth/interfaces';
@@ -17,7 +19,12 @@ import {
   ManagerCompaniesQueryDto,
   ManagerEventsQueryDto,
   ManagerActivityQueryDto,
+  ManagerProposalsQueryDto,
   VerifyEntityDto,
+  UpdateEventTierDto,
+  CreateEventTierDto,
+  UpdateManagerEventDto,
+  UpdateManagerProposalDto,
 } from './dto';
 
 /**
@@ -30,10 +37,13 @@ import {
  *  - GET  /manager/events
  *  - GET  /manager/events/:id
  *  - GET  /manager/activity
+ *  - GET  /manager/proposals
+ *  - GET  /manager/proposals/:id
  *
  * Write endpoints:
  *  - POST /manager/companies/:id/verify
  *  - POST /manager/events/:id/verify
+ *  - PATCH /manager/proposals/:id
  *
  * All endpoints require MANAGER role and scope to the caller's tenant.
  */
@@ -41,7 +51,7 @@ import {
 @UseGuards(AuthGuard, RoleGuard)
 @Roles(Role.MANAGER)
 export class ManagerDashboardController {
-  constructor(private readonly service: ManagerDashboardService) {}
+  constructor(private readonly service: ManagerDashboardService) { }
 
   // ─── Dashboard Stats ─────────────────────────────────────
 
@@ -95,6 +105,15 @@ export class ManagerDashboardController {
     return this.service.getEventById(user.tenant_id, id);
   }
 
+  @Patch('events/:id')
+  async updateEvent(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateManagerEventDto,
+    @CurrentUser() user: JwtPayloadWithClaims,
+  ) {
+    return this.service.updateEvent(user.tenant_id, id, dto, user.sub, user.role);
+  }
+
   @Post('events/:id/verify')
   async verifyEvent(
     @Param('id', ParseUUIDPipe) id: string,
@@ -102,6 +121,40 @@ export class ManagerDashboardController {
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
     return this.service.verifyEvent(user.tenant_id, id, dto, user.sub, user.role);
+  }
+
+  // ─── Tier Management ─────────────────────────────────────
+
+  @Post('events/:eventId/tiers')
+  async createTier(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Body() dto: CreateEventTierDto,
+    @CurrentUser() user: JwtPayloadWithClaims,
+  ) {
+    return this.service.createTier(
+      user.tenant_id,
+      eventId,
+      dto,
+      user.sub,
+      user.role,
+    );
+  }
+
+  @Put('events/:eventId/tiers/:tierId')
+  async updateTier(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Param('tierId', ParseUUIDPipe) tierId: string,
+    @Body() dto: UpdateEventTierDto,
+    @CurrentUser() user: JwtPayloadWithClaims,
+  ) {
+    return this.service.updateTier(
+      user.tenant_id,
+      eventId,
+      tierId,
+      dto,
+      user.sub,
+      user.role,
+    );
   }
 
   // ─── Activity Log ────────────────────────────────────────
@@ -112,5 +165,32 @@ export class ManagerDashboardController {
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
     return this.service.getActivity(user.tenant_id, query);
+  }
+
+  // ─── Proposals ───────────────────────────────────────────
+
+  @Get('proposals')
+  async getProposals(
+    @Query() query: ManagerProposalsQueryDto,
+    @CurrentUser() user: JwtPayloadWithClaims,
+  ) {
+    return this.service.getProposals(user.tenant_id, query);
+  }
+
+  @Get('proposals/:id')
+  async getProposalById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayloadWithClaims,
+  ) {
+    return this.service.getProposalById(user.tenant_id, id);
+  }
+
+  @Patch('proposals/:id')
+  async updateProposal(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateManagerProposalDto,
+    @CurrentUser() user: JwtPayloadWithClaims,
+  ) {
+    return this.service.updateProposal(user.tenant_id, id, dto, user.sub, user.role);
   }
 }

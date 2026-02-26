@@ -61,6 +61,9 @@ export class CreateProposalDto {
   @IsUUID()
   eventId!: string;
 
+  @IsUUID()
+  tierId!: string;
+
   @IsOptional()
   @Type(() => Number)
   @IsNumber()

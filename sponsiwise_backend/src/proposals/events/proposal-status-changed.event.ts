@@ -19,7 +19,7 @@ export const PROPOSAL_STATUS_CHANGED_EVENT = 'proposal.status_changed';
  *   "tenantId": "tenant_abc",
  *   "actorId": "user_456",
  *   "actorRole": "ADMIN",
- *   "previousStatus": "UNDER_REVIEW",
+ *   "previousStatus": "UNDER_MANAGER_REVIEW",
  *   "newStatus": "APPROVED",
  *   "timestamp": "2026-02-09T13:20:00.000Z"
  * }

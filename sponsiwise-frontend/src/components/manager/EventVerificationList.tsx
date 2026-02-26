@@ -105,29 +105,32 @@ export default async function EventVerificationList({
 
             {!error && events.length > 0 && (
                 <div className="space-y-3">
-                    {events.map((event) => (
-                        <Link
-                            key={event.id}
-                            href={`/dashboard/events/${event.id}`}
-                            className="block rounded-2xl border border-slate-800 bg-slate-900 p-5 transition-all hover:border-slate-700 hover:bg-slate-800/50"
-                        >
-                            <div className="flex items-center justify-between gap-4">
-                                <div className="min-w-0">
-                                    <h3 className="font-medium text-white">{event.title}</h3>
-                                    <p className="mt-0.5 text-sm text-slate-400">
-                                        {event.organizer?.name} · {event.location ?? "No location"}
-                                    </p>
+                    {events.map((event) => {
+                        const vs = (event.verification_status || "").toUpperCase();
+                        return (
+                            <Link
+                                key={event.id}
+                                href={`/dashboard/events/${event.id}`}
+                                className="block rounded-2xl border border-slate-800 bg-slate-900 p-5 transition-all hover:border-slate-700 hover:bg-slate-800/50"
+                            >
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="min-w-0">
+                                        <h3 className="font-medium text-white">{event.title}</h3>
+                                        <p className="mt-0.5 text-sm text-slate-400">
+                                            {event.organizer?.name} · {event.location ?? "No location"}
+                                        </p>
+                                    </div>
+                                    <span
+                                        className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium ${verificationBadge[vs] ??
+                                            verificationBadge.PENDING
+                                            }`}
+                                    >
+                                        {vs}
+                                    </span>
                                 </div>
-                                <span
-                                    className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium ${verificationBadge[event.verificationStatus] ??
-                                        verificationBadge.PENDING
-                                        }`}
-                                >
-                                    {event.verificationStatus}
-                                </span>
-                            </div>
-                        </Link>
-                    ))}
+                            </Link>
+                        );
+                    })}
                 </div>
             )}
 

@@ -123,29 +123,34 @@ export class AuthController {
    * domain: '.sponsiwise.app' — works across subdomains (api.sponsiwise.app, sponsiwise.app, www.sponsiwise.app)
    */
   private setAccessTokenCookie(res: Response, accessToken: string): void {
-    // Always use 'none' in production when frontend and backend are on different domains
-    // This is needed because the frontend (www.sponsiwise.app) and backend (sponsiwise.onrender.com) are on different domains
-    // We assume production if NOT running on localhost
-    const isProduction = this.isProduction() || !this.isLocalhost();
+    // Determine if we're in production based on environment and deployment platform
+    const isProduction = this.isProduction();
+    const isLocalhost = this.isLocalhost();
+
+    // For local development: use lax + no secure (works with HTTP)
+    // For production: use none + secure (requires HTTPS)
     const sameSite = isProduction ? 'none' : 'lax';
+    const secure = isProduction;
 
     const cookieOptions: any = {
       httpOnly: true,
-      secure: isProduction,
+      secure,
       sameSite,
       maxAge: 15 * 60 * 1000, // 15 minutes
       path: '/',
     };
 
     // For production (cross-subdomain), set domain to share cookies across subdomains
+    // For local development, don't set domain (browser will use current host)
     if (isProduction) {
       cookieOptions.domain = '.sponsiwise.app';
-    } else {
-      cookieOptions.domain = 'localhost';
+    } else if (!isLocalhost) {
+      // For non-localhost non-production (e.g., preview deployments), don't set domain
+      cookieOptions.domain = undefined;
     }
 
-    console.log('[AUTH] Setting access_token cookie:', { isProduction, sameSite, secure: isProduction, domain: cookieOptions.domain });
-    
+    console.log('[AUTH] Setting access_token cookie:', { isProduction, sameSite, secure, domain: cookieOptions.domain });
+
     res.cookie('access_token', accessToken, cookieOptions);
   }
 
@@ -156,48 +161,76 @@ export class AuthController {
    * domain: '.sponsiwise.app' — works across subdomains
    */
   private setRefreshTokenCookie(res: Response, refreshToken: string): void {
-    // Always use 'none' in production when frontend and backend are on different domains
-    // We assume production if NOT running on localhost
-    const isProduction = this.isProduction() || !this.isLocalhost();
+    // Determine if we're in production based on environment and deployment platform
+    const isProduction = this.isProduction();
+    const isLocalhost = this.isLocalhost();
+
+    // For local development: use lax + no secure (works with HTTP)
+    // For production: use none + secure (requires HTTPS)
     const sameSite = isProduction ? 'none' : 'lax';
+    const secure = isProduction;
+
     const jwtConfig = this.configService.get<JwtConfig>('jwt');
     const refreshExpiresIn = jwtConfig?.refreshExpiresIn || '7d';
 
+    // In local dev, use path '/' so the cookie is sent through the /api proxy rewrite
+    // In production, restrict to '/auth' to minimize cookie exposure
+    const cookiePath = isProduction ? '/auth' : '/';
+
     const cookieOptions: any = {
       httpOnly: true,
-      secure: isProduction,
+      secure,
       sameSite,
       maxAge: this.parseDurationMs(refreshExpiresIn),
-      path: '/auth',
+      path: cookiePath,
     };
 
     // For production (cross-subdomain), set domain to share cookies across subdomains
+    // For local development, don't set domain (browser will use current host)
     if (isProduction) {
       cookieOptions.domain = '.sponsiwise.app';
-    } else {
-      cookieOptions.domain = 'localhost';
+    } else if (!isLocalhost) {
+      // For non-localhost non-production (e.g., preview deployments), don't set domain
+      cookieOptions.domain = undefined;
     }
 
-    console.log('[AUTH] Setting refresh_token cookie:', { isProduction, sameSite, secure: isProduction, domain: cookieOptions.domain });
+    console.log('[AUTH] Setting refresh_token cookie:', { isProduction, sameSite, secure, domain: cookieOptions.domain });
 
     res.cookie('refresh_token', refreshToken, cookieOptions);
   }
 
   private isProduction(): boolean {
-    // Check multiple ways to determine if we're in production
-    const appConfig = this.configService.get<AppConfig>('app');
-    const nodeEnv = appConfig?.nodeEnv || process.env.NODE_ENV;
-    
-    // Also check if we're deployed on known production domains
-    const isOnRender = process.env.RENDER === 'true' || process.env.RENDER_EXTERNAL_URL !== undefined;
+    // Only treat as production if explicitly set to production AND deployed on a platform
+    // This prevents local development from being treated as production
+    const nodeEnv = process.env.NODE_ENV;
+
+    // Check if we're deployed on known production platforms
+    const isOnRender = process.env.RENDER === 'true';
     const isOnVercel = process.env.VERCEL === '1';
-    
-    return nodeEnv === 'production' || isOnRender || isOnVercel;
+    const isDeployed = isOnRender || isOnVercel;
+
+    // For local development: always return false
+    // For production: must have NODE_ENV=production AND be on a deployment platform
+    return nodeEnv === 'production' && isDeployed;
   }
 
   private isLocalhost(): boolean {
+    // Check multiple indicators of local development
     const host = process.env.HOST || process.env.HOSTNAME || '';
-    return host.includes('localhost') || host.includes('127.0.0.1') || process.env.NODE_ENV === 'development';
+    const nodeEnv = process.env.NODE_ENV;
+
+    // Also check if we're running on typical local development ports
+    const port = process.env.PORT || '3000';
+    const isLocalPort = ['3000', '3001', '3002', '8080', '5000', '8000'].includes(port);
+
+    return (
+      host.includes('localhost') ||
+      host.includes('127.0.0.1') ||
+      nodeEnv === 'development' ||
+      nodeEnv === undefined ||
+      nodeEnv === '' ||
+      isLocalPort
+    );
   }
 
   /**
@@ -240,25 +273,43 @@ export class AuthController {
     }
 
     // Clear both cookies regardless
-    const isProduction = this.isProduction() || !this.isLocalhost();
+    const isProduction = this.isProduction();
+    const isLocalhost = this.isLocalhost();
     const sameSite = isProduction ? 'none' : 'lax';
-    const domain = isProduction ? '.sponsiwise.app' : 'localhost';
+    const secure = isProduction;
 
-    res.clearCookie('access_token', {
+    // Clear access_token cookie
+    const accessTokenOptions: any = {
       httpOnly: true,
-      secure: isProduction,
+      secure,
       sameSite,
       path: '/',
-      domain,
-    });
+    };
 
-    res.clearCookie('refresh_token', {
+    if (isProduction) {
+      accessTokenOptions.domain = '.sponsiwise.app';
+    } else if (!isLocalhost) {
+      accessTokenOptions.domain = undefined;
+    }
+
+    res.clearCookie('access_token', accessTokenOptions);
+
+    // Clear refresh_token cookie — path must match setRefreshTokenCookie
+    const refreshCookiePath = isProduction ? '/auth' : '/';
+    const refreshTokenOptions: any = {
       httpOnly: true,
-      secure: isProduction,
+      secure,
       sameSite,
-      path: '/auth',
-      domain,
-    });
+      path: refreshCookiePath,
+    };
+
+    if (isProduction) {
+      refreshTokenOptions.domain = '.sponsiwise.app';
+    } else if (!isLocalhost) {
+      refreshTokenOptions.domain = undefined;
+    }
+
+    res.clearCookie('refresh_token', refreshTokenOptions);
 
     return { message: 'Logged out successfully' };
   }

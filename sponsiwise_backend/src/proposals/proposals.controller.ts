@@ -30,7 +30,7 @@ import { CreateProposalDto, UpdateProposalDto, ListProposalsQueryDto } from './d
  *  - tenantId is derived from the Sponsorship, never from the request
  *  - USER / ADMIN operations are scoped to callerTenantId (from JWT)
  *  - SUPER_ADMIN bypasses tenant scoping
- *  - Status transitions are validated (DRAFT → SUBMITTED → UNDER_REVIEW → APPROVED/REJECTED)
+ *  - Status transitions are validated (DRAFT → SUBMITTED → UNDER_MANAGER_REVIEW → APPROVED/REJECTED)
  */
 @Controller('proposals')
 export class ProposalsController {

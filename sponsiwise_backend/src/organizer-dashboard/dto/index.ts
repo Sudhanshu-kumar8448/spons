@@ -2,6 +2,7 @@ import { IsOptional, IsString, IsInt, Min, Max, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export { CreateOrganizerEventDto } from './create-organizer-event.dto';
+export { UpdateOrganizerEventDto } from './update-organizer-event.dto';
 
 /**
  * Pagination DTO shared across organizer endpoints.

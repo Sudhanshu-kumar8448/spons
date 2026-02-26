@@ -41,6 +41,19 @@ export async function fetchOrganizerEventById(
   return authFetch<OrganizerEvent>(`/organizer/events/${id}`);
 }
 
+export async function updateOrganizerEvent(
+  id: string,
+  payload: any,
+): Promise<OrganizerEvent> {
+  return authFetch<OrganizerEvent>(`/organizer/events/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
+
 // ─── Create event ──────────────────────────────────────────────────────
 
 export async function createOrganizerEvent(

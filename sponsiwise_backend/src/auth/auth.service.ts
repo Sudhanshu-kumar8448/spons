@@ -8,7 +8,8 @@ import type { JwtPayload } from './interfaces';
 import type { JwtConfig } from '../common/config';
 import type { StringValue } from 'ms';
 import * as bcrypt from 'bcrypt';
-import { createHash, randomUUID } from 'crypto';
+import { createHash } from 'crypto';
+import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * AuthService handles all authentication-related business logic.
@@ -63,7 +64,7 @@ export class AuthService {
    * Register a new user and auto-login by generating tokens.
    * - Checks for existing email
    * - Hashes password with bcrypt
-   * - Generates tenant ID
+   * - Uses GLOBAL_TENANT_ID (single-tenant mode)
    * - Creates user with default role USER
    * - Generates JWT access + refresh tokens (auto-login)
    */
@@ -80,34 +81,21 @@ export class AuthService {
     // Hash password
     const hashedPassword = await bcrypt.hash(dto.password, this.SALT_ROUNDS);
 
-    // Generate tenant ID for this user
-    const tenantId = randomUUID();
+    // Use GLOBAL_TENANT_ID for single-tenant mode
+    const tenantId = GLOBAL_TENANT_ID;
 
-    // Create tenant + user in a transaction to maintain referential integrity
-    const user = await this.prisma.$transaction(async (tx) => {
-      // Create a personal tenant for the new user
-      const emailPrefix = dto.email.toLowerCase().split('@')[0];
-      const slug = `${emailPrefix}-${tenantId.slice(0, 8)}`;
-
-      await tx.tenant.create({
-        data: {
-          id: tenantId,
-          name: `${emailPrefix}'s Organization`,
-          slug,
-        },
-      });
-
-      // Create user within the new tenant
-      return tx.user.create({
-        data: {
-          email: dto.email.toLowerCase(),
-          password: hashedPassword,
-          tenantId,
-          // role defaults to USER in schema
-          // isActive defaults to true in schema
-        },
-      });
+    // Create user within the global tenant
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email.toLowerCase(),
+        password: hashedPassword,
+        tenantId,
+        // role defaults to USER in schema
+        // isActive defaults to true in schema
+      },
     });
+
+    this.logger.log(`User ${user.id} registered with global tenant ${GLOBAL_TENANT_ID}`);
 
     // Generate tokens for auto-login (mirrors login flow)
     const { accessToken, refreshToken } = await this.generateTokens(user);
@@ -132,6 +120,7 @@ export class AuthService {
    * - Validates email exists
    * - Checks user is active
    * - Verifies password with bcrypt
+   * - Checks global tenant status
    * - Returns JWT access token
    */
   async login(dto: LoginDto): Promise<{ accessToken: string; refreshToken: string; user: object }> {
@@ -157,14 +146,14 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Check if tenant is active
+    // Check if global tenant is active
     const tenant = await this.prisma.tenant.findUnique({
-      where: { id: user.tenantId },
+      where: { id: GLOBAL_TENANT_ID },
       select: { status: true },
     });
 
     if (!tenant || tenant.status === TenantStatus.SUSPENDED || tenant.status === TenantStatus.DEACTIVATED) {
-      throw new ForbiddenException('Your organization account is suspended or deactivated. Please contact support.');
+      throw new ForbiddenException('System is currently unavailable. Please contact support.');
     }
 
     // Generate tokens using shared method
@@ -244,14 +233,14 @@ export class AuthService {
       throw new UnauthorizedException('User not found or deactivated');
     }
 
-    // Check if tenant is still active
+    // Check if global tenant is still active
     const tenant = await this.prisma.tenant.findUnique({
-      where: { id: user.tenantId },
+      where: { id: GLOBAL_TENANT_ID },
       select: { status: true },
     });
 
     if (!tenant || tenant.status === TenantStatus.SUSPENDED || tenant.status === TenantStatus.DEACTIVATED) {
-      throw new ForbiddenException('Your organization account is suspended or deactivated.');
+      throw new ForbiddenException('System is currently unavailable.');
     }
 
     // 7. Rotate: revoke the old token and mark rotatedAt
@@ -276,6 +265,9 @@ export class AuthService {
   /**
    * Generates a new pair of access and refresh tokens for a user.
    * Publicly accessible for modules that need to refresh auth state (e.g. role upgrades).
+   * 
+   * IMPORTANT: tenant_id is no longer included in JWT payload.
+   * GLOBAL_TENANT_ID is used internally for all database operations.
    */
   async generateTokens(user: {
     id: string;
@@ -287,7 +279,7 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user.id,
       role: user.role,
-      tenant_id: user.tenantId,
+      // tenant_id removed from JWT - using GLOBAL_TENANT_ID internally
       ...(user.companyId && { company_id: user.companyId }),
       ...(user.organizerId && { organizer_id: user.organizerId }),
     };

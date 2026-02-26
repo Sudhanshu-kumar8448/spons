@@ -11,19 +11,16 @@ import { SponsorshipRepository } from './sponsorship.repository';
 import { CompanyRepository } from '../companies/company.repository';
 import { EventRepository } from '../events/event.repository';
 import { CreateSponsorshipDto, UpdateSponsorshipDto, ListSponsorshipsQueryDto } from './dto';
+import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * SponsorshipService — business logic for sponsorship management.
  *
- * Rules:
- *  - Sponsorship links exactly one Company to exactly one Event
- *  - Company and Event MUST belong to the same tenant
- *  - tenantId is derived from Company/Event, never trusted from request
- *  - Duplicate company–event pair is rejected (unique constraint)
- *  - ADMIN can create / update / list sponsorships within their own tenant
- *  - USER  can only view sponsorships within their own tenant
- *  - SUPER_ADMIN can view / manage all sponsorships across all tenants
- *  - No cross-tenant sponsorships
+ * AFTER SOFT-DISABLE MULTI-TENANCY:
+ * - All operations use GLOBAL_TENANT_ID internally
+ * - Tenant isolation is handled at the guard level
+ * - Role checks remain for authorization (ADMIN, MANAGER, SPONSOR, etc.)
+ * - Sponsorship links Company to Event
  */
 @Injectable()
 export class SponsorshipService {

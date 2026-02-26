@@ -8,6 +8,7 @@ import { ProposalStatus } from "@/lib/types/sponsor";
 import ProposalStatusBadge from "@/components/shared/ProposalStatusBadge";
 import WithdrawButton from "./WithdrawButton";
 import OrganizerProposalDetail from "@/components/organizer/OrganizerProposalDetail";
+import ManagerProposalDetail from "@/components/manager/ManagerProposalDetail";
 
 interface ProposalDetailPageProps {
   params: Promise<{ id: string }>;
@@ -81,7 +82,7 @@ function canWithdraw(status: ProposalStatus): boolean {
   return (
     status === ProposalStatus.DRAFT ||
     status === ProposalStatus.SUBMITTED ||
-    status === ProposalStatus.UNDER_REVIEW
+    status === ProposalStatus.UNDER_MANAGER_REVIEW
   );
 }
 
@@ -96,6 +97,11 @@ export default async function ProposalDetailPage({
   // Organizer role → incoming proposal detail with review
   if (user?.role === UserRole.ORGANIZER) {
     return <OrganizerProposalDetail id={id} />;
+  }
+
+  // Manager role → pending proposal review
+  if (user?.role === UserRole.MANAGER) {
+    return <ManagerProposalDetail id={id} />;
   }
 
   // Default: Sponsor proposal detail

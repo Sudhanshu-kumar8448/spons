@@ -19,19 +19,16 @@ import {
   PROPOSAL_STATUS_CHANGED_EVENT,
 } from './events';
 import { CreateProposalDto, UpdateProposalDto, ListProposalsQueryDto } from './dto';
+import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * ProposalService — business logic for proposal management.
  *
- * Rules:
- *  - Proposal belongs to exactly one Sponsorship
- *  - tenantId is derived from the Sponsorship, never trusted from request
- *  - Sponsorship must exist before a proposal can be created
- *  - ADMIN can create / update / list proposals within their own tenant
- *  - USER  can only view proposals within their own tenant
- *  - SUPER_ADMIN can view / manage all proposals across all tenants
- *  - Status workflow: DRAFT → SUBMITTED → UNDER_REVIEW → APPROVED / REJECTED
- *  - A proposal can be WITHDRAWN from any pre-approved state
+ * AFTER SOFT-DISABLE MULTI-TENANCY:
+ * - All operations use GLOBAL_TENANT_ID internally
+ * - Tenant isolation is handled at the guard level
+ * - Role checks remain for authorization (ADMIN, MANAGER, ORGANIZER, etc.)
+ * - Status workflow: DRAFT → SUBMITTED → UNDER_MANAGER_REVIEW → APPROVED / REJECTED
  */
 @Injectable()
 export class ProposalService {
@@ -345,8 +342,8 @@ export class ProposalService {
    *
    * Allowed transitions:
    *  DRAFT        → SUBMITTED, WITHDRAWN
-   *  SUBMITTED    → UNDER_REVIEW, WITHDRAWN
-   *  UNDER_REVIEW → APPROVED, REJECTED, WITHDRAWN
+   *  SUBMITTED    → UNDER_MANAGER_REVIEW, WITHDRAWN
+   *  UNDER_MANAGER_REVIEW → APPROVED, REJECTED, WITHDRAWN
    *  APPROVED     → (terminal — no further transitions)
    *  REJECTED     → (terminal — no further transitions)
    *  WITHDRAWN    → (terminal — no further transitions)
@@ -358,10 +355,22 @@ export class ProposalService {
 
     const allowedTransitions: Record<ProposalStatus, ProposalStatus[]> = {
       [ProposalStatus.DRAFT]: [ProposalStatus.SUBMITTED, ProposalStatus.WITHDRAWN],
-      [ProposalStatus.SUBMITTED]: [ProposalStatus.UNDER_REVIEW, ProposalStatus.WITHDRAWN],
-      [ProposalStatus.UNDER_REVIEW]: [
+      [ProposalStatus.SUBMITTED]: [ProposalStatus.UNDER_MANAGER_REVIEW, ProposalStatus.WITHDRAWN],
+      [ProposalStatus.UNDER_MANAGER_REVIEW]: [
         ProposalStatus.APPROVED,
         ProposalStatus.REJECTED,
+        ProposalStatus.WITHDRAWN,
+        ProposalStatus.FORWARDED_TO_ORGANIZER,
+        ProposalStatus.REQUEST_CHANGES,
+      ],
+      [ProposalStatus.FORWARDED_TO_ORGANIZER]: [
+        ProposalStatus.APPROVED,
+        ProposalStatus.REJECTED,
+        ProposalStatus.REQUEST_CHANGES,
+        ProposalStatus.WITHDRAWN,
+      ],
+      [ProposalStatus.REQUEST_CHANGES]: [
+        ProposalStatus.SUBMITTED,
         ProposalStatus.WITHDRAWN,
       ],
       [ProposalStatus.APPROVED]: [],

@@ -67,11 +67,11 @@ function EventCard({ event }: { event: BrowsableEvent }) {
         </div>
 
         {/* Tiers preview */}
-        {event.sponsorship_tiers.length > 0 && (
+        {event.tiers.length > 0 && (
           <div className="mt-3 border-t border-slate-800 pt-3">
             <p className="text-xs font-medium text-slate-500">
-              {event.sponsorship_tiers.length} sponsorship{" "}
-              {event.sponsorship_tiers.length === 1 ? "tier" : "tiers"}{" "}
+              {event.tiers.length} sponsorship{" "}
+              {event.tiers.length === 1 ? "tier" : "tiers"}{" "}
               available
             </p>
           </div>
@@ -163,11 +163,17 @@ export default async function EventsPage({
   try {
     const res = await fetchBrowsableEvents({
       page,
-      page_size: 12,
+      page_size: 50, // Fetch more to ensure we have enough after filtering
       category,
       search,
     });
-    events = res.data;
+
+    // Filter out events where all tiers are sold out
+    events = res.data.filter(event => {
+      // Check if there is at least one tier with available slots
+      return event.tiers.some(tier => tier.soldSlots < tier.totalSlots);
+    }).slice(0, 12); // Limit to 12 per page on frontend
+
     total = res.total;
   } catch (err) {
     error =

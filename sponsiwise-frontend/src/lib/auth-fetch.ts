@@ -1,41 +1,115 @@
+"server-only";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { AuthError, HttpError } from "./errors/fetch-errors";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 /**
- * ApiError — typed error for non-OK HTTP responses.
+ * Get the API base URL
  */
-export class ApiError extends Error {
-    constructor(
-        public status: number,
-        public statusText: string,
-        public detail?: string,
-    ) {
-        super(detail || statusText);
-        this.name = "ApiError";
+function getApiBaseUrl(): string {
+    if (!API_BASE_URL) {
+        throw new Error("NEXT_PUBLIC_API_BASE_URL is not defined");
+    }
+    return API_BASE_URL;
+}
+
+/**
+ * Parse a Set-Cookie header value and extract cookie properties
+ */
+function parseSetCookieHeader(setCookieValue: string): {
+    name: string;
+    value: string;
+    options: {
+        path?: string;
+        httpOnly?: boolean;
+        sameSite?: string;
+        secure?: boolean;
+        maxAge?: number;
+    };
+} {
+    // Split by semicolon to get cookie name=value and options
+    const parts = setCookieValue.split(";").map(s => s.trim());
+    const [nameValue, ...optionParts] = parts;
+    const [name, ...valueParts] = nameValue.split("=");
+    const value = valueParts.join("=");
+
+    // Parse options
+    const options: { path?: string; httpOnly?: boolean; sameSite?: string; secure?: boolean; maxAge?: number } = {};
+    
+    for (const option of optionParts) {
+        const [key, val] = option.split("=").map(s => s.trim().toLowerCase());
+        
+        switch (key) {
+            case "path":
+                options.path = val;
+                break;
+            case "httponly":
+                options.httpOnly = true;
+                break;
+            case "samesite":
+                options.sameSite = val;
+                break;
+            case "secure":
+                options.secure = true;
+                break;
+            case "max-age":
+                options.maxAge = parseInt(val, 10);
+                break;
+        }
+    }
+
+    return { name, value, options };
+}
+
+/**
+ * Write Set-Cookie headers to the Next.js cookie store
+ */
+async function writeCookiesToStore(setCookieHeaders: string[]): Promise<void> {
+    const cookieStore = await cookies();
+    
+    for (const setCookieValue of setCookieHeaders) {
+        try {
+            const { name, value, options } = parseSetCookieHeader(setCookieValue);
+            
+            cookieStore.set(name, value, {
+                path: options.path || "/",
+                httpOnly: options.httpOnly ?? true,
+                sameSite: options.sameSite as "lax" | "strict" | "none" | undefined,
+                secure: options.secure ?? process.env.NODE_ENV === "production",
+                maxAge: options.maxAge,
+            });
+            
+            console.log(`[authFetch] Cookie written to store: ${name}`);
+        } catch (err) {
+            console.error(`[authFetch] Failed to write cookie:`, err);
+        }
     }
 }
 
 /**
  * Server-side authenticated fetch with automatic 401 refresh retry.
- *
+ * 
  * Flow:
- *  1. Forward browser cookies to the backend.
+ *  1. Forward cookies to the backend.
  *  2. If backend returns 401, call POST /auth/refresh to rotate tokens.
- *  3. Retry the original request exactly once with the new cookie header.
- *  4. If refresh also fails, redirect to /login.
+ *  3. Write new cookies to Next.js cookie store using cookies().set()
+ *  4. Retry the original request with fresh cookies from the store.
+ *  5. If refresh fails, throw AuthError (caller must handle redirect).
  *
  * ⚠️  Must only be called from Server Components / Server Actions.
- *     Importing `next/headers` makes this server-only.
+ *
+ * @throws {AuthError} When session is expired and refresh failed
+ * @throws {HttpError} For other HTTP errors
  */
 export async function authFetch<T>(
     endpoint: string,
     init?: RequestInit & { revalidate?: number | false },
 ): Promise<T> {
-    if (!API_BASE_URL) {
-        throw new Error("NEXT_PUBLIC_API_BASE_URL is not defined");
-    }
+    const baseUrl = getApiBaseUrl();
+    
+    // Ensure endpoint starts with /
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
 
     const cookieStore = await cookies();
     const cookieHeader = cookieStore
@@ -43,9 +117,13 @@ export async function authFetch<T>(
         .map((c) => `${c.name}=${c.value}`)
         .join("; ");
 
+    // Debug logging
+    console.log(`[authFetch] Endpoint: ${normalizedEndpoint}`);
+    console.log(`[authFetch] Cookies found:`, cookieStore.getAll().map(c => c.name));
+
     const { revalidate, ...rest } = init ?? {};
 
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const res = await fetch(`${baseUrl}${normalizedEndpoint}`, {
         headers: {
             "Content-Type": "application/json",
             Cookie: cookieHeader,
@@ -64,7 +142,9 @@ export async function authFetch<T>(
 
     // ── 401 → attempt token refresh once ────────────────────
     if (res.status === 401) {
-        const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        console.log(`[authFetch] Got 401, attempting refresh...`);
+        
+        const refreshRes = await fetch(`${baseUrl}/auth/refresh`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -74,19 +154,32 @@ export async function authFetch<T>(
         });
 
         if (!refreshRes.ok) {
-            // Refresh failed — session expired, redirect to login
-            redirect("/login");
+            // Refresh failed — session expired, throw AuthError
+            console.log(`[authFetch] Refresh failed with status ${refreshRes.status}, throwing AuthError`);
+            throw new AuthError("Session expired. Please log in again.");
         }
 
-        // Extract the new Set-Cookie value from the refresh response
-        // so we can forward it in the retry request
-        const newCookies = refreshRes.headers.getSetCookie?.() ?? [];
-        const updatedCookieHeader = newCookies.length > 0
-            ? [...cookieHeader.split("; "), ...newCookies.map((c) => c.split(";")[0])].join("; ")
-            : cookieHeader;
+        console.log(`[authFetch] Refresh successful, writing cookies to store`);
 
-        // Retry the original request with fresh auth
-        const retryRes = await fetch(`${API_BASE_URL}${endpoint}`, {
+        // Extract Set-Cookie headers from refresh response
+        const setCookieHeaders = refreshRes.headers.getSetCookie?.() ?? [];
+        
+        if (setCookieHeaders.length > 0) {
+            // Write new cookies to Next.js cookie store
+            await writeCookiesToStore(setCookieHeaders);
+        }
+
+        // Get fresh cookies from the store for retry
+        const updatedCookieStore = await cookies();
+        const updatedCookieHeader = updatedCookieStore
+            .getAll()
+            .map((c) => `${c.name}=${c.value}`)
+            .join("; ");
+
+        console.log(`[authFetch] Retrying with updated cookies:`, updatedCookieStore.getAll().map(c => c.name));
+
+        // Retry the original request with fresh cookies
+        const retryRes = await fetch(`${baseUrl}${normalizedEndpoint}`, {
             headers: {
                 "Content-Type": "application/json",
                 Cookie: updatedCookieHeader,
@@ -101,24 +194,33 @@ export async function authFetch<T>(
             return retryRes.json();
         }
 
-        // Retry also failed — extract error and throw
+        // Retry also failed with 401 - session still invalid
+        if (retryRes.status === 401) {
+            throw new AuthError("Session expired. Please log in again.");
+        }
+
+        // Retry failed with other error - extract error and throw HttpError
         let detail: string | undefined;
+        let code: string | undefined;
         try {
             const body = await retryRes.json();
             detail = body.message || body.error;
+            code = body.code;
         } catch {
             /* non-JSON */
         }
-        throw new ApiError(retryRes.status, retryRes.statusText, detail);
+        throw new HttpError(retryRes.status, retryRes.statusText, detail, code);
     }
 
-    // ── Other errors → throw ApiError ───────────────────────
+    // ── Other errors → throw HttpError ───────────────────────
     let message: string | undefined;
+    let code: string | undefined;
     try {
         const body = await res.json();
         message = body.message || body.error;
+        code = body.code;
     } catch {
         /* non-JSON */
     }
-    throw new ApiError(res.status, res.statusText, message);
+    throw new HttpError(res.status, res.statusText, message, code);
 }

@@ -30,12 +30,12 @@ export default async function EventDetailPage({
     }
     const { event, proposals, progress, timeline } = data;
     const hasFailed = timeline.some((t) => t.type === "EMAIL_FAILED");
-    const startDate = new Date(event.startDate).toLocaleDateString("en-US", {
+    const startDate = new Date(event.start_date).toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
       year: "numeric",
     });
-    const endDate = new Date(event.endDate).toLocaleDateString("en-US", {
+    const endDate = new Date(event.end_date).toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
       year: "numeric",
@@ -46,7 +46,8 @@ export default async function EventDetailPage({
       VERIFIED: { bg: "bg-green-100", text: "text-green-700" },
       REJECTED: { bg: "bg-red-100", text: "text-red-700" },
     };
-    const vBadge = verificationBadge[event.verificationStatus] ?? verificationBadge.PENDING;
+    const vs = (event.verification_status || "").toUpperCase();
+    const vBadge = verificationBadge[vs] ?? verificationBadge.PENDING;
     // Event status badge
     const statusBadge: Record<string, { bg: string; text: string }> = {
       DRAFT: { bg: "bg-gray-100", text: "text-gray-600" },
@@ -54,12 +55,16 @@ export default async function EventDetailPage({
       CANCELLED: { bg: "bg-red-100", text: "text-red-700" },
       COMPLETED: { bg: "bg-green-100", text: "text-green-700" },
     };
-    const sBadge = statusBadge[event.status] ?? statusBadge.DRAFT;
+    const es = (event.status || "").toUpperCase();
+    const sBadge = statusBadge[es] ?? statusBadge.DRAFT;
+
+
+
     return (
       <div className="space-y-6">
         <Link
           href="/dashboard/events"
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+          className="inline-flex items-center gap-1 text-sm text-red-500  hover:text-red-400 text-xl transition-colors"
         >
           ← Back to events
         </Link>
@@ -70,10 +75,10 @@ export default async function EventDetailPage({
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{event.title}</h1>
               <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
-                {event.organizer.logoUrl ? (
+                {event.organizer.logo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={event.organizer.logoUrl}
+                    src={event.organizer.logo_url}
                     alt={event.organizer.name}
                     className="h-5 w-5 rounded-full object-cover"
                   />
@@ -82,6 +87,8 @@ export default async function EventDetailPage({
                     {event.organizer.name.charAt(0)}
                   </span>
                 )}
+
+
                 <span>{event.organizer.name}</span>
                 {event.location && (
                   <>
@@ -98,15 +105,16 @@ export default async function EventDetailPage({
               <span
                 className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${vBadge.bg} ${vBadge.text}`}
               >
-                {event.verificationStatus}
+                {vs}
               </span>
               <span
                 className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${sBadge.bg} ${sBadge.text}`}
               >
-                {event.status}
+                {es}
               </span>
             </div>
           </div>
+
           {/* Proposals summary */}
           {proposals.length > 0 && (
             <div className="mt-4 border-t border-gray-100 pt-4">
@@ -119,7 +127,7 @@ export default async function EventDetailPage({
                     APPROVED: "bg-green-100 text-green-700",
                     REJECTED: "bg-red-100 text-red-700",
                     SUBMITTED: "bg-yellow-100 text-yellow-700",
-                    UNDER_REVIEW: "bg-blue-100 text-blue-700",
+                    UNDER_MANAGER_REVIEW: "bg-blue-100 text-blue-700",
                     DRAFT: "bg-gray-100 text-gray-600",
                     WITHDRAWN: "bg-gray-100 text-gray-500",
                   };
@@ -138,10 +146,20 @@ export default async function EventDetailPage({
             </div>
           )}
         </div>
+
+        <Link
+            href={`/dashboard/events/${event.id}/edit`}
+            className="block w-full rounded-xl bg-blue-600 px-4 py-3 text-center text-sm font-medium text-white hover:bg-red-700 transition-colors"
+          >
+            Edit Event details
+        </Link>
+
+
         {/* ─── Progress bar ──────────────────────────────────────────── */}
         <LifecycleProgressBar progress={progress} hasFailed={hasFailed} />
         {/* ─── Timeline ──────────────────────────────────────────────── */}
         <LifecycleTimeline timeline={timeline} />
+        
       </div>
     );
   }
@@ -221,44 +239,29 @@ export default async function EventDetailPage({
           )}
 
           {/* Sponsorship tiers */}
-          {event.sponsorship_tiers.length > 0 && (
+          {event.tiers.length > 0 && (
             <div>
               <h2 className="mb-4 text-lg font-semibold text-gray-900">
                 Sponsorship Tiers
               </h2>
               <div className="grid gap-4 sm:grid-cols-2">
-                {event.sponsorship_tiers.map((tier) => (
+                {event.tiers.map((tier) => (
                   <div
                     key={tier.id}
                     className="rounded-xl border border-gray-200 bg-white p-5"
                   >
                     <div className="flex items-center justify-between">
                       <h3 className="font-semibold text-gray-900">
-                        {tier.name}
+                        {tier.tierType}
                       </h3>
                       <span className="text-sm font-bold text-blue-600">
-                        {tier.currency} {tier.amount.toLocaleString()}
+                        ${tier.askingPrice.toLocaleString()}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-gray-500">
-                      {tier.description}
-                    </p>
-                    {tier.benefits && tier.benefits.length > 0 && (
-                      <ul className="mt-3 space-y-1">
-                        {tier.benefits.map((b, i) => (
-                          <li
-                            key={i}
-                            className="flex items-start gap-2 text-xs text-gray-600"
-                          >
-                            <span className="mt-0.5 text-green-500">✓</span>
-                            {b}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
                     <p className="mt-3 text-xs text-gray-400">
-                      {tier.slots_available} slot
-                      {tier.slots_available !== 1 ? "s" : ""} available
+                      {tier.totalSlots - tier.soldSlots} slot
+                      {tier.totalSlots - tier.soldSlots !== 1 ? "s" : ""} available
+                      {tier.isLocked && <span className="ml-2 text-amber-600">• Locked</span>}
                     </p>
                   </div>
                 ))}

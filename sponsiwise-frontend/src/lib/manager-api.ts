@@ -4,6 +4,7 @@ import type {
   CompanyLifecycleResponse,
   EventLifecycleResponse,
   ManagerDashboardStats,
+  ManagerEventDetail,
   VerifiableCompaniesResponse,
   VerifiableCompany,
   VerifiableEvent,
@@ -77,8 +78,21 @@ export async function fetchVerifiableEvents(params?: {
 
 export async function fetchVerifiableEventById(
   id: string,
-): Promise<VerifiableEvent> {
-  return authFetch<VerifiableEvent>(`/manager/events/${id}`);
+): Promise<ManagerEventDetail> {
+  return authFetch<ManagerEventDetail>(`/manager/events/${id}`);
+}
+
+export async function updateEvent(
+  id: string,
+  payload: any,
+): Promise<ManagerEventDetail> {
+  return authFetch<ManagerEventDetail>(`/manager/events/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
 }
 
 export async function verifyEvent(
@@ -91,7 +105,80 @@ export async function verifyEvent(
   });
 }
 
-// ─── Activity log ──────────────────────────────────────────────────────
+// ─── Tier Management ───────────────────────────────────────────────────
+
+export interface CreateTierPayload {
+  tierType: string;
+  askingPrice: number;
+  totalSlots?: number;
+}
+
+export interface UpdateTierPayload {
+  askingPrice?: number;
+  totalSlots?: number;
+  isLocked?: boolean;
+}
+
+export async function createEventTier(
+  eventId: string,
+  payload: CreateTierPayload,
+): Promise<any> {
+  return authFetch(`/manager/events/${eventId}/tiers`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateEventTier(
+  eventId: string,
+  tierId: string,
+  payload: UpdateTierPayload,
+): Promise<{ error: string }> {
+  return authFetch<{ error: string }>(
+    `/manager/events/${eventId}/tiers/${tierId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+// ─── Proposals ────────────────────────────────────────────────────────
+
+export async function fetchManagerProposals(params?: {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  search?: string;
+}): Promise<any> {
+  const qs = new URLSearchParams();
+  if (params?.page) qs.set("page", String(params.page));
+  if (params?.page_size) qs.set("page_size", String(params.page_size));
+  if (params?.status) qs.set("status", params.status);
+  if (params?.search) qs.set("search", params.search);
+
+  const query = qs.toString();
+  return authFetch<any>(`/manager/proposals${query ? `?${query}` : ""}`);
+}
+
+export async function fetchManagerProposalById(id: string): Promise<any> {
+  return authFetch<any>(`/manager/proposals/${id}`);
+}
+
+export async function updateManagerProposal(
+  id: string,
+  payload: any,
+): Promise<any> {
+  return authFetch<any>(`/manager/proposals/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
+
+// ─── Activity Log ──────────────────────────────────────────────────────
 
 export async function fetchActivityLog(params?: {
   page?: number;

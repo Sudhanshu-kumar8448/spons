@@ -12,6 +12,13 @@ import { PrismaService } from '../common/providers/prisma.service';
 export class EventRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Get the Prisma client for transactions.
+   */
+  getPrismaClient(): PrismaService {
+    return this.prisma;
+  }
+
   // ─── CREATE ──────────────────────────────────────────────
 
   /**

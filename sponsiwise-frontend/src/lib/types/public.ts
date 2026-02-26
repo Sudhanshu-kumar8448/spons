@@ -1,5 +1,55 @@
 // ─── Public Events ─────────────────────────────────────────────────────
 
+export type EventStatus =
+    | "DRAFT"
+    | "UNDER_MANAGER_REVIEW"
+    | "VERIFIED"
+    | "REJECTED"
+    | "PUBLISHED"
+    | "CANCELLED"
+    | "COMPLETED";
+
+export const EventStatus = {
+    DRAFT: "DRAFT" as EventStatus,
+    UNDER_MANAGER_REVIEW: "UNDER_MANAGER_REVIEW" as EventStatus,
+    VERIFIED: "VERIFIED" as EventStatus,
+    REJECTED: "REJECTED" as EventStatus,
+    PUBLISHED: "PUBLISHED" as EventStatus,
+    CANCELLED: "CANCELLED" as EventStatus,
+    COMPLETED: "COMPLETED" as EventStatus,
+} as const;
+
+// ─── Tier Type ─────────────────────────────────────────────────────────
+
+export type TierType =
+    | "TITLE"
+    | "PRESENTING"
+    | "POWERED_BY"
+    | "GOLD"
+    | "SILVER";
+
+export const TierType = {
+    TITLE: "TITLE" as TierType,
+    PRESENTING: "PRESENTING" as TierType,
+    POWERED_BY: "POWERED_BY" as TierType,
+    GOLD: "GOLD" as TierType,
+    SILVER: "SILVER" as TierType,
+} as const;
+
+// ─── Sponsorship Tier ─────────────────────────────────────────────────
+
+export interface PublicSponsorshipTier {
+    id: string;
+    tenantId: string;
+    eventId: string;
+    tierType: TierType;
+    askingPrice: number;
+    totalSlots: number;
+    soldSlots: number;
+    isLocked: boolean;
+    isActive: boolean;
+}
+
 export interface PublicEvent {
     id: string;
     title: string;
@@ -12,7 +62,7 @@ export interface PublicEvent {
     start_date: string;
     endDate: string;
     end_date: string;
-    status: string;
+    status: EventStatus;
     website?: string | null;
     image_url?: string | null;
     category?: string | null;
@@ -24,6 +74,7 @@ export interface PublicEvent {
         logoUrl?: string | null;
         logo_url?: string | null;
     };
+    tiers?: PublicSponsorshipTier[];
 }
 
 export interface PublicEventsResponse {

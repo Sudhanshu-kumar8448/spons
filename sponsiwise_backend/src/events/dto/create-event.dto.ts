@@ -1,16 +1,44 @@
 import {
   IsString,
-  IsNotEmpty,
   IsOptional,
   IsUUID,
-  IsUrl,
   IsDateString,
   IsEnum,
-  MaxLength,
-  IsInt,
+  ValidateNested,
+  IsNumber,
   Min,
+  IsArray,
+  registerDecorator,
+  ValidationOptions,
 } from 'class-validator';
-import { EventStatus } from '@prisma/client';
+import { Type } from 'class-transformer';
+import { EventStatus, TierType } from '@prisma/client';
+import { CreateAddressDto } from './create-tier.dto';
+
+/**
+ * Custom validator that allows URLs including localhost
+ */
+export function IsUrlAllowLocalhost(validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'isUrlAllowLocalhost',
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: unknown) {
+          if (!value || typeof value !== 'string') return true;
+          try {
+            const url = new URL(value);
+            return url.protocol === 'http:' || url.protocol === 'https:';
+          } catch {
+            return false;
+          }
+        },
+      },
+    });
+  };
+}
 
 /**
  * DTO for creating a new event.
@@ -19,37 +47,29 @@ import { EventStatus } from '@prisma/client';
  */
 export class CreateEventDto {
   @IsUUID('4', { message: 'organizerId must be a valid UUID' })
-  @IsNotEmpty({ message: 'organizerId is required' })
-  organizerId!: string;
+  @IsOptional()
+  organizerId?: string;
 
   @IsString()
-  @IsNotEmpty({ message: 'Event title is required' })
-  @MaxLength(255, { message: 'Title must be 255 characters or fewer' })
-  title!: string;
+  @IsOptional()
+  title?: string;
 
   @IsOptional()
   @IsString()
   description?: string;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(500, { message: 'Location must be 500 characters or fewer' })
-  location?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(255, { message: 'Venue must be 255 characters or fewer' })
-  venue?: string;
-
   @IsDateString({}, { message: 'startDate must be a valid ISO 8601 date' })
-  startDate!: string;
+  @IsOptional()
+  startDate?: string;
 
   @IsDateString({}, { message: 'endDate must be a valid ISO 8601 date' })
-  endDate!: string;
+  @IsOptional()
+  endDate?: string;
 
-  @IsInt({ message: 'expectedFootfall must be an integer' })
+  @IsNumber({}, { message: 'expectedFootfall must be a number' })
   @Min(0, { message: 'expectedFootfall must be non-negative' })
-  expectedFootfall!: number;
+  @IsOptional()
+  expectedFootfall?: number;
 
   @IsOptional()
   @IsEnum(EventStatus, {
@@ -58,12 +78,71 @@ export class CreateEventDto {
   status?: EventStatus;
 
   @IsOptional()
-  @IsUrl({}, { message: 'Website must be a valid URL' })
-  @MaxLength(500, { message: 'Website must be 500 characters or fewer' })
+  @IsUrlAllowLocalhost({ message: 'Website must be a valid URL' })
   website?: string;
 
   @IsOptional()
-  @IsUrl({}, { message: 'Logo URL must be a valid URL' })
-  @MaxLength(500, { message: 'Logo URL must be 500 characters or fewer' })
+  @IsUrlAllowLocalhost({ message: 'Logo URL must be a valid URL' })
   logoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  // New fields
+  @IsOptional()
+  @IsUrlAllowLocalhost({ message: 'pptDeckUrl must be a valid URL' })
+  pptDeckUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  contactPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  contactEmail?: string;
+
+  // Address (nested object)
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateAddressDto)
+  address?: CreateAddressDto;
+
+  // Tiers array
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateTierDtoItem)
+  tiers?: CreateTierDtoItem[];
 }
+
+/**
+ * DTO for individual tier item in the tiers array
+ */
+export class CreateTierDtoItem {
+  @IsEnum([...Object.values(TierType), 'CUSTOM'] as const, { message: 'tierType must be a valid TierType' })
+  tierType!: string;
+
+  @IsOptional()
+  @IsString()
+  customName?: string;
+
+  @IsNumber({}, { message: 'askingPrice must be a number' })
+  @Min(0, { message: 'askingPrice must be non-negative' })
+  askingPrice!: number;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'totalSlots must be a number' })
+  @Min(1, { message: 'totalSlots must be at least 1' })
+  totalSlots?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  benefits?: string[];
+
+  @IsOptional()
+  @IsUUID('4')
+  id?: string;
+}
+

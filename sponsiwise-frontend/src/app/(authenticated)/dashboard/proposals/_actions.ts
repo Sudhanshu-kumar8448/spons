@@ -17,13 +17,16 @@ export async function createProposalAction(
   formData: FormData,
 ): Promise<CreateProposalState> {
   const eventId = formData.get("event_id") as string;
+  const tierId = formData.get("tier_id") as string;
   const amountRaw = formData.get("amount") as string;
-  const proposedTier = (formData.get("proposed_tier") as string)?.trim() || undefined;
   const message = (formData.get("message") as string)?.trim() || undefined;
 
   // Basic server-side validation
   if (!eventId) {
     return { success: false, error: "Event is required.", proposalId: null };
+  }
+  if (!tierId) {
+    return { success: false, error: "Please select a sponsorship tier.", proposalId: null };
   }
   const proposedAmount = amountRaw ? Number(amountRaw) : undefined;
   if (proposedAmount !== undefined && proposedAmount <= 0) {
@@ -36,8 +39,8 @@ export async function createProposalAction(
 
   const payload: CreateProposalPayload = {
     eventId,
+    tierId,
     proposedAmount,
-    proposedTier,
     message,
   };
 

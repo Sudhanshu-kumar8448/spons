@@ -51,8 +51,16 @@ export class PublicService {
       verificationStatus: VerificationStatus.VERIFIED,
     };
 
+    // Location filter - search in address fields
     if (query.location) {
-      where.location = { contains: query.location, mode: 'insensitive' };
+      where.address = {
+        OR: [
+          { addressLine1: { contains: query.location, mode: 'insensitive' } },
+          { city: { contains: query.location, mode: 'insensitive' } },
+          { state: { contains: query.location, mode: 'insensitive' } },
+          { country: { contains: query.location, mode: 'insensitive' } },
+        ],
+      };
     }
 
     if (query.search) {
@@ -74,7 +82,6 @@ export class PublicService {
           id: true,
           title: true,
           description: true,
-          location: true,
           startDate: true,
           endDate: true,
           logoUrl: true,
@@ -85,6 +92,14 @@ export class PublicService {
               id: true,
               name: true,
               logoUrl: true,
+            },
+          },
+          address: {
+            select: {
+              addressLine1: true,
+              city: true,
+              state: true,
+              country: true,
             },
           },
         },
@@ -100,7 +115,7 @@ export class PublicService {
       description: e.description ?? '',
       start_date: e.startDate.toISOString(),
       end_date: e.endDate.toISOString(),
-      location: e.location ?? '',
+      location: e.address ? `${e.address.addressLine1}, ${e.address.city}, ${e.address.state}, ${e.address.country}` : '',
       image_url: e.logoUrl,
       category: '', // Not in schema — empty for now
       status: 'published' as const,
@@ -137,7 +152,6 @@ export class PublicService {
         id: true,
         title: true,
         description: true,
-        location: true,
         startDate: true,
         endDate: true,
         logoUrl: true,
@@ -148,6 +162,14 @@ export class PublicService {
             id: true,
             name: true,
             logoUrl: true,
+          },
+        },
+        address: {
+          select: {
+            addressLine1: true,
+            city: true,
+            state: true,
+            country: true,
           },
         },
       },
@@ -164,7 +186,7 @@ export class PublicService {
       description: event.description ?? '',
       start_date: event.startDate.toISOString(),
       end_date: event.endDate.toISOString(),
-      location: event.location ?? '',
+      location: event.address ? `${event.address.addressLine1}, ${event.address.city}, ${event.address.state}, ${event.address.country}` : '',
       image_url: event.logoUrl,
       category: '',
       status: 'published' as const,
@@ -285,8 +307,13 @@ export class PublicService {
                 id: true,
                 title: true,
                 startDate: true,
-                location: true,
                 logoUrl: true,
+                address: {
+                  select: {
+                    addressLine1: true,
+                    city: true,
+                  },
+                },
               },
             },
           },
@@ -312,12 +339,12 @@ export class PublicService {
       location: '', // Not in schema
       founded_year: null as number | null, // Not in schema
       social_links: {} as Record<string, string>,
-      sponsored_events: company.sponsorships.map((s) => ({
+      sponsored_events: company.sponsorships.map((s: any) => ({
         id: s.event.id,
         title: s.event.title,
         slug: s.event.id, // Use id as slug
         start_date: s.event.startDate.toISOString(),
-        location: s.event.location ?? '',
+        location: s.event.address ? `${s.event.address.addressLine1}, ${s.event.address.city}` : '',
         image_url: s.event.logoUrl,
       })),
     };

@@ -25,6 +25,7 @@ const allowedOrigins =
   appConfig?.corsOrigin?.split(',').map(o => o.trim()) ?? [
     'http://localhost:3000',
     'http://localhost:3001',
+    'http://localhost:3002',
     'https://sponsiwise.app',
     'https://www.sponsiwise.app',
     'https://api.sponsiwise.app',
@@ -37,9 +38,13 @@ app.use((req: any, res: any, next: any) => {
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     const origin = req.headers['origin'];
 
+    // Skip CSRF check for same-origin requests (no origin header or origin matches host)
+    if (!origin) {
+      return next(); // Allow same-origin/server-to-server requests
+    }
+
     if (
       allowedOrigins.length > 0 &&
-      origin &&
       !allowedOrigins.includes(origin)
     ) {
       console.log(`[CORS] Origin "${origin}" not allowed. Allowed: ${allowedOrigins.join(', ')}`);
@@ -57,7 +62,8 @@ app.use((req: any, res: any, next: any) => {
 // Enable dynamic CORS
 app.enableCors({
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin) return callback(null, true); // allow Postman/server-to-server
+    // Allow requests with no origin (same-origin, server-to-server, Postman)
+    if (!origin) return callback(null, true);
 
     if (allowedOrigins.length === 0) {
       return callback(null, true); // no restriction if not configured
@@ -72,7 +78,8 @@ app.enableCors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With'],
+  exposedHeaders: ['Set-Cookie'],
 });
 
   // Enable global validation pipe

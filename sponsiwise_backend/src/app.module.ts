@@ -29,6 +29,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { CompanyLifecycleModule } from './company-lifecycle/company-lifecycle.module';
 import { HealthModule } from './health/health.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
+import { SponsorshipTiersModule } from './sponsorship-tiers/sponsorship-tiers.module';
+import { UploadModule } from './upload/upload.module';
 
 @Module({
   imports: [
@@ -70,6 +72,8 @@ import { OnboardingModule } from './onboarding/onboarding.module';
     NotificationsModule,
     CompanyLifecycleModule,
     OnboardingModule,
+    SponsorshipTiersModule,
+    UploadModule,
   ],
   controllers: [AppController],
   providers: [

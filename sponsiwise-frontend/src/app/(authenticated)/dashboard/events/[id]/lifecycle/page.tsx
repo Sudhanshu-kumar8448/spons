@@ -64,7 +64,7 @@ export default async function EventLifecyclePage({
 
   const hasFailed = timeline.some((t) => t.type === "EMAIL_FAILED");
 
-  const startDate = new Date(event.startDate).toLocaleDateString("en-US", {
+  const startDate = new Date(event.start_date).toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
     year: "numeric",
@@ -72,20 +72,22 @@ export default async function EventLifecyclePage({
 
   // Verification status badge colors
   const verificationBadge: Record<string, { bg: string; text: string }> = {
-    PENDING:  { bg: "bg-yellow-100", text: "text-yellow-700" },
-    VERIFIED: { bg: "bg-green-100",  text: "text-green-700" },
-    REJECTED: { bg: "bg-red-100",    text: "text-red-700" },
+    PENDING: { bg: "bg-yellow-100", text: "text-yellow-700" },
+    VERIFIED: { bg: "bg-green-100", text: "text-green-700" },
+    REJECTED: { bg: "bg-red-100", text: "text-red-700" },
   };
-  const vBadge = verificationBadge[event.verificationStatus] ?? verificationBadge.PENDING;
+  const vs = (event.verification_status || "").toUpperCase();
+  const vBadge = verificationBadge[vs] ?? verificationBadge.PENDING;
 
   // Event status badge
   const statusBadge: Record<string, { bg: string; text: string }> = {
-    DRAFT:     { bg: "bg-gray-100",   text: "text-gray-600" },
-    PUBLISHED: { bg: "bg-blue-100",   text: "text-blue-700" },
-    CANCELLED: { bg: "bg-red-100",    text: "text-red-700" },
-    COMPLETED: { bg: "bg-green-100",  text: "text-green-700" },
+    DRAFT: { bg: "bg-gray-100", text: "text-gray-600" },
+    PUBLISHED: { bg: "bg-blue-100", text: "text-blue-700" },
+    CANCELLED: { bg: "bg-red-100", text: "text-red-700" },
+    COMPLETED: { bg: "bg-green-100", text: "text-green-700" },
   };
-  const sBadge = statusBadge[event.status] ?? statusBadge.DRAFT;
+  const es = (event.status || "").toUpperCase();
+  const sBadge = statusBadge[es] ?? statusBadge.DRAFT;
 
   return (
     <div className="space-y-6">
@@ -103,10 +105,10 @@ export default async function EventLifecyclePage({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{event.title}</h1>
             <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
-              {event.organizer.logoUrl ? (
+              {event.organizer.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={event.organizer.logoUrl}
+                  src={event.organizer.logo_url}
                   alt={event.organizer.name}
                   className="h-5 w-5 rounded-full object-cover"
                 />
@@ -132,12 +134,12 @@ export default async function EventLifecyclePage({
             <span
               className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${vBadge.bg} ${vBadge.text}`}
             >
-              {event.verificationStatus}
+              {vs}
             </span>
             <span
               className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${sBadge.bg} ${sBadge.text}`}
             >
-              {event.status}
+              {es}
             </span>
           </div>
         </div>
@@ -154,7 +156,7 @@ export default async function EventLifecyclePage({
                   APPROVED: "bg-green-100 text-green-700",
                   REJECTED: "bg-red-100 text-red-700",
                   SUBMITTED: "bg-yellow-100 text-yellow-700",
-                  UNDER_REVIEW: "bg-blue-100 text-blue-700",
+                  UNDER_MANAGER_REVIEW: "bg-blue-100 text-blue-700",
                   DRAFT: "bg-gray-100 text-gray-600",
                   WITHDRAWN: "bg-gray-100 text-gray-500",
                 };

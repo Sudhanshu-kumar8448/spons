@@ -1,7 +1,7 @@
 import type { ProposalStatus } from "@/lib/types/sponsor";
 
 const statusConfig: Record<
-  ProposalStatus,
+  string,
   { label: string; className: string }
 > = {
   draft: {

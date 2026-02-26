@@ -20,11 +20,11 @@ export default function ManagerLayout({ user, children }: ManagerLayoutProps) {
         <Sidebar
           role={UserRole.MANAGER}
           items={items}
-          accentClass="bg-blue-500/20 text-blue-400"
+          accentClass="bg-blue-500/20 text-black-800"
         />
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          <TopNav user={user} title="Manager Console" />
+          <TopNav user={user} title="Manager Dashboard" />
 
           <main className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 lg:p-8">
             {children}

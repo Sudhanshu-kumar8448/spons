@@ -10,6 +10,22 @@ import type {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 /**
+ * Get the API base URL - uses proxy path for browser requests
+ */
+function getBaseUrl(): string {
+  // For browser requests, use the proxy path to avoid CORS issues
+  if (typeof window !== "undefined") {
+    return "/api";
+  }
+
+  // Server-side: use the full URL from env
+  if (!API_BASE_URL) {
+    throw new Error("NEXT_PUBLIC_API_BASE_URL is not defined");
+  }
+  return API_BASE_URL;
+}
+
+/**
  * Server-side fetch wrapper for PUBLIC (unauthenticated) endpoints.
  *
  * — No cookies / tokens forwarded
@@ -20,9 +36,18 @@ async function publicFetch<T>(
   endpoint: string,
   options?: { revalidate?: number | false },
 ): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const baseUrl = getBaseUrl();
+
+  // Ensure endpoint starts with /
+  const normalizedEndpoint = endpoint.startsWith("/")
+    ? endpoint
+    : `/${endpoint}`;
+
+  const res = await fetch(`${baseUrl}${normalizedEndpoint}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
+    // Include credentials for browser requests (same-origin via proxy)
+    credentials: typeof window !== "undefined" ? "include" : undefined,
     next: {
       revalidate:
         options?.revalidate === false ? 0 : (options?.revalidate ?? 60),

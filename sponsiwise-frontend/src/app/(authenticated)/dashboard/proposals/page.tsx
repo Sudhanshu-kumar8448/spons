@@ -15,6 +15,7 @@ import type { Proposal } from "@/lib/types/sponsor";
 import { ProposalStatus } from "@/lib/types/sponsor";
 import ProposalStatusBadge from "@/components/shared/ProposalStatusBadge";
 import OrganizerProposalsList from "@/components/organizer/OrganizerProposalsList";
+import ManagerProposalsList from "@/components/manager/ManagerProposalsList";
 
 // ─── Filter tabs ───────────────────────────────────────────────────────
 
@@ -22,7 +23,7 @@ const statusFilters: { label: string; value: string }[] = [
   { label: "All", value: "" },
   { label: "Draft", value: ProposalStatus.DRAFT },
   { label: "Submitted", value: ProposalStatus.SUBMITTED },
-  { label: "Under Review", value: ProposalStatus.UNDER_REVIEW },
+  { label: "Under Review", value: ProposalStatus.UNDER_MANAGER_REVIEW },
   { label: "Approved", value: ProposalStatus.APPROVED },
   { label: "Rejected", value: ProposalStatus.REJECTED },
   { label: "Withdrawn", value: ProposalStatus.WITHDRAWN },
@@ -87,6 +88,11 @@ export default async function ProposalsListPage({
     return <OrganizerProposalsList searchParams={params} />;
   }
 
+  // Manager role → pending proposals
+  if (user?.role === UserRole.MANAGER) {
+    return <ManagerProposalsList searchParams={params} />;
+  }
+
   // Default: Sponsor proposals
   const page = Number(params.page) || 1;
   const statusFilter = params.status ?? "";
@@ -137,8 +143,8 @@ export default async function ProposalsListPage({
               key={f.value}
               href={`/dashboard/proposals${f.value ? `?status=${f.value}` : ""}`}
               className={`rounded-full px-3 py-1.5 text-sm font-medium transition-all ${isActive
-                  ? "bg-gradient-to-r from-blue-600 to-sky-500 text-white shadow-lg shadow-blue-500/20"
-                  : "border border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-600 hover:text-white"
+                ? "bg-gradient-to-r from-blue-600 to-sky-500 text-white shadow-lg shadow-blue-500/20"
+                : "border border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-600 hover:text-white"
                 }`}
             >
               {f.label}

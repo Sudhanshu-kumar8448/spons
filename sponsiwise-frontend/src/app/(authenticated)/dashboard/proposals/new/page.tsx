@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { fetchBrowsableEventById } from "@/lib/sponsor-api";
 import ProposalForm from "./ProposalForm";
+import type { SponsorshipTier } from "@/lib/types/sponsor";
 
 interface NewProposalPageProps {
   searchParams: Promise<{ event_id?: string }>;
@@ -11,8 +12,8 @@ interface NewProposalPageProps {
  * Server Component wrapper for the proposal creation form.
  *
  * 1. Reads `event_id` from query params.
- * 2. Fetches the event server-side to display its name.
- * 3. Renders the Client Component form.
+ * 2. Fetches the event server-side to display its name and available tiers.
+ * 3. Renders the Client Component form with tier options.
  *
  * If no event_id is provided, redirects to the events list.
  */
@@ -27,9 +28,12 @@ export default async function NewProposalPage({
   }
 
   let eventTitle = "Unknown event";
+  let availableTiers: SponsorshipTier[] = [];
   try {
     const event = await fetchBrowsableEventById(eventId);
     eventTitle = event.title;
+    // Only pass available tiers (where soldSlots < totalSlots)
+    availableTiers = event.tiers.filter(t => t.isAvailable);
   } catch {
     // Event not found — show form anyway with generic title,
     // the server action will validate the event_id.
@@ -52,7 +56,11 @@ export default async function NewProposalPage({
       </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <ProposalForm eventId={eventId} eventTitle={eventTitle} />
+        <ProposalForm 
+          eventId={eventId} 
+          eventTitle={eventTitle}
+          availableTiers={availableTiers}
+        />
       </div>
     </div>
   );

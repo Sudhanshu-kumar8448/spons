@@ -5,8 +5,8 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import type { Event } from '@prisma/client';
-import { Role } from '@prisma/client';
+import type { Event, Prisma } from '@prisma/client';
+import { Role, TierType } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventRepository } from './event.repository';
 import { OrganizerRepository } from '../organizers/organizer.repository';
@@ -19,18 +19,16 @@ import {
   EVENT_REJECTED_EVENT,
 } from '../common/events';
 import { CreateEventDto, UpdateEventDto, ListEventsQueryDto } from './dto';
+import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * EventService — business logic for event management.
  *
- * Rules:
- *  - An event belongs to exactly one Organizer and one Tenant
- *  - tenantId is derived from the Organizer (not from the request body)
- *  - ADMIN can manage all events within their own tenant
- *  - USER  can only view events within their own tenant
- *  - SUPER_ADMIN can view / manage all events across all tenants
- *  - Organizer ownership is enforced for write operations
- *  - No cross-tenant access for non-super-admins
+ * AFTER SOFT-DISABLE MULTI-TENANCY:
+ * - All operations use GLOBAL_TENANT_ID internally
+ * - Tenant isolation is handled at the guard level
+ * - Organizer ownership is still enforced for write operations
+ * - Role checks remain for authorization (ADMIN, ORGANIZER, MANAGER, etc.)
  */
 @Injectable()
 export class EventService {
@@ -47,13 +45,18 @@ export class EventService {
   // ─── CREATE ──────────────────────────────────────────────
 
   /**
-   * Create a new event.
+   * Create a new event with tiers and address using a transaction.
    * - ADMIN: event is created under an Organizer within their own tenant
    * - SUPER_ADMIN: may create for any Organizer in any tenant
    *
    * The tenantId is always derived from the Organizer to prevent mismatch.
    */
   async create(dto: CreateEventDto, callerRole: Role, callerTenantId: string): Promise<Event> {
+    // Validate organizerId is provided
+    if (!dto.organizerId) {
+      throw new BadRequestException('organizerId is required');
+    }
+
     // Validate the organizer exists and is within the caller's tenant
     const organizer = await this.resolveAndValidateOrganizer(
       dto.organizerId,
@@ -62,25 +65,95 @@ export class EventService {
     );
 
     // Validate date range
+    if (!dto.startDate || !dto.endDate) {
+      throw new BadRequestException('startDate and endDate are required');
+    }
     this.validateDateRange(dto.startDate, dto.endDate);
 
-    const event = await this.eventRepository.create({
-      title: dto.title,
-      ...(dto.description !== undefined && { description: dto.description }),
-      ...(dto.location !== undefined && { location: dto.location }),
-      ...(dto.venue !== undefined && { venue: dto.venue }),
-      expectedFootfall: dto.expectedFootfall,
-      startDate: new Date(dto.startDate),
-      endDate: new Date(dto.endDate),
-      ...(dto.status !== undefined && { status: dto.status }),
-      ...(dto.website !== undefined && { website: dto.website }),
-      ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
-      tenant: { connect: { id: organizer.tenantId } },
-      organizer: { connect: { id: organizer.id } },
+    // Validate tiers if provided
+    const tiers = dto.tiers ?? [];
+    if (tiers.length === 0) {
+      throw new BadRequestException('At least one sponsorship tier is required');
+    }
+
+    // Validate predefined tier uniqueness (service layer enforcement)
+    this.validatePredefinedTierUniqueness(tiers);
+
+    // Validate address if provided
+    if (dto.address) {
+      this.validateAddress(dto.address);
+    }
+
+    // Get Prisma client for transaction
+    const prisma = this.eventRepository.getPrismaClient();
+
+    // Create event with tiers and address in a transaction
+    const event = await prisma.$transaction(async (tx) => {
+      // Create the event
+      const eventData: Prisma.EventCreateInput = {
+        title: dto.title!,
+        ...(dto.description !== undefined && { description: dto.description }),
+        expectedFootfall: dto.expectedFootfall ?? 0,
+        startDate: new Date(dto.startDate!),
+        endDate: new Date(dto.endDate!),
+        ...(dto.status !== undefined && { status: dto.status }),
+        ...(dto.website !== undefined && { website: dto.website }),
+        ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
+        ...(dto.category !== undefined && { category: dto.category }),
+        ...(dto.pptDeckUrl !== undefined && { pptDeckUrl: dto.pptDeckUrl }),
+        ...(dto.contactPhone !== undefined && { contactPhone: dto.contactPhone }),
+        ...(dto.contactEmail !== undefined && { contactEmail: dto.contactEmail }),
+        tenant: { connect: { id: organizer.tenantId } },
+        organizer: { connect: { id: organizer.id } },
+      };
+
+      const event = await tx.event.create({
+        data: eventData,
+      });
+
+      // Create address if provided
+      if (dto.address) {
+        await tx.address.create({
+          data: {
+            tenantId: organizer.tenantId,
+            eventId: event.id,
+            addressLine1: dto.address.addressLine1,
+            addressLine2: dto.address.addressLine2,
+            city: dto.address.city,
+            state: dto.address.state,
+            country: dto.address.country,
+            postalCode: dto.address.postalCode,
+          },
+        });
+      }
+
+      // Create tiers
+      for (const tier of tiers) {
+        const tierType = tier.tierType as TierType;
+        const benefitsJson = JSON.stringify(tier.benefits ?? []);
+        
+        await tx.sponsorshipTier.create({
+          data: {
+            tenantId: organizer.tenantId,
+            eventId: event.id,
+            tierType: tierType,
+            ...(tierType === TierType.CUSTOM && tier.customName && { customName: tier.customName }),
+            askingPrice: tier.askingPrice,
+            totalSlots: tier.totalSlots ?? 1,
+            soldSlots: 0,
+            isLocked: false,
+            isActive: true,
+            benefits: benefitsJson,
+            ...(tier.id && { id: tier.id }), // For updates
+          },
+        });
+      }
+
+      return event;
     });
 
     this.logger.log(
-      `Event ${event.id} created by ${callerRole} for organizer ${organizer.id} in tenant ${organizer.tenantId}`,
+      `Event ${event.id} created by ${callerRole} for organizer ${organizer.id} in tenant ${organizer.tenantId} with ${tiers.length} tiers`,
     );
 
     // Invalidate event list caches for this tenant (+ global for SUPER_ADMIN)
@@ -203,8 +276,6 @@ export class EventService {
     const data = {
       ...(dto.title !== undefined && { title: dto.title }),
       ...(dto.description !== undefined && { description: dto.description }),
-      ...(dto.location !== undefined && { location: dto.location }),
-      ...(dto.venue !== undefined && { venue: dto.venue }),
       ...(dto.expectedFootfall !== undefined && { expectedFootfall: dto.expectedFootfall }),
       ...(dto.startDate !== undefined && { startDate: new Date(dto.startDate) }),
       ...(dto.endDate !== undefined && { endDate: new Date(dto.endDate) }),
@@ -268,6 +339,45 @@ export class EventService {
 
     if (end <= start) {
       throw new BadRequestException('endDate must be after startDate');
+    }
+  }
+
+  /**
+   * Validate predefined tier uniqueness.
+   * Only one of each predefined tier type (TITLE, PLATINUM, etc.) is allowed per event.
+   * CUSTOM tier type can have multiple entries.
+   */
+  private validatePredefinedTierUniqueness(tiers: CreateEventDto['tiers']): void {
+    const predefinedTypes = new Set<string>();
+    
+    for (const tier of tiers ?? []) {
+      if (tier.tierType !== 'CUSTOM') {
+        if (predefinedTypes.has(tier.tierType)) {
+          throw new BadRequestException(`Duplicate predefined tier: ${tier.tierType}. Only one ${tier.tierType} tier is allowed per event.`);
+        }
+        predefinedTypes.add(tier.tierType);
+      }
+    }
+  }
+
+  /**
+   * Validate required address fields.
+   */
+  private validateAddress(address: NonNullable<CreateEventDto['address']>): void {
+    if (!address.addressLine1) {
+      throw new BadRequestException('Address line 1 is required');
+    }
+    if (!address.city) {
+      throw new BadRequestException('City is required');
+    }
+    if (!address.state) {
+      throw new BadRequestException('State is required');
+    }
+    if (!address.country) {
+      throw new BadRequestException('Country is required');
+    }
+    if (!address.postalCode) {
+      throw new BadRequestException('Postal code is required');
     }
   }
 

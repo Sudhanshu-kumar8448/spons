@@ -81,6 +81,12 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
                 {event.category}
               </span>
             )}
+            <Link
+              href={`/dashboard/events/${id}/edit`}
+              className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+            >
+              ✏️ Edit Event
+            </Link>
           </div>
 
           <h1 className="text-3xl font-bold text-gray-900">{event.title}</h1>
@@ -102,13 +108,13 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
           )}
 
           {/* Sponsorship tiers */}
-          {event.sponsorship_tiers.length > 0 && (
+          {(event.tiers?.length || 0) > 0 && (
             <div>
               <h2 className="mb-4 text-lg font-semibold text-gray-900">
                 Sponsorship Tiers
               </h2>
               <div className="grid gap-4 sm:grid-cols-2">
-                {event.sponsorship_tiers.map((tier) => (
+                {event.tiers?.map((tier) => (
                   <div
                     key={tier.id}
                     className="rounded-xl border border-gray-200 bg-white p-5"
@@ -118,15 +124,15 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
                         {tier.name}
                       </h3>
                       <span className="text-sm font-bold text-green-600">
-                        {tier.currency} {tier.amount.toLocaleString()}
+                        ${tier.amount?.toLocaleString() ?? tier.askingPrice?.toLocaleString() ?? 0}
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-gray-500">
                       {tier.description}
                     </p>
-                    {tier.benefits.length > 0 && (
+                    {(tier.benefits?.length ?? 0) > 0 && (
                       <ul className="mt-3 space-y-1">
-                        {tier.benefits.map((b, i) => (
+                        {tier.benefits?.map((b, i) => (
                           <li
                             key={i}
                             className="flex items-start gap-2 text-xs text-gray-600"
@@ -138,8 +144,8 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
                       </ul>
                     )}
                     <p className="mt-3 text-xs text-gray-400">
-                      {tier.slots_available} / {tier.slots_total} slot
-                      {tier.slots_total !== 1 ? "s" : ""} available
+                      {(tier.slots_available ?? 0)} / {(tier.slots_total ?? tier.totalSlots ?? 0)} slot
+                      {((tier.slots_total ?? tier.totalSlots ?? 0) !== 1 ? "s" : "")} available
                     </p>
                   </div>
                 ))}
@@ -171,7 +177,7 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
               <div>
                 <dt className="font-medium text-gray-700">Expected Footfall</dt>
                 <dd className="text-gray-600">
-                  {event.expected_footfall.toLocaleString()}
+                  {event.expected_footfall ? event.expected_footfall.toLocaleString() : 'N/A'}
                 </dd>
               </div>
             </dl>
@@ -199,7 +205,7 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
                 <dt className="text-gray-600">Total revenue</dt>
                 <dd className="font-semibold text-green-600">
                   {event.currency}{" "}
-                  {event.total_sponsorship_amount.toLocaleString()}
+                  {event.total_sponsorship_amount ? event.total_sponsorship_amount.toLocaleString() : '0'}
                 </dd>
               </div>
             </dl>

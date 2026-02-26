@@ -24,15 +24,18 @@ function LoginForm() {
     try {
       const result = await apiClient.post<{ user: { role: string; companyId?: string | null; organizerId?: string | null } }>("/auth/login", { email, password });
 
+      // Force Next.js to re-fetch server components with the new cookies
+      router.refresh();
+
       // Role-aware redirect - use callbackUrl if provided
       const { role, companyId } = result.user;
-      
+
       // If callbackUrl is provided, use it for redirect (after validation)
       if (callbackUrl && typeof callbackUrl === 'string') {
         router.push(callbackUrl);
         return;
       }
-      
+
       // Default role-based redirect
       if (role === "USER") {
         if (companyId) {

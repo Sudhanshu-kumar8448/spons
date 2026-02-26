@@ -1,26 +1,71 @@
 // ─── Proposal ──────────────────────────────────────────────────────────
 
 export type ProposalStatus =
-    | "draft"
-    | "submitted"
-    | "under_review"
-    | "approved"
-    | "rejected"
-    | "withdrawn";
+    | "DRAFT"
+    | "SUBMITTED"
+    | "UNDER_MANAGER_REVIEW"
+    | "FORWARDED_TO_ORGANIZER"
+    | "APPROVED"
+    | "REJECTED"
+    | "REQUEST_CHANGES"
+    | "WITHDRAWN";
 
 export const ProposalStatus = {
-    DRAFT: "draft" as ProposalStatus,
-    SUBMITTED: "submitted" as ProposalStatus,
-    UNDER_REVIEW: "under_review" as ProposalStatus,
-    APPROVED: "approved" as ProposalStatus,
-    REJECTED: "rejected" as ProposalStatus,
-    WITHDRAWN: "withdrawn" as ProposalStatus,
+    DRAFT: "DRAFT" as ProposalStatus,
+    SUBMITTED: "SUBMITTED" as ProposalStatus,
+    UNDER_MANAGER_REVIEW: "UNDER_MANAGER_REVIEW" as ProposalStatus,
+    FORWARDED_TO_ORGANIZER: "FORWARDED_TO_ORGANIZER" as ProposalStatus,
+    APPROVED: "APPROVED" as ProposalStatus,
+    REJECTED: "REJECTED" as ProposalStatus,
+    REQUEST_CHANGES: "REQUEST_CHANGES" as ProposalStatus,
+    WITHDRAWN: "WITHDRAWN" as ProposalStatus,
+} as const;
+
+// ─── Event Status ───────────────────────────────────────────────────────
+
+export type EventStatus =
+    | "DRAFT"
+    | "UNDER_MANAGER_REVIEW"
+    | "VERIFIED"
+    | "REJECTED"
+    | "PUBLISHED"
+    | "CANCELLED"
+    | "COMPLETED";
+
+export const EventStatus = {
+    DRAFT: "DRAFT" as EventStatus,
+    UNDER_MANAGER_REVIEW: "UNDER_MANAGER_REVIEW" as EventStatus,
+    VERIFIED: "VERIFIED" as EventStatus,
+    REJECTED: "REJECTED" as EventStatus,
+    PUBLISHED: "PUBLISHED" as EventStatus,
+    CANCELLED: "CANCELLED" as EventStatus,
+    COMPLETED: "COMPLETED" as EventStatus,
+} as const;
+
+// ─── Tier Type ─────────────────────────────────────────────────────────
+
+export type TierType =
+    | "TITLE"
+    | "PLATINUM"
+    | "PRESENTING"
+    | "POWERED_BY"
+    | "GOLD"
+    | "SILVER";
+
+export const TierType = {
+    TITLE: "TITLE" as TierType,
+    PLATINUM: "PLATINUM" as TierType,
+    PRESENTING: "PRESENTING" as TierType,
+    POWERED_BY: "POWERED_BY" as TierType,
+    GOLD: "GOLD" as TierType,
+    SILVER: "SILVER" as TierType,
 } as const;
 
 export interface Proposal {
     id: string;
     tenantId: string;
     sponsorshipId: string;
+    tierId?: string | null;
     event_id: string;
     status: ProposalStatus;
     title: string;
@@ -56,13 +101,37 @@ export interface ProposalsResponse {
 }
 
 export interface CreateProposalPayload {
-    eventId: string;
     proposedTier?: string;
+    eventId: string;
+    tierId: string;
     proposedAmount?: number;
     message?: string;
 }
 
 // ─── Browsable Events ──────────────────────────────────────────────────
+
+export interface SponsorshipTier {
+    id: string;
+    tenantId: string;
+    eventId: string;
+    tierType: TierType;
+    askingPrice: number;
+    totalSlots: number;
+    soldSlots: number;
+    availableSlots: number;
+    isLocked: boolean;
+    isActive: boolean;
+    isAvailable: boolean;
+}
+
+export interface EventAddress {
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state: string;
+    country: string;
+    postalCode: string;
+}
 
 export interface BrowsableEvent {
     id: string;
@@ -79,25 +148,20 @@ export interface BrowsableEvent {
     start_date: string;
     endDate: string;
     end_date: string;
-    status: string;
+    status: EventStatus;
     website?: string | null;
     logoUrl?: string | null;
     image_url?: string | null;
+    pptDeckUrl?: string | null;
+    contactPhone?: string | null;
+    contactEmail?: string | null;
     verificationStatus: string;
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
     tags: string[];
-    sponsorship_tiers: Array<{
-        id: string;
-        name: string;
-        price: number;
-        amount: number;
-        currency: string;
-        description?: string | null;
-        benefits?: string[];
-        slots_available?: number;
-    }>;
+    tiers: SponsorshipTier[];
+    address?: EventAddress | null;
     organizer?: {
         id: string;
         name: string;

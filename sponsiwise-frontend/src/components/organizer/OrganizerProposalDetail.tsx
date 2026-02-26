@@ -73,7 +73,7 @@ function ProposalTimeline({ proposal }: { proposal: IncomingProposal }) {
 function canReview(status: string): boolean {
   return (
     status === ProposalStatus.SUBMITTED ||
-    status === ProposalStatus.UNDER_REVIEW
+    status === ProposalStatus.UNDER_MANAGER_REVIEW
   );
 }
 

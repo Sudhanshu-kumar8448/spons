@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Query,
   Param,
   Body,
@@ -13,7 +14,7 @@ import { AuthGuard, RoleGuard } from '../common/guards';
 import { Roles, CurrentUser } from '../common/decorators';
 import type { JwtPayloadWithClaims } from '../auth/interfaces';
 import { OrganizerDashboardService } from './organizer-dashboard.service';
-import { OrganizerEventsQueryDto, OrganizerProposalsQueryDto, ReviewProposalDto, CreateOrganizerEventDto } from './dto';
+import { OrganizerEventsQueryDto, OrganizerProposalsQueryDto, ReviewProposalDto, CreateOrganizerEventDto, UpdateOrganizerEventDto } from './dto';
 
 /**
  * OrganizerDashboardController — authenticated endpoints for the Organizer dashboard.
@@ -34,10 +35,11 @@ export class OrganizerDashboardController {
    * GET /organizer/dashboard/stats
    *
    * Returns aggregate stats for the organizer dashboard overview.
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Get('dashboard/stats')
   async getDashboardStats(@CurrentUser() user: JwtPayloadWithClaims) {
-    return this.organizerDashboardService.getDashboardStats(user.tenant_id, user.organizer_id);
+    return this.organizerDashboardService.getDashboardStats(user.organizer_id);
   }
 
   /**
@@ -46,71 +48,92 @@ export class OrganizerDashboardController {
    * Creates a new event owned by this organizer.
    * organizerId is derived from the JWT — never from the request body.
    * The event is created in DRAFT status with PENDING verification.
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Post('events')
   async createEvent(
     @Body() dto: CreateOrganizerEventDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.organizerDashboardService.createEvent(user.tenant_id, user.organizer_id, dto);
+    return this.organizerDashboardService.createEvent(user.organizer_id, dto);
   }
 
   /**
    * GET /organizer/events
    *
    * Returns paginated list of events owned by this organizer.
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Get('events')
   async getEvents(
     @Query() query: OrganizerEventsQueryDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.organizerDashboardService.getEvents(user.tenant_id, user.organizer_id, query);
+    return this.organizerDashboardService.getEvents(user.organizer_id, query);
   }
 
   /**
    * GET /organizer/events/:id
    *
    * Returns a single event owned by this organizer.
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Get('events/:id')
   async getEventById(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.organizerDashboardService.getEventById(id, user.tenant_id, user.organizer_id);
+    return this.organizerDashboardService.getEventById(id, user.organizer_id);
+  }
+
+  /**
+   * PATCH /organizer/events/:id
+   *
+   * Updates an event owned by this organizer.
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
+   */
+  @Patch('events/:id')
+  async updateEvent(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateOrganizerEventDto,
+    @CurrentUser() user: JwtPayloadWithClaims,
+  ) {
+    return this.organizerDashboardService.updateEvent(id, dto, user.organizer_id);
   }
 
   /**
    * GET /organizer/proposals
    *
    * Returns paginated proposals for events owned by this organizer.
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Get('proposals')
   async getProposals(
     @Query() query: OrganizerProposalsQueryDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.organizerDashboardService.getProposals(user.tenant_id, user.organizer_id, query);
+    return this.organizerDashboardService.getProposals(user.organizer_id, query);
   }
 
   /**
    * GET /organizer/proposals/:id
    *
    * Returns a single proposal for an event owned by this organizer.
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Get('proposals/:id')
   async getProposalById(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.organizerDashboardService.getProposalById(id, user.tenant_id, user.organizer_id);
+    return this.organizerDashboardService.getProposalById(id, user.organizer_id);
   }
 
   /**
    * POST /organizer/proposals/:id/review
    *
    * Allows the organizer to approve or reject a proposal on their events.
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Post('proposals/:id/review')
   async reviewProposal(
@@ -121,7 +144,6 @@ export class OrganizerDashboardController {
     return this.organizerDashboardService.reviewProposal(
       id,
       dto,
-      user.tenant_id,
       user.organizer_id,
       user.sub,
     );

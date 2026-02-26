@@ -10,6 +10,7 @@ import { CreateSponsorDto, CreateOrganizerDto } from './dto';
 import type { JwtPayloadWithClaims } from '../auth/interfaces';
 
 import { AuthService } from '../auth/auth.service';
+import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * OnboardingService — handles new user onboarding flows.
@@ -76,10 +77,11 @@ export class OnboardingService {
         }
 
         // 3. Create company + link user in a transaction
+        // Using GLOBAL_TENANT_ID for single-tenant mode
         const result = await this.prisma.$transaction(async (tx) => {
             const company = await tx.company.create({
                 data: {
-                    tenantId: user.tenant_id,
+                    tenantId: GLOBAL_TENANT_ID,
                     name: dto.name,
                     slug,
                     type: CompanyType.SPONSOR,
@@ -99,7 +101,7 @@ export class OnboardingService {
             // Create audit log
             await tx.auditLog.create({
                 data: {
-                    tenantId: user.tenant_id,
+                    tenantId: GLOBAL_TENANT_ID,
                     actorId: user.sub,
                     actorRole: user.role,
                     action: 'company.created',
@@ -113,16 +115,16 @@ export class OnboardingService {
                 },
             });
 
-            // Notify all managers in the tenant
+            // Notify all managers in the global tenant
             const managers = await tx.user.findMany({
-                where: { tenantId: user.tenant_id, role: Role.MANAGER },
+                where: { tenantId: GLOBAL_TENANT_ID, role: Role.MANAGER },
                 select: { id: true },
             });
 
             if (managers.length > 0) {
                 await tx.notification.createMany({
                     data: managers.map((m) => ({
-                        tenantId: user.tenant_id,
+                        tenantId: GLOBAL_TENANT_ID,
                         userId: m.id,
                         title: 'New Sponsor Registration',
                         message: `A new sponsor company "${dto.name}" has been registered and is awaiting verification.`,
@@ -138,7 +140,7 @@ export class OnboardingService {
         });
 
         this.logger.log(
-            `Sponsor company "${result.name}" (${result.id}) created by user ${user.sub} in tenant ${user.tenant_id}`,
+            `Sponsor company "${result.name}" (${result.id}) created by user ${user.sub} in global tenant`,
         );
 
         return {
@@ -180,7 +182,7 @@ export class OnboardingService {
         // 2. Check for duplicate contactEmail
         if (dto.contactEmail) {
             const existing = await this.prisma.organizer.findFirst({
-                where: { contactEmail: dto.contactEmail, tenantId: user.tenant_id },
+                where: { contactEmail: dto.contactEmail, tenantId: GLOBAL_TENANT_ID },
             });
             if (existing) {
                 throw new ConflictException('An organizer with this contact email already exists.');
@@ -188,10 +190,11 @@ export class OnboardingService {
         }
 
         // 3. Create organizer + upgrade role in a transaction
+        // Using GLOBAL_TENANT_ID for single-tenant mode
         const result = await this.prisma.$transaction(async (tx) => {
             const organizer = await tx.organizer.create({
                 data: {
-                    tenantId: user.tenant_id,
+                    tenantId: GLOBAL_TENANT_ID,
                     name: dto.name,
                     description: dto.description || null,
                     contactEmail: dto.contactEmail,
@@ -213,7 +216,7 @@ export class OnboardingService {
             // Create audit log
             await tx.auditLog.create({
                 data: {
-                    tenantId: user.tenant_id,
+                    tenantId: GLOBAL_TENANT_ID,
                     actorId: user.sub,
                     actorRole: user.role,
                     action: 'organizer.created',
@@ -230,7 +233,7 @@ export class OnboardingService {
         });
 
         this.logger.log(
-            `Organizer "${result.organizer.name}" (${result.organizer.id}) created by user ${user.sub} in tenant ${user.tenant_id}. Role upgraded to ORGANIZER.`,
+            `Organizer "${result.organizer.name}" (${result.organizer.id}) created by user ${user.sub} in global tenant. Role upgraded to ORGANIZER.`,
         );
 
         // Generate new tokens with updated role

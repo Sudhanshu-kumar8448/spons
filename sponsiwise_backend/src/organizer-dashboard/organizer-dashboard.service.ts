@@ -5,13 +5,14 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { EventStatus, ProposalStatus, SponsorshipStatus } from '@prisma/client';
+import { EventStatus, ProposalStatus, SponsorshipStatus, TierType as PrismaTierType } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../common/providers/prisma.service';
 import { AuditLogService } from '../audit-logs/audit-log.service';
 import { CacheService } from '../common/providers/cache.service';
 import { ProposalStatusChangedEvent, PROPOSAL_STATUS_CHANGED_EVENT } from '../proposals/events';
-import type { OrganizerEventsQueryDto, OrganizerProposalsQueryDto, ReviewProposalDto, CreateOrganizerEventDto } from './dto';
+import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
+import type { OrganizerEventsQueryDto, OrganizerProposalsQueryDto, ReviewProposalDto, CreateOrganizerEventDto, UpdateOrganizerEventDto } from './dto';
 
 /**
  * OrganizerDashboardService — read-mostly aggregation layer for organizer-scoped data.
@@ -53,9 +54,13 @@ export class OrganizerDashboardService {
    * - Total events, published events
    * - Total proposals received, pending, approved
    * - Total sponsorship revenue
+   * 
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
-  async getDashboardStats(tenantId: string, organizerId?: string) {
+  async getDashboardStats(organizerId?: string) {
     this.assertOrganizerId(organizerId);
+
+    const tenantId = GLOBAL_TENANT_ID;
 
     const [
       totalEvents,
@@ -85,13 +90,13 @@ export class OrganizerDashboardService {
           sponsorship: { event: { organizerId } },
         },
       }),
-      // Pending proposals (SUBMITTED or UNDER_REVIEW)
+      // Pending proposals (SUBMITTED or UNDER_MANAGER_REVIEW)
       this.prisma.proposal.count({
         where: {
           tenantId,
           isActive: true,
           sponsorship: { event: { organizerId } },
-          status: { in: [ProposalStatus.SUBMITTED, ProposalStatus.UNDER_REVIEW] },
+          status: { in: [ProposalStatus.SUBMITTED, ProposalStatus.UNDER_MANAGER_REVIEW] },
         },
       }),
       // Approved proposals
@@ -141,9 +146,9 @@ export class OrganizerDashboardService {
    * - organizerId is derived from the JWT.
    * - The event is created in DRAFT status with PENDING verification.
    * - Date range is validated (endDate must be after startDate).
+   * - Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   async createEvent(
-    tenantId: string,
     organizerId: string | undefined,
     dto: CreateOrganizerEventDto,
   ) {
@@ -156,46 +161,89 @@ export class OrganizerDashboardService {
       throw new BadRequestException('endDate must be after startDate');
     }
 
-    const event = await this.prisma.event.create({
-      data: {
-        title: dto.title,
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.location !== undefined && { location: dto.location }),
-        ...(dto.venue !== undefined && { venue: dto.venue }),
-        expectedFootfall: dto.expectedFootfall,
-        startDate: start,
-        endDate: end,
-        status: EventStatus.DRAFT,
-        ...(dto.website !== undefined && { website: dto.website }),
-        ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
-        tenant: { connect: { id: tenantId } },
-        organizer: { connect: { id: organizerId } },
-      },
+    // Validate predefined tier uniqueness if tiers provided
+    if (dto.tiers && dto.tiers.length > 0) {
+      const tierTypes = dto.tiers.map(t => t.tierType);
+      const predefinedTypes = tierTypes.filter(t => t !== 'CUSTOM');
+      const uniqueTypes = new Set(predefinedTypes);
+      if (uniqueTypes.size !== predefinedTypes.length) {
+        throw new BadRequestException('Duplicate predefined tier types are not allowed');
+      }
+    }
+
+    // Use transaction to create event with address and tiers
+    const event = await this.prisma.$transaction(async (tx) => {
+      // Create the event
+      const event = await tx.event.create({
+        data: {
+          title: dto.title,
+          ...(dto.description !== undefined && { description: dto.description }),
+          expectedFootfall: dto.expectedFootfall,
+          startDate: start,
+          endDate: end,
+          status: EventStatus.UNDER_MANAGER_REVIEW,
+          ...(dto.website !== undefined && { website: dto.website }),
+          ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
+          ...(dto.category !== undefined && { category: dto.category }),
+          ...(dto.contactPhone !== undefined && { contactPhone: dto.contactPhone }),
+          ...(dto.contactEmail !== undefined && { contactEmail: dto.contactEmail }),
+          ...(dto.pptDeckUrl !== undefined && { pptDeckUrl: dto.pptDeckUrl }),
+          tenant: { connect: { id: GLOBAL_TENANT_ID } },
+          organizer: { connect: { id: organizerId } },
+        },
+      });
+
+      // Create address if provided
+      if (dto.address) {
+        await tx.address.create({
+          data: {
+            tenantId: GLOBAL_TENANT_ID,
+            eventId: event.id,
+            addressLine1: dto.address.addressLine1,
+            addressLine2: dto.address.addressLine2,
+            city: dto.address.city,
+            state: dto.address.state,
+            country: dto.address.country,
+            postalCode: dto.address.postalCode,
+          },
+        });
+      }
+
+      // Create sponsorship tiers if provided
+      if (dto.tiers && dto.tiers.length > 0) {
+        for (const tier of dto.tiers) {
+          // Parse benefits array to JSON string
+          const benefitsJson = tier.benefits ? JSON.stringify(tier.benefits) : '[]';
+          
+          await tx.sponsorshipTier.create({
+            data: {
+              tenantId: GLOBAL_TENANT_ID,
+              eventId: event.id,
+              tierType: tier.tierType as PrismaTierType,
+              customName: tier.customName || null,
+              askingPrice: tier.askingPrice,
+              totalSlots: tier.totalSlots || 1,
+              soldSlots: 0,
+              isLocked: false,
+              isActive: true,
+              benefits: benefitsJson,
+            },
+          });
+        }
+      }
+
+      return event;
     });
 
     this.logger.log(
-      `Event ${event.id} created by organizer ${organizerId} in tenant ${tenantId}`,
+      `Event ${event.id} created by organizer ${organizerId} in global tenant`,
     );
 
     // Invalidate event list caches
     this.cacheService.delByPattern('events:list:*');
 
-    return {
-      id: event.id,
-      title: event.title,
-      description: event.description || '',
-      location: event.location || '',
-      venue: event.venue || '',
-      start_date: event.startDate.toISOString(),
-      end_date: event.endDate.toISOString(),
-      expected_footfall: event.expectedFootfall,
-      status: event.status.toLowerCase(),
-      verification_status: event.verificationStatus.toLowerCase(),
-      website: event.website || '',
-      logo_url: event.logoUrl || null,
-      created_at: event.createdAt.toISOString(),
-      updated_at: event.updatedAt.toISOString(),
-    };
+    // Return the created event with address and tiers
+    return this.getEventById(event.id, organizerId);
   }
 
   // ─── Events ──────────────────────────────────────────────
@@ -205,14 +253,16 @@ export class OrganizerDashboardService {
    *
    * Returns paginated list of events owned by this organizer.
    * Includes proposal counts and sponsorship revenue per event.
+   * 
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   async getEvents(
-    tenantId: string,
     organizerId: string | undefined,
     query: OrganizerEventsQueryDto,
   ) {
     this.assertOrganizerId(organizerId);
 
+    const tenantId = GLOBAL_TENANT_ID;
     const { page, page_size, status, search } = query;
     const skip = (page - 1) * page_size;
 
@@ -239,13 +289,40 @@ export class OrganizerDashboardService {
           id: true,
           title: true,
           description: true,
-          location: true,
           startDate: true,
           endDate: true,
           logoUrl: true,
           status: true,
+          category: true,
+          contactPhone: true,
+          contactEmail: true,
+          pptDeckUrl: true,
+          expectedFootfall: true,
           createdAt: true,
           updatedAt: true,
+          address: {
+            select: {
+              addressLine1: true,
+              addressLine2: true,
+              city: true,
+              state: true,
+              country: true,
+              postalCode: true,
+            },
+          },
+          tiers: {
+            where: { isActive: true },
+            select: {
+              id: true,
+              tierType: true,
+              customName: true,
+              askingPrice: true,
+              totalSlots: true,
+              soldSlots: true,
+              benefits: true,
+              isLocked: true,
+            },
+          },
           sponsorships: {
             where: { isActive: true },
             select: {
@@ -269,7 +346,7 @@ export class OrganizerDashboardService {
 
     return {
       data: data.map((e) => {
-        // Aggregate proposal counts and revenue per event
+        // Aggregate proposal counts and revenue per event from sponsorships
         let totalProposals = 0;
         let pendingProposals = 0;
         let totalSponsorshipAmount = 0;
@@ -277,7 +354,7 @@ export class OrganizerDashboardService {
         for (const s of e.sponsorships) {
           for (const p of s.proposals) {
             totalProposals++;
-            if (p.status === ProposalStatus.SUBMITTED || p.status === ProposalStatus.UNDER_REVIEW) {
+            if (p.status === ProposalStatus.SUBMITTED || p.status === ProposalStatus.UNDER_MANAGER_REVIEW) {
               pendingProposals++;
             }
             if (p.status === ProposalStatus.APPROVED && p.proposedAmount) {
@@ -286,6 +363,28 @@ export class OrganizerDashboardService {
           }
         }
 
+        // Map tiers to sponsorship_tiers format
+        const sponsorshipTiers = e.tiers.map((t) => {
+          let benefits: string[] = [];
+          try {
+            benefits = JSON.parse(t.benefits || '[]');
+          } catch {
+            benefits = [];
+          }
+
+          return {
+            id: t.id,
+            tier_type: t.tierType.toLowerCase(),
+            name: t.customName || t.tierType,
+            asking_price: Number(t.askingPrice),
+            total_slots: t.totalSlots,
+            sold_slots: t.soldSlots,
+            slots_available: t.totalSlots - t.soldSlots,
+            benefits: benefits,
+            is_locked: t.isLocked,
+          };
+        });
+
         return {
           id: e.id,
           title: e.title,
@@ -293,21 +392,23 @@ export class OrganizerDashboardService {
           description: e.description || '',
           start_date: e.startDate.toISOString(),
           end_date: e.endDate.toISOString(),
-          location: e.location || '',
-          image_url: e.logoUrl || null,
-          category: '',
+          expected_footfall: e.expectedFootfall,
           status: e.status.toLowerCase(),
-          sponsorship_tiers: e.sponsorships.map((s) => ({
-            id: s.id,
-            name: s.tier || '',
-            description: '',
-            amount: 0,
-            currency: 'USD',
-            benefits: [],
-            slots_total: 0,
-            slots_available: 0,
-          })),
-          tags: [],
+          website: e.logoUrl || '',
+          logo_url: e.logoUrl || null,
+          category: e.category || null,
+          contact_phone: e.contactPhone || null,
+          contact_email: e.contactEmail || null,
+          ppt_deck_url: e.pptDeckUrl || null,
+          address: e.address ? {
+            address_line_1: e.address.addressLine1,
+            address_line_2: e.address.addressLine2 || '',
+            city: e.address.city,
+            state: e.address.state,
+            country: e.address.country,
+            postal_code: e.address.postalCode,
+          } : null,
+          sponsorship_tiers: sponsorshipTiers,
           total_proposals: totalProposals,
           pending_proposals: pendingProposals,
           total_sponsorship_amount: totalSponsorshipAmount,
@@ -328,9 +429,13 @@ export class OrganizerDashboardService {
    * GET /organizer/events/:id
    *
    * Returns a single event owned by this organizer with aggregated proposal data.
+   * 
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
-  async getEventById(eventId: string, tenantId: string, organizerId?: string) {
+  async getEventById(eventId: string, organizerId?: string) {
     this.assertOrganizerId(organizerId);
+
+    const tenantId = GLOBAL_TENANT_ID;
 
     const e = await this.prisma.event.findFirst({
       where: { id: eventId, tenantId, organizerId, isActive: true },
@@ -338,13 +443,41 @@ export class OrganizerDashboardService {
         id: true,
         title: true,
         description: true,
-        location: true,
         startDate: true,
         endDate: true,
+        website: true,
         logoUrl: true,
         status: true,
+        expectedFootfall: true,
+        category: true,
+        contactPhone: true,
+        contactEmail: true,
+        pptDeckUrl: true,
         createdAt: true,
         updatedAt: true,
+        address: {
+          select: {
+            addressLine1: true,
+            addressLine2: true,
+            city: true,
+            state: true,
+            country: true,
+            postalCode: true,
+          },
+        },
+        tiers: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            tierType: true,
+            customName: true,
+            askingPrice: true,
+            totalSlots: true,
+            soldSlots: true,
+            benefits: true,
+            isLocked: true,
+          },
+        },
         sponsorships: {
           where: { isActive: true },
           select: {
@@ -371,7 +504,7 @@ export class OrganizerDashboardService {
     for (const s of e.sponsorships) {
       for (const p of s.proposals) {
         totalProposals++;
-        if (p.status === ProposalStatus.SUBMITTED || p.status === ProposalStatus.UNDER_REVIEW) {
+        if (p.status === ProposalStatus.SUBMITTED || p.status === ProposalStatus.UNDER_MANAGER_REVIEW) {
           pendingProposals++;
         }
         if (p.status === ProposalStatus.APPROVED && p.proposedAmount) {
@@ -380,6 +513,28 @@ export class OrganizerDashboardService {
       }
     }
 
+    // Map tiers to sponsorship_tiers format
+    const sponsorshipTiers = e.tiers.map((t) => {
+      let benefits: string[] = [];
+      try {
+        benefits = JSON.parse(t.benefits || '[]');
+      } catch {
+        benefits = [];
+      }
+
+      return {
+        id: t.id,
+        tier_type: t.tierType.toLowerCase(),
+        name: t.customName || t.tierType,
+        asking_price: Number(t.askingPrice),
+        total_slots: t.totalSlots,
+        sold_slots: t.soldSlots,
+        slots_available: t.totalSlots - t.soldSlots,
+        benefits: benefits,
+        is_locked: t.isLocked,
+      };
+    });
+
     return {
       id: e.id,
       title: e.title,
@@ -387,21 +542,23 @@ export class OrganizerDashboardService {
       description: e.description || '',
       start_date: e.startDate.toISOString(),
       end_date: e.endDate.toISOString(),
-      location: e.location || '',
-      image_url: e.logoUrl || null,
-      category: '',
+      expected_footfall: e.expectedFootfall || 0,
       status: e.status.toLowerCase(),
-      sponsorship_tiers: e.sponsorships.map((s) => ({
-        id: s.id,
-        name: s.tier || '',
-        description: '',
-        amount: 0,
-        currency: 'USD',
-        benefits: [],
-        slots_total: 0,
-        slots_available: 0,
-      })),
-      tags: [],
+      website: e.website || '',
+      logo_url: e.logoUrl || null,
+      category: e.category || null,
+      contact_phone: e.contactPhone || null,
+      contact_email: e.contactEmail || null,
+      ppt_deck_url: e.pptDeckUrl || null,
+      address: e.address ? {
+        address_line_1: e.address.addressLine1,
+        address_line_2: e.address.addressLine2 || '',
+        city: e.address.city,
+        state: e.address.state,
+        country: e.address.country,
+        postal_code: e.address.postalCode,
+      } : null,
+      sponsorship_tiers: sponsorshipTiers,
       total_proposals: totalProposals,
       pending_proposals: pendingProposals,
       total_sponsorship_amount: totalSponsorshipAmount,
@@ -411,6 +568,175 @@ export class OrganizerDashboardService {
     };
   }
 
+  // ─── Event Update Action ──────────────────────────
+
+  /**
+   * PATCH /organizer/events/:id
+   * 
+   * Updates an event owned by this organizer.
+   * Organizers cannot edit tiers that are locked.
+   * 
+   * Uses GLOBAL_TENANT_ID internally.
+   */
+  async updateEvent(
+    eventId: string,
+    dto: UpdateOrganizerEventDto,
+    organizerId?: string,
+  ) {
+    this.assertOrganizerId(organizerId);
+    const tenantId = GLOBAL_TENANT_ID;
+
+    // Load event with tiers
+    const event = await this.prisma.event.findFirst({
+      where: { id: eventId, tenantId, organizerId, isActive: true },
+      include: { address: true, tiers: { where: { isActive: true } } },
+    });
+
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
+
+    // Check if dates are valid
+    if (dto.startDate || dto.endDate) {
+      const start = new Date(dto.startDate || event.startDate);
+      const end = new Date(dto.endDate || event.endDate);
+      if (end <= start) {
+        throw new BadRequestException('endDate must be after startDate');
+      }
+    }
+
+    // Validate predefined tier uniqueness if tiers are being updated
+    if (dto.tiers && dto.tiers.length > 0) {
+      const tierTypes = dto.tiers
+        .filter(t => t.tierType && t.tierType !== 'CUSTOM')
+        .map(t => t.tierType);
+      const uniqueTypes = new Set(tierTypes);
+      if (uniqueTypes.size !== tierTypes.length) {
+        throw new BadRequestException('Duplicate predefined tier types are not allowed');
+      }
+    }
+
+    const updatedEvent = await this.prisma.$transaction(async (tx) => {
+      // 1. Update basic event fields
+      const coreData: any = {};
+      if (dto.title !== undefined) coreData.title = dto.title;
+      if (dto.description !== undefined) coreData.description = dto.description;
+      if (dto.startDate !== undefined) coreData.startDate = new Date(dto.startDate);
+      if (dto.endDate !== undefined) coreData.endDate = new Date(dto.endDate);
+      if (dto.expectedFootfall !== undefined) coreData.expectedFootfall = dto.expectedFootfall;
+      if (dto.website !== undefined) coreData.website = dto.website;
+      if (dto.logoUrl !== undefined) coreData.logoUrl = dto.logoUrl;
+      if (dto.category !== undefined) coreData.category = dto.category;
+      if (dto.contactPhone !== undefined) coreData.contactPhone = dto.contactPhone;
+      if (dto.contactEmail !== undefined) coreData.contactEmail = dto.contactEmail;
+      if (dto.pptDeckUrl !== undefined) coreData.pptDeckUrl = dto.pptDeckUrl;
+      if (dto.status !== undefined) coreData.status = dto.status;
+
+      let savedEvent = event;
+      if (Object.keys(coreData).length > 0) {
+        savedEvent = await tx.event.update({
+          where: { id: eventId },
+          data: coreData,
+        }) as any;
+      }
+
+      // 2. Update address
+      if (dto.address) {
+        if (event.address) {
+          await tx.address.update({
+            where: { id: event.address.id },
+            data: dto.address,
+          });
+        } else {
+          await tx.address.create({
+            data: {
+              ...dto.address,
+              eventId,
+              tenantId,
+            } as any,
+          });
+        }
+      }
+
+      // 3. Update tiers
+      if (dto.tiers) {
+        const existingTiersMap = new Map(event.tiers.map(t => [t.id, t]));
+
+        for (const tierDto of dto.tiers) {
+          if (tierDto.id && existingTiersMap.has(tierDto.id)) {
+            // Update existing tier
+            const existing = existingTiersMap.get(tierDto.id)!;
+
+            // SECURITY: Organizers cannot modify locked tiers
+            if (existing.isLocked) {
+              existingTiersMap.delete(tierDto.id);
+              continue;
+            }
+
+            // Slot safety validation
+            if (tierDto.totalSlots !== undefined && tierDto.totalSlots < existing.soldSlots) {
+              throw new BadRequestException(`Cannot reduce total slots for tier ${existing.tierType} below already sold slots (${existing.soldSlots})`);
+            }
+
+            // Build update data
+            const tierUpdateData: any = {};
+            if (tierDto.askingPrice !== undefined) tierUpdateData.askingPrice = tierDto.askingPrice;
+            if (tierDto.totalSlots !== undefined) tierUpdateData.totalSlots = tierDto.totalSlots;
+            if (tierDto.customName !== undefined) tierUpdateData.customName = tierDto.customName;
+            if (tierDto.benefits !== undefined) {
+              tierUpdateData.benefits = JSON.stringify(tierDto.benefits);
+            }
+
+            await tx.sponsorshipTier.update({
+              where: { id: tierDto.id },
+              data: tierUpdateData,
+            });
+            existingTiersMap.delete(tierDto.id);
+          } else if (tierDto.tierType && tierDto.askingPrice !== undefined) {
+            // Create new tier
+            const benefitsJson = tierDto.benefits ? JSON.stringify(tierDto.benefits) : '[]';
+            
+            await tx.sponsorshipTier.create({
+              data: {
+                tenantId,
+                eventId,
+                tierType: tierDto.tierType as any,
+                customName: tierDto.customName || null,
+                askingPrice: tierDto.askingPrice,
+                totalSlots: tierDto.totalSlots ?? 1,
+                soldSlots: 0,
+                isLocked: false,
+                isActive: true,
+                benefits: benefitsJson,
+              },
+            });
+          }
+        }
+
+        // Soft delete remaining tiers that weren't included in the update payload
+        // BUT ONLY if they are not locked. Organizers cannot delete locked tiers!
+        for (const [id, t] of existingTiersMap) {
+          if (!t.isLocked) {
+            await tx.sponsorshipTier.update({
+              where: { id },
+              data: { isActive: false },
+            });
+          }
+        }
+      }
+
+      return savedEvent;
+    });
+
+    this.logger.log(`Event ${eventId} updated by organizer ${organizerId}`);
+
+    // Invalidate caches
+    this.cacheService.delByPattern('events:list:*');
+
+    // Return the updated event
+    return this.getEventById(eventId, organizerId);
+  }
+
   // ─── Incoming Proposals ──────────────────────────────────
 
   /**
@@ -418,14 +744,16 @@ export class OrganizerDashboardService {
    *
    * Returns paginated proposals for events owned by this organizer.
    * Includes nested sponsor and event info.
+   * 
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   async getProposals(
-    tenantId: string,
     organizerId: string | undefined,
     query: OrganizerProposalsQueryDto,
   ) {
     this.assertOrganizerId(organizerId);
 
+    const tenantId = GLOBAL_TENANT_ID;
     const { page, page_size, status, event_id } = query;
     const skip = (page - 1) * page_size;
 
@@ -518,9 +846,13 @@ export class OrganizerDashboardService {
    * GET /organizer/proposals/:id
    *
    * Returns a single proposal for an event owned by this organizer.
+   * 
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
-  async getProposalById(proposalId: string, tenantId: string, organizerId?: string) {
+  async getProposalById(proposalId: string, organizerId?: string) {
     this.assertOrganizerId(organizerId);
+
+    const tenantId = GLOBAL_TENANT_ID;
 
     const p = await this.prisma.proposal.findFirst({
       where: {
@@ -590,17 +922,20 @@ export class OrganizerDashboardService {
    * Allows the organizer to approve or reject a proposal on their events.
    * - Validates ownership: proposal→sponsorship→event.organizerId === JWT organizer_id
    * - Maps action to ProposalStatus (approve → APPROVED, reject → REJECTED)
-   * - Validates status transition (must be UNDER_REVIEW or SUBMITTED; auto-transitions SUBMITTED→UNDER_REVIEW→APPROVED/REJECTED)
+   * - Validates status transition (must be UNDER_MANAGER_REVIEW or SUBMITTED; auto-transitions SUBMITTED→UNDER_MANAGER_REVIEW→APPROVED/REJECTED)
    * - Records audit log and emits domain event
+   * 
+   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   async reviewProposal(
     proposalId: string,
     dto: ReviewProposalDto,
-    tenantId: string,
     organizerId: string | undefined,
     actorId: string,
   ) {
     this.assertOrganizerId(organizerId);
+
+    const tenantId = GLOBAL_TENANT_ID;
 
     // 1. Load proposal with full relationship chain for ownership check
     const proposal = await this.prisma.proposal.findFirst({
@@ -631,37 +966,87 @@ export class OrganizerDashboardService {
       dto.action === 'approve' ? ProposalStatus.APPROVED : ProposalStatus.REJECTED;
 
     // 4. Validate status transition
-    // If currently SUBMITTED, auto-transition through UNDER_REVIEW first
+    // If currently SUBMITTED, auto-transition through UNDER_MANAGER_REVIEW first
     const currentStatus = proposal.status;
     const reviewableStatuses: ProposalStatus[] = [
       ProposalStatus.SUBMITTED,
-      ProposalStatus.UNDER_REVIEW,
+      ProposalStatus.UNDER_MANAGER_REVIEW,
     ];
 
     if (!reviewableStatuses.includes(currentStatus)) {
       throw new BadRequestException(
-        `Cannot review a proposal with status "${currentStatus}". Only SUBMITTED or UNDER_REVIEW proposals can be reviewed.`,
+        `Cannot review a proposal with status "${currentStatus}". Only SUBMITTED or UNDER_MANAGER_REVIEW proposals can be reviewed.`,
       );
     }
 
-    // 5. Update proposal
+    // 5. Use transaction for atomic proposal update + slot increment (on approval)
     const now = new Date();
-    const updated = await this.prisma.proposal.update({
-      where: { id: proposalId },
-      data: {
-        status: targetStatus,
-        ...(dto.reviewer_notes !== undefined && { notes: dto.reviewer_notes }),
-        reviewedAt: now,
-        // If transitioning from SUBMITTED, also set submittedAt if not already set
-        ...(!proposal.submittedAt && { submittedAt: now }),
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Update proposal status
+      const updatedProposal = await tx.proposal.update({
+        where: { id: proposalId },
+        data: {
+          status: targetStatus,
+          ...(dto.reviewer_notes !== undefined && { notes: dto.reviewer_notes }),
+          reviewedAt: now,
+          // If transitioning from SUBMITTED, also set submittedAt if not already set
+          ...(!proposal.submittedAt && { submittedAt: now }),
+        },
+      });
+
+      // INVENTORY: If APPROVED, atomically increment soldSlots on the tier
+      if (targetStatus === ProposalStatus.APPROVED && proposal.tierId) {
+        // Re-check tier availability inside transaction to prevent race conditions
+        const tier = await tx.sponsorshipTier.findUnique({
+          where: { id: proposal.tierId },
+        });
+
+        if (!tier) {
+          throw new BadRequestException('Referenced sponsorship tier no longer exists');
+        }
+
+        if (tier.soldSlots >= tier.totalSlots) {
+          throw new BadRequestException(
+            `Cannot approve: tier "${tier.tierType}" is sold out (${tier.soldSlots}/${tier.totalSlots} slots used)`,
+          );
+        }
+
+        // Atomic increment using Prisma's increment operation
+        await tx.sponsorshipTier.update({
+          where: { id: proposal.tierId },
+          data: { soldSlots: { increment: 1 } },
+        });
+
+        this.logger.log(
+          `Tier ${tier.tierType} slot sold: ${tier.soldSlots + 1}/${tier.totalSlots} for event ${proposal.sponsorship.eventId}`,
+        );
+
+        // Also update the sponsorship status to ACTIVE
+        await tx.sponsorship.update({
+          where: { id: proposal.sponsorshipId },
+          data: {
+            status: SponsorshipStatus.ACTIVE,
+            tier: tier.tierType,
+          },
+        });
+      }
+
+      // If REJECTED, update sponsorship status to CANCELLED
+      if (targetStatus === ProposalStatus.REJECTED) {
+        await tx.sponsorship.update({
+          where: { id: proposal.sponsorshipId },
+          data: { status: SponsorshipStatus.CANCELLED },
+        });
+      }
+
+      return updatedProposal;
     });
 
     this.logger.log(
       `Proposal ${proposalId} reviewed: ${currentStatus} → ${targetStatus} by organizer ${organizerId}`,
     );
 
-    // 6. Audit log
+    // 6. Audit log — proposal status change
     this.auditLogService.log({
       tenantId,
       actorId,
@@ -677,6 +1062,24 @@ export class OrganizerDashboardService {
       },
     });
 
+    // 6b. If approved and tier exists, also log the slot sale
+    if (targetStatus === ProposalStatus.APPROVED && proposal.tierId) {
+      this.auditLogService.log({
+        tenantId,
+        actorId,
+        actorRole: 'ORGANIZER',
+        action: 'tier.slot_sold',
+        entityType: 'SponsorshipTier',
+        entityId: proposal.tierId,
+        metadata: {
+          proposalId,
+          eventId: proposal.sponsorship.eventId,
+          companyId: proposal.sponsorship.company.id,
+          companyName: proposal.sponsorship.company.name,
+        },
+      });
+    }
+
     // 7. Domain event
     this.eventEmitter.emit(
       PROPOSAL_STATUS_CHANGED_EVENT,
@@ -690,8 +1093,10 @@ export class OrganizerDashboardService {
       }),
     );
 
-    // 8. Invalidate proposal caches
+    // 8. Invalidate caches
     this.cacheService.delByPattern('proposals:list:*');
+    this.cacheService.delByPattern('events:list:*');
+    this.cacheService.delByPattern('sponsor:dashboard:*');
 
     // Return the updated proposal in the IncomingProposal shape
     return {
@@ -721,3 +1126,4 @@ export class OrganizerDashboardService {
     };
   }
 }
+

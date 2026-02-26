@@ -1,6 +1,7 @@
-import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { EventStatus, VerificationStatus, SponsorshipStatus, ProposalStatus } from '@prisma/client';
 import { PrismaService } from '../common/providers/prisma.service';
+import { AuditLogService } from '../audit-logs/audit-log.service';
 import type {
   SponsorEventsQueryDto,
   SponsorProposalsQueryDto,
@@ -23,6 +24,7 @@ export class SponsorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
+    private readonly auditLogService: AuditLogService,
   ) { }
 
   /**
@@ -136,47 +138,43 @@ export class SponsorService {
 
   // ─── Browsable Events ────────────────────────────────────
 
+  /**
+   * GET /sponsor/events
+   * 
+   * INVENTORY RULE: Only show events that are VERIFIED and have at least 1 available tier
+   * (soldSlots < totalSlots). Events where ALL tiers are sold out are hidden.
+   */
   async getEvents(tenantId: string, companyId: string | undefined, query: SponsorEventsQueryDto) {
     this.assertCompanyId(companyId);
 
-    const { page, page_size, search } = query;
+    const { page, page_size, search, category } = query;
     const skip = (page - 1) * page_size;
 
-    // Get event IDs already sponsored by this company
-    const existingSponsorships = await this.prisma.sponsorship.findMany({
-      where: { companyId, isActive: true },
-      select: { eventId: true },
-    });
-    const sponsoredEventIds = existingSponsorships.map((s) => s.eventId);
-
-    // Build where clause
+    // Prisma doesn't support field-to-field comparison (soldSlots < totalSlots) in where clause.
+    // We use a two-step approach: fetch verified events with tiers, then filter in-memory.
     const where: any = {
       tenantId,
       isActive: true,
-      status: EventStatus.PUBLISHED,
+      status: { in: [EventStatus.PUBLISHED, EventStatus.VERIFIED] },
       verificationStatus: VerificationStatus.VERIFIED,
-      ...(sponsoredEventIds.length > 0 && {
-        id: { notIn: sponsoredEventIds },
-      }),
       ...(search && {
         OR: [
           { title: { contains: search, mode: 'insensitive' } },
           { description: { contains: search, mode: 'insensitive' } },
         ],
       }),
+      ...(category && { category }),
     };
 
-    const [data, total] = await Promise.all([
+    const [allEvents, totalUnfiltered] = await Promise.all([
       this.prisma.event.findMany({
         where,
-        skip,
-        take: page_size,
         orderBy: { startDate: 'asc' },
         select: {
           id: true,
           title: true,
           description: true,
-          location: true,
+          category: true,
           startDate: true,
           endDate: true,
           expectedFootfall: true,
@@ -184,32 +182,77 @@ export class SponsorService {
           organizer: {
             select: { id: true, name: true, logoUrl: true },
           },
+          address: {
+            select: {
+              addressLine1: true,
+              city: true,
+              state: true,
+              country: true,
+            },
+          },
+          tiers: {
+            where: { isActive: true, isLocked: true },
+            select: {
+              id: true,
+              tierType: true,
+              askingPrice: true,
+              totalSlots: true,
+              soldSlots: true,
+              isLocked: true,
+              isActive: true,
+            },
+          },
         },
       }),
       this.prisma.event.count({ where }),
     ]);
 
+    // INVENTORY FILTER: Only include events that have at least 1 available tier
+    const eventsWithAvailableTiers = allEvents.filter((e: any) =>
+      e.tiers.some((t: any) => t.soldSlots < t.totalSlots),
+    );
+
+    const total = eventsWithAvailableTiers.length;
+    const paginatedEvents = eventsWithAvailableTiers.slice(skip, skip + page_size);
+
     return {
-      data: data.map((e) => ({
-        id: e.id,
-        title: e.title,
-        slug: e.id,
-        description: e.description || '',
-        start_date: e.startDate.toISOString(),
-        end_date: e.endDate.toISOString(),
-        location: e.location || '',
-        expected_footfall: e.expectedFootfall ?? 0,
-        image_url: e.logoUrl || null,
-        category: '',
-        status: 'published',
-        organizer: {
-          id: e.organizer.id,
-          name: e.organizer.name,
-          logo_url: e.organizer.logoUrl || null,
-        },
-        sponsorship_tiers: [],
-        tags: [],
-      })),
+      data: paginatedEvents.map((e: any) => {
+        // Only return available tiers (soldSlots < totalSlots)
+        const availableTiers = e.tiers
+          .filter((t: any) => t.soldSlots < t.totalSlots)
+          .map((t: any) => ({
+            id: t.id,
+            tier_type: t.tierType,
+            asking_price: Number(t.askingPrice),
+            total_slots: t.totalSlots,
+            sold_slots: t.soldSlots,
+            available_slots: t.totalSlots - t.soldSlots,
+            is_locked: t.isLocked,
+            is_active: t.isActive,
+            is_available: t.soldSlots < t.totalSlots,
+          }));
+
+        return {
+          id: e.id,
+          title: e.title,
+          slug: e.id,
+          description: e.description || '',
+          start_date: e.startDate.toISOString(),
+          end_date: e.endDate.toISOString(),
+          location: e.address ? `${e.address.addressLine1}, ${e.address.city}, ${e.address.state}, ${e.address.country}` : '',
+          expected_footfall: e.expectedFootfall ?? 0,
+          image_url: e.logoUrl || null,
+          category: e.category || '',
+          status: 'published',
+          organizer: {
+            id: e.organizer.id,
+            name: e.organizer.name,
+            logo_url: e.organizer.logoUrl || null,
+          },
+          sponsorship_tiers: availableTiers,
+          tags: [],
+        };
+      }),
       total,
       page,
       page_size,
@@ -264,7 +307,12 @@ export class SponsorService {
                   id: true,
                   title: true,
                   startDate: true,
-                  location: true,
+                  address: {
+                    select: {
+                      addressLine1: true,
+                      city: true,
+                    },
+                  },
                 },
               },
             },
@@ -275,7 +323,7 @@ export class SponsorService {
     ]);
 
     return {
-      data: data.map((p) => ({
+      data: data.map((p: any) => ({
         id: p.id,
         event_id: p.sponsorship.eventId,
         sponsorship_id: p.sponsorship.id,
@@ -289,7 +337,7 @@ export class SponsorService {
           title: p.sponsorship.event.title,
           slug: p.sponsorship.event.id,
           start_date: p.sponsorship.event.startDate.toISOString(),
-          location: p.sponsorship.event.location || '',
+          location: p.sponsorship.event.address ? `${p.sponsorship.event.address.addressLine1}, ${p.sponsorship.event.address.city}` : '',
         },
         submitted_at: p.submittedAt?.toISOString() || null,
         reviewed_at: p.reviewedAt?.toISOString() || null,
@@ -340,7 +388,12 @@ export class SponsorService {
               id: true,
               title: true,
               startDate: true,
-              location: true,
+              address: {
+                select: {
+                  addressLine1: true,
+                  city: true,
+                },
+              },
             },
           },
           // Sum approved proposal amounts for this sponsorship
@@ -354,9 +407,9 @@ export class SponsorService {
     ]);
 
     return {
-      data: data.map((s) => {
+      data: data.map((s: any) => {
         const amount = s.proposals.reduce(
-          (sum, p) => sum + (p.proposedAmount ? Number(p.proposedAmount) : 0),
+          (sum: number, p: any) => sum + (p.proposedAmount ? Number(p.proposedAmount) : 0),
           0,
         );
         return {
@@ -372,7 +425,7 @@ export class SponsorService {
             title: s.event.title,
             slug: s.event.id,
             start_date: s.event.startDate.toISOString(),
-            location: s.event.location || '',
+            location: s.event.address ? `${s.event.address.addressLine1}, ${s.event.address.city}` : '',
           },
           created_at: s.createdAt.toISOString(),
         };
@@ -385,6 +438,12 @@ export class SponsorService {
 
   // ─── Single Event Detail ────────────────────────────────────
 
+  /**
+   * GET /sponsor/events/:id
+   * 
+   * Returns event detail with available sponsorship tiers.
+   * Only shows tiers where soldSlots < totalSlots.
+   */
   async getEventById(tenantId: string, companyId: string | undefined, eventId: string) {
     this.assertCompanyId(companyId);
 
@@ -393,20 +452,46 @@ export class SponsorService {
         id: eventId,
         tenantId,
         isActive: true,
-        status: EventStatus.PUBLISHED,
+        status: { in: [EventStatus.PUBLISHED, EventStatus.VERIFIED] },
         verificationStatus: VerificationStatus.VERIFIED,
       },
       select: {
         id: true,
         title: true,
         description: true,
-        location: true,
+        category: true,
+        website: true,
+        pptDeckUrl: true,
+        contactPhone: true,
+        contactEmail: true,
         startDate: true,
         endDate: true,
         expectedFootfall: true,
         logoUrl: true,
         organizer: {
           select: { id: true, name: true, logoUrl: true },
+        },
+        address: {
+          select: {
+            addressLine1: true,
+            addressLine2: true,
+            city: true,
+            state: true,
+            country: true,
+            postalCode: true,
+          },
+        },
+        tiers: {
+          where: { isActive: true, isLocked: true },
+          select: {
+            id: true,
+            tierType: true,
+            askingPrice: true,
+            totalSlots: true,
+            soldSlots: true,
+            isLocked: true,
+            isActive: true,
+          },
         },
       },
     });
@@ -415,6 +500,21 @@ export class SponsorService {
       throw new NotFoundException('Event not found');
     }
 
+    // Only return available tiers (soldSlots < totalSlots)
+    const availableTiers = event.tiers
+      .filter((t: any) => t.soldSlots < t.totalSlots)
+      .map((t: any) => ({
+        id: t.id,
+        tier_type: t.tierType,
+        asking_price: Number(t.askingPrice),
+        total_slots: t.totalSlots,
+        sold_slots: t.soldSlots,
+        available_slots: t.totalSlots - t.soldSlots,
+        is_locked: t.isLocked,
+        is_active: t.isActive,
+        is_available: t.soldSlots < t.totalSlots,
+      }));
+
     return {
       id: event.id,
       title: event.title,
@@ -422,17 +522,28 @@ export class SponsorService {
       description: event.description || '',
       start_date: event.startDate.toISOString(),
       end_date: event.endDate.toISOString(),
-      location: event.location || '',
+      location: event.address ? `${event.address.addressLine1}, ${event.address.city}, ${event.address.state}, ${event.address.country}` : '',
       expected_footfall: event.expectedFootfall ?? 0,
       image_url: event.logoUrl || null,
-      category: '',
+      category: event.category || '',
+      website: event.website || null,
+      contact_phone: event.contactPhone || null,
+      contact_email: event.contactEmail || null,
       status: 'published',
       organizer: {
         id: event.organizer.id,
         name: event.organizer.name,
         logo_url: event.organizer.logoUrl || null,
       },
-      sponsorship_tiers: [],
+      address: event.address ? {
+        address_line_1: event.address.addressLine1,
+        address_line_2: event.address.addressLine2 || null,
+        city: event.address.city,
+        state: event.address.state,
+        country: event.address.country,
+        postal_code: event.address.postalCode,
+      } : null,
+      sponsorship_tiers: availableTiers,
       tags: [],
     };
   }
@@ -469,7 +580,12 @@ export class SponsorService {
                 id: true,
                 title: true,
                 startDate: true,
-                location: true,
+                address: {
+                  select: {
+                    addressLine1: true,
+                    city: true,
+                  },
+                },
               },
             },
           },
@@ -495,7 +611,7 @@ export class SponsorService {
         title: proposal.sponsorship.event.title,
         slug: proposal.sponsorship.event.id,
         start_date: proposal.sponsorship.event.startDate.toISOString(),
-        location: proposal.sponsorship.event.location || '',
+        location: proposal.sponsorship.event.address ? `${proposal.sponsorship.event.address.addressLine1}, ${proposal.sponsorship.event.address.city}` : '',
       },
       submitted_at: proposal.submittedAt?.toISOString() || null,
       reviewed_at: proposal.reviewedAt?.toISOString() || null,
@@ -507,16 +623,26 @@ export class SponsorService {
 
   // ─── Create Proposal ────────────────────────────────────────
 
+  /**
+   * POST /sponsor/proposals
+   * 
+   * INVENTORY RULES:
+   * - Must reference a valid tierId
+   * - Tier must be locked (isLocked = true)
+   * - Tier must have available slots (soldSlots < totalSlots)
+   * - Sponsor cannot modify tier pricing
+   * - proposedAmount defaults to tier's askingPrice if not provided
+   */
   async createProposal(tenantId: string, companyId: string | undefined, dto: CreateProposalDto) {
     this.assertCompanyId(companyId);
 
-    // Verify the event exists, is published, and verified
+    // 1. Verify the event exists, is published/verified
     const event = await this.prisma.event.findFirst({
       where: {
         id: dto.eventId,
         tenantId,
         isActive: true,
-        status: EventStatus.PUBLISHED,
+        status: { in: [EventStatus.PUBLISHED, EventStatus.VERIFIED] },
         verificationStatus: VerificationStatus.VERIFIED,
       },
     });
@@ -525,7 +651,31 @@ export class SponsorService {
       throw new NotFoundException('Event not found or not available for sponsorship');
     }
 
-    // Create or find existing sponsorship, then create proposal in a transaction
+    // 2. Validate the tier exists, belongs to this event, is locked, and has available slots
+    const tier = await this.prisma.sponsorshipTier.findFirst({
+      where: {
+        id: dto.tierId,
+        eventId: dto.eventId,
+        isActive: true,
+      },
+    });
+
+    if (!tier) {
+      throw new NotFoundException('Sponsorship tier not found for this event');
+    }
+
+    if (!tier.isLocked) {
+      throw new BadRequestException('This sponsorship tier is not yet locked. Event must be approved first.');
+    }
+
+    if (tier.soldSlots >= tier.totalSlots) {
+      throw new BadRequestException('This sponsorship tier is sold out. No available slots.');
+    }
+
+    // 3. Use tier's asking price — sponsor cannot manipulate price
+    const proposedAmount = dto.proposedAmount ?? Number(tier.askingPrice);
+
+    // 4. Create or find existing sponsorship, then create proposal in a transaction
     const result = await this.prisma.$transaction(async (tx) => {
       // Upsert: find existing sponsorship or create one
       let sponsorship = await tx.sponsorship.findFirst({
@@ -543,18 +693,19 @@ export class SponsorService {
             eventId: dto.eventId,
             tenantId,
             status: SponsorshipStatus.PENDING,
-            tier: dto.proposedTier || null,
+            tier: tier.tierType,
           },
         });
       }
 
-      // Create the proposal
+      // Create the proposal with tierId reference
       const proposal = await tx.proposal.create({
         data: {
           sponsorshipId: sponsorship.id,
           tenantId,
-          proposedAmount: dto.proposedAmount ?? null,
-          proposedTier: dto.proposedTier ?? null,
+          tierId: dto.tierId,
+          proposedAmount: proposedAmount,
+          proposedTier: tier.tierType,
           message: dto.message ?? null,
           status: ProposalStatus.SUBMITTED,
           submittedAt: new Date(),
@@ -568,6 +719,13 @@ export class SponsorService {
           submittedAt: true,
           createdAt: true,
           updatedAt: true,
+          tier: {
+            select: {
+              id: true,
+              tierType: true,
+              askingPrice: true,
+            },
+          },
           sponsorship: {
             select: {
               id: true,
@@ -577,7 +735,12 @@ export class SponsorService {
                   id: true,
                   title: true,
                   startDate: true,
-                  location: true,
+                  address: {
+                    select: {
+                      addressLine1: true,
+                      city: true,
+                    },
+                  },
                 },
               },
             },
@@ -588,10 +751,29 @@ export class SponsorService {
       return proposal;
     });
 
+    // 5. Audit log
+    this.auditLogService.log({
+      tenantId,
+      actorId: companyId,
+      actorRole: 'SPONSOR',
+      action: 'proposal.submitted',
+      entityType: 'Proposal',
+      entityId: result.id,
+      metadata: {
+        eventId: dto.eventId,
+        tierId: dto.tierId,
+        tierType: tier.tierType,
+        proposedAmount,
+      },
+    });
+
+    this.logger.log(`Proposal ${result.id} created for tier ${tier.tierType} on event ${dto.eventId}`);
+
     return {
       id: result.id,
       event_id: result.sponsorship.eventId,
       sponsorship_id: result.sponsorship.id,
+      tier_id: result.tier?.id || dto.tierId,
       title: result.proposedTier || '',
       description: result.message || '',
       amount: result.proposedAmount ? Number(result.proposedAmount) : 0,
@@ -602,7 +784,7 @@ export class SponsorService {
         title: result.sponsorship.event.title,
         slug: result.sponsorship.event.id,
         start_date: result.sponsorship.event.startDate.toISOString(),
-        location: result.sponsorship.event.location || '',
+        location: result.sponsorship.event.address ? `${result.sponsorship.event.address.addressLine1}, ${result.sponsorship.event.address.city}` : '',
       },
       submitted_at: result.submittedAt?.toISOString() || null,
       reviewed_at: null,
@@ -658,7 +840,12 @@ export class SponsorService {
                 id: true,
                 title: true,
                 startDate: true,
-                location: true,
+                address: {
+                  select: {
+                    addressLine1: true,
+                    city: true,
+                  },
+                },
               },
             },
           },
@@ -680,7 +867,7 @@ export class SponsorService {
         title: updated.sponsorship.event.title,
         slug: updated.sponsorship.event.id,
         start_date: updated.sponsorship.event.startDate.toISOString(),
-        location: updated.sponsorship.event.location || '',
+        location: updated.sponsorship.event.address ? `${updated.sponsorship.event.address.addressLine1}, ${updated.sponsorship.event.address.city}` : '',
       },
       submitted_at: updated.submittedAt?.toISOString() || null,
       reviewed_at: null,
