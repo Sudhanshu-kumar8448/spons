@@ -1,9 +1,10 @@
-import { IsString, IsOptional, IsEmail, IsUrl, IsBoolean, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsUrl, IsBoolean, MaxLength, IsEnum, IsObject } from 'class-validator';
+import { OrganizerType } from '@prisma/client';
 
 /**
  * DTO for updating an existing organizer.
  * Only mutable fields are exposed.
- * tenantId and id are immutable after creation.
+ * id is immutable after creation.
  */
 export class UpdateOrganizerDto {
   @IsOptional()
@@ -12,13 +13,10 @@ export class UpdateOrganizerDto {
   name?: string;
 
   @IsOptional()
-  @IsString()
-  description?: string;
-
-  @IsOptional()
-  @IsEmail({}, { message: 'Contact email must be a valid email address' })
-  @MaxLength(255, { message: 'Contact email must be 255 characters or fewer' })
-  contactEmail?: string;
+  @IsEnum(OrganizerType, {
+    message: `Type must be one of: ${Object.values(OrganizerType).join(', ')}`,
+  })
+  type?: OrganizerType;
 
   @IsOptional()
   @IsString()
@@ -31,9 +29,17 @@ export class UpdateOrganizerDto {
   website?: string;
 
   @IsOptional()
-  @IsUrl({}, { message: 'Logo URL must be a valid URL' })
-  @MaxLength(500, { message: 'Logo URL must be 500 characters or fewer' })
-  logoUrl?: string;
+  @IsString()
+  pastRecords?: string;
+
+  @IsOptional()
+  @IsObject({ message: 'socialLinks must be a JSON object' })
+  socialLinks?: Record<string, any>;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100, { message: 'Tax ID must be 100 characters or fewer' })
+  taxId?: string;
 
   @IsOptional()
   @IsBoolean({ message: 'isActive must be a boolean' })

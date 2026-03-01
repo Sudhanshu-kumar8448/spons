@@ -2,15 +2,17 @@ import {
     IsString,
     IsNotEmpty,
     IsOptional,
-    IsEmail,
     IsUrl,
+    IsEnum,
+    IsObject,
     MaxLength,
 } from 'class-validator';
+import { OrganizerType } from '@prisma/client';
 
 /**
  * DTO for organizer onboarding.
  * Creates an Organizer record.
- * tenantId and userId are derived from the JWT — never from the body.
+ * userId is derived from the JWT — never from the body.
  */
 export class CreateOrganizerDto {
     @IsString()
@@ -19,13 +21,10 @@ export class CreateOrganizerDto {
     name!: string;
 
     @IsOptional()
-    @IsString()
-    description?: string;
-
-    @IsEmail({}, { message: 'Contact email must be a valid email' })
-    @IsNotEmpty({ message: 'Contact email is required' })
-    @MaxLength(255, { message: 'Contact email must be 255 characters or fewer' })
-    contactEmail!: string;
+    @IsEnum(OrganizerType, {
+        message: `Type must be one of: ${Object.values(OrganizerType).join(', ')}`,
+    })
+    type?: OrganizerType;
 
     @IsOptional()
     @IsString()
@@ -38,7 +37,15 @@ export class CreateOrganizerDto {
     website?: string;
 
     @IsOptional()
-    @IsUrl({}, { message: 'Logo URL must be a valid URL' })
-    @MaxLength(500, { message: 'Logo URL must be 500 characters or fewer' })
-    logoUrl?: string;
+    @IsString()
+    pastRecords?: string;
+
+    @IsOptional()
+    @IsObject({ message: 'socialLinks must be a JSON object' })
+    socialLinks?: Record<string, any>;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(100, { message: 'Tax ID must be 100 characters or fewer' })
+    taxId?: string;
 }

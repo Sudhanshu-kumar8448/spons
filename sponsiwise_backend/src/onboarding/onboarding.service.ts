@@ -4,13 +4,12 @@ import {
     ForbiddenException,
     Logger,
 } from '@nestjs/common';
-import { Role, CompanyType, VerificationStatus } from '@prisma/client';
+import { Role, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../common/providers/prisma.service';
 import { CreateSponsorDto, CreateOrganizerDto } from './dto';
 import type { JwtPayloadWithClaims } from '../auth/interfaces';
 
 import { AuthService } from '../auth/auth.service';
-import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * OnboardingService — handles new user onboarding flows.
@@ -41,7 +40,6 @@ export class OnboardingService {
     // ─── SPONSOR ONBOARDING ──────────────────────────────────
 
     async registerSponsor(dto: CreateSponsorDto, user: JwtPayloadWithClaims) {
-        // 1. Validate user is eligible
         const dbUser = await this.prisma.user.findUnique({
             where: { id: user.sub },
             select: { role: true, companyId: true, organizerId: true },
@@ -63,7 +61,7 @@ export class OnboardingService {
             throw new ConflictException('You are already registered as an organizer.');
         }
 
-        // 2. Generate unique slug from company name
+        // Generate unique slug from company name
         const baseSlug = dto.name
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
@@ -76,32 +74,26 @@ export class OnboardingService {
             slug = `${baseSlug}-${counter}`;
         }
 
-        // 3. Create company + link user in a transaction
-        // Using GLOBAL_TENANT_ID for single-tenant mode
+        // Create company + link user in a transaction
         const result = await this.prisma.$transaction(async (tx) => {
             const company = await tx.company.create({
                 data: {
-                    tenantId: GLOBAL_TENANT_ID,
                     name: dto.name,
                     slug,
-                    type: CompanyType.SPONSOR,
+                    type: dto.type,
                     website: dto.website || null,
-                    description: dto.description || null,
-                    logoUrl: dto.logoUrl || null,
+                    strategicIntent: dto.strategicIntent || null,
                     verificationStatus: VerificationStatus.PENDING,
                 },
             });
 
-            // Link user to company (keep role as USER until approved)
             await tx.user.update({
                 where: { id: user.sub },
                 data: { companyId: company.id },
             });
 
-            // Create audit log
             await tx.auditLog.create({
                 data: {
-                    tenantId: GLOBAL_TENANT_ID,
                     actorId: user.sub,
                     actorRole: user.role,
                     action: 'company.created',
@@ -115,16 +107,15 @@ export class OnboardingService {
                 },
             });
 
-            // Notify all managers in the global tenant
+            // Notify all managers
             const managers = await tx.user.findMany({
-                where: { tenantId: GLOBAL_TENANT_ID, role: Role.MANAGER },
+                where: { role: Role.MANAGER },
                 select: { id: true },
             });
 
             if (managers.length > 0) {
                 await tx.notification.createMany({
                     data: managers.map((m) => ({
-                        tenantId: GLOBAL_TENANT_ID,
                         userId: m.id,
                         title: 'New Sponsor Registration',
                         message: `A new sponsor company "${dto.name}" has been registered and is awaiting verification.`,
@@ -140,7 +131,7 @@ export class OnboardingService {
         });
 
         this.logger.log(
-            `Sponsor company "${result.name}" (${result.id}) created by user ${user.sub} in global tenant`,
+            `Sponsor company "${result.name}" (${result.id}) created by user ${user.sub}`,
         );
 
         return {
@@ -157,7 +148,6 @@ export class OnboardingService {
     // ─── ORGANIZER ONBOARDING ────────────────────────────────
 
     async registerOrganizer(dto: CreateOrganizerDto, user: JwtPayloadWithClaims) {
-        // 1. Validate user is eligible
         const dbUser = await this.prisma.user.findUnique({
             where: { id: user.sub },
             select: { role: true, companyId: true, organizerId: true },
@@ -179,32 +169,28 @@ export class OnboardingService {
             throw new ConflictException('You already have a company registration.');
         }
 
-        // 2. Check for duplicate contactEmail
-        if (dto.contactEmail) {
-            const existing = await this.prisma.organizer.findFirst({
-                where: { contactEmail: dto.contactEmail, tenantId: GLOBAL_TENANT_ID },
-            });
-            if (existing) {
-                throw new ConflictException('An organizer with this contact email already exists.');
-            }
+        // Check for duplicate organizer name
+        const existingOrg = await this.prisma.organizer.findFirst({
+            where: { name: dto.name },
+        });
+        if (existingOrg) {
+            throw new ConflictException('An organizer with this name already exists.');
         }
 
-        // 3. Create organizer + upgrade role in a transaction
-        // Using GLOBAL_TENANT_ID for single-tenant mode
+        // Create organizer + upgrade role in a transaction
         const result = await this.prisma.$transaction(async (tx) => {
             const organizer = await tx.organizer.create({
                 data: {
-                    tenantId: GLOBAL_TENANT_ID,
                     name: dto.name,
-                    description: dto.description || null,
-                    contactEmail: dto.contactEmail,
+                    ...(dto.type !== undefined && { type: dto.type }),
                     contactPhone: dto.contactPhone || null,
                     website: dto.website || null,
-                    logoUrl: dto.logoUrl || null,
+                    ...(dto.pastRecords !== undefined && { pastRecords: dto.pastRecords }),
+                    ...(dto.socialLinks !== undefined && { socialLinks: dto.socialLinks }),
+                    ...(dto.taxId !== undefined && { taxId: dto.taxId }),
                 },
             });
 
-            // Link user to organizer AND upgrade role to ORGANIZER
             const updatedUser = await tx.user.update({
                 where: { id: user.sub },
                 data: {
@@ -213,10 +199,8 @@ export class OnboardingService {
                 },
             });
 
-            // Create audit log
             await tx.auditLog.create({
                 data: {
-                    tenantId: GLOBAL_TENANT_ID,
                     actorId: user.sub,
                     actorRole: user.role,
                     action: 'organizer.created',
@@ -233,7 +217,7 @@ export class OnboardingService {
         });
 
         this.logger.log(
-            `Organizer "${result.organizer.name}" (${result.organizer.id}) created by user ${user.sub} in global tenant. Role upgraded to ORGANIZER.`,
+            `Organizer "${result.organizer.name}" (${result.organizer.id}) created by user ${user.sub}. Role upgraded to ORGANIZER.`,
         );
 
         // Generate new tokens with updated role

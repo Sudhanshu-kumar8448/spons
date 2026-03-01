@@ -11,7 +11,6 @@ export const COMPANY_VERIFIED_EVENT = 'company.verified';
  *   "event": "company.verified",
  *   "entityType": "Company",
  *   "entityId": "comp_abc123",
- *   "tenantId": "tenant_xyz",
  *   "reviewerId": "user_456",
  *   "reviewerRole": "ADMIN",
  *   "decision": "VERIFIED",
@@ -26,7 +25,6 @@ export class CompanyVerifiedEvent implements VerificationEventPayload {
   readonly decision = 'VERIFIED' as const;
 
   readonly entityId: string;
-  readonly tenantId: string;
   readonly reviewerId: string;
   readonly reviewerRole: string;
   readonly reviewerNotes: string | null;
@@ -34,13 +32,11 @@ export class CompanyVerifiedEvent implements VerificationEventPayload {
 
   constructor(params: {
     entityId: string;
-    tenantId: string;
     reviewerId: string;
     reviewerRole: string;
     reviewerNotes?: string | null;
   }) {
     this.entityId = params.entityId;
-    this.tenantId = params.tenantId;
     this.reviewerId = params.reviewerId;
     this.reviewerRole = params.reviewerRole;
     this.reviewerNotes = params.reviewerNotes ?? null;

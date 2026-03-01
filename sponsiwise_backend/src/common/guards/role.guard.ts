@@ -11,7 +11,7 @@ import { ROLES_KEY } from '../decorators';
  * Reads required roles from the @Roles() decorator metadata.
  * Compares them against `req.user.role` (set by AuthGuard).
  *
- * Execution order: AuthGuard → ② RoleGuard → TenantGuard
+ * Execution order: AuthGuard → ② RoleGuard
  *
  * Behaviour:
  *  - If no @Roles() decorator is present → allow (no role restriction)
@@ -22,7 +22,7 @@ import { ROLES_KEY } from '../decorators';
  */
 @Injectable()
 export class RoleGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(private readonly reflector: Reflector) { }
 
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES_KEY, [

@@ -11,14 +11,13 @@ import { PrismaService } from '../common/providers/prisma.service';
 import { AuditLogService } from '../audit-logs/audit-log.service';
 import { CacheService } from '../common/providers/cache.service';
 import { ProposalStatusChangedEvent, PROPOSAL_STATUS_CHANGED_EVENT } from '../proposals/events';
-import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 import type { OrganizerEventsQueryDto, OrganizerProposalsQueryDto, ReviewProposalDto, CreateOrganizerEventDto, UpdateOrganizerEventDto } from './dto';
 
 /**
  * OrganizerDashboardService — read-mostly aggregation layer for organizer-scoped data.
  *
  * Every method requires organizerId (resolved from JWT, never from request).
- * All queries are tenant-scoped AND organizer-scoped.
+ * All queries are organizer-scoped.
  *
  * The review endpoint reuses the same status transition logic and events
  * as ProposalService to avoid duplication, implemented inline with proper
@@ -54,13 +53,9 @@ export class OrganizerDashboardService {
    * - Total events, published events
    * - Total proposals received, pending, approved
    * - Total sponsorship revenue
-   * 
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   async getDashboardStats(organizerId?: string) {
     this.assertOrganizerId(organizerId);
-
-    const tenantId = GLOBAL_TENANT_ID;
 
     const [
       totalEvents,
@@ -71,12 +66,11 @@ export class OrganizerDashboardService {
     ] = await Promise.all([
       // Total events owned by this organizer
       this.prisma.event.count({
-        where: { tenantId, organizerId, isActive: true },
+        where: { organizerId, isActive: true },
       }),
       // Published events
       this.prisma.event.count({
         where: {
-          tenantId,
           organizerId,
           isActive: true,
           status: EventStatus.PUBLISHED,
@@ -85,7 +79,6 @@ export class OrganizerDashboardService {
       // Total proposals received (on organizer's events)
       this.prisma.proposal.count({
         where: {
-          tenantId,
           isActive: true,
           sponsorship: { event: { organizerId } },
         },
@@ -93,7 +86,6 @@ export class OrganizerDashboardService {
       // Pending proposals (SUBMITTED or UNDER_MANAGER_REVIEW)
       this.prisma.proposal.count({
         where: {
-          tenantId,
           isActive: true,
           sponsorship: { event: { organizerId } },
           status: { in: [ProposalStatus.SUBMITTED, ProposalStatus.UNDER_MANAGER_REVIEW] },
@@ -102,7 +94,6 @@ export class OrganizerDashboardService {
       // Approved proposals
       this.prisma.proposal.count({
         where: {
-          tenantId,
           isActive: true,
           sponsorship: { event: { organizerId } },
           status: ProposalStatus.APPROVED,
@@ -113,7 +104,6 @@ export class OrganizerDashboardService {
     // Sum approved proposal amounts as sponsorship revenue
     const revenueResult = await this.prisma.proposal.findMany({
       where: {
-        tenantId,
         isActive: true,
         status: ProposalStatus.APPROVED,
         sponsorship: { event: { organizerId } },
@@ -146,7 +136,6 @@ export class OrganizerDashboardService {
    * - organizerId is derived from the JWT.
    * - The event is created in DRAFT status with PENDING verification.
    * - Date range is validated (endDate must be after startDate).
-   * - Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   async createEvent(
     organizerId: string | undefined,
@@ -183,12 +172,10 @@ export class OrganizerDashboardService {
           endDate: end,
           status: EventStatus.UNDER_MANAGER_REVIEW,
           ...(dto.website !== undefined && { website: dto.website }),
-          ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
-          ...(dto.category !== undefined && { category: dto.category }),
+          category: dto.category,
           ...(dto.contactPhone !== undefined && { contactPhone: dto.contactPhone }),
           ...(dto.contactEmail !== undefined && { contactEmail: dto.contactEmail }),
           ...(dto.pptDeckUrl !== undefined && { pptDeckUrl: dto.pptDeckUrl }),
-          tenant: { connect: { id: GLOBAL_TENANT_ID } },
           organizer: { connect: { id: organizerId } },
         },
       });
@@ -197,7 +184,6 @@ export class OrganizerDashboardService {
       if (dto.address) {
         await tx.address.create({
           data: {
-            tenantId: GLOBAL_TENANT_ID,
             eventId: event.id,
             addressLine1: dto.address.addressLine1,
             addressLine2: dto.address.addressLine2,
@@ -217,7 +203,6 @@ export class OrganizerDashboardService {
           
           await tx.sponsorshipTier.create({
             data: {
-              tenantId: GLOBAL_TENANT_ID,
               eventId: event.id,
               tierType: tier.tierType as PrismaTierType,
               customName: tier.customName || null,
@@ -253,8 +238,6 @@ export class OrganizerDashboardService {
    *
    * Returns paginated list of events owned by this organizer.
    * Includes proposal counts and sponsorship revenue per event.
-   * 
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   async getEvents(
     organizerId: string | undefined,
@@ -262,12 +245,10 @@ export class OrganizerDashboardService {
   ) {
     this.assertOrganizerId(organizerId);
 
-    const tenantId = GLOBAL_TENANT_ID;
     const { page, page_size, status, search } = query;
     const skip = (page - 1) * page_size;
 
     const where: any = {
-      tenantId,
       organizerId,
       isActive: true,
       ...(status && { status: status.toUpperCase() }),
@@ -291,7 +272,6 @@ export class OrganizerDashboardService {
           description: true,
           startDate: true,
           endDate: true,
-          logoUrl: true,
           status: true,
           category: true,
           contactPhone: true,
@@ -394,8 +374,8 @@ export class OrganizerDashboardService {
           end_date: e.endDate.toISOString(),
           expected_footfall: e.expectedFootfall,
           status: e.status.toLowerCase(),
-          website: e.logoUrl || '',
-          logo_url: e.logoUrl || null,
+          website: '',
+          logo_url: null,
           category: e.category || null,
           contact_phone: e.contactPhone || null,
           contact_email: e.contactEmail || null,
@@ -429,16 +409,12 @@ export class OrganizerDashboardService {
    * GET /organizer/events/:id
    *
    * Returns a single event owned by this organizer with aggregated proposal data.
-   * 
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   async getEventById(eventId: string, organizerId?: string) {
     this.assertOrganizerId(organizerId);
 
-    const tenantId = GLOBAL_TENANT_ID;
-
     const e = await this.prisma.event.findFirst({
-      where: { id: eventId, tenantId, organizerId, isActive: true },
+      where: { id: eventId, organizerId, isActive: true },
       select: {
         id: true,
         title: true,
@@ -446,7 +422,6 @@ export class OrganizerDashboardService {
         startDate: true,
         endDate: true,
         website: true,
-        logoUrl: true,
         status: true,
         expectedFootfall: true,
         category: true,
@@ -545,7 +520,7 @@ export class OrganizerDashboardService {
       expected_footfall: e.expectedFootfall || 0,
       status: e.status.toLowerCase(),
       website: e.website || '',
-      logo_url: e.logoUrl || null,
+      logo_url: null,
       category: e.category || null,
       contact_phone: e.contactPhone || null,
       contact_email: e.contactEmail || null,
@@ -575,8 +550,6 @@ export class OrganizerDashboardService {
    * 
    * Updates an event owned by this organizer.
    * Organizers cannot edit tiers that are locked.
-   * 
-   * Uses GLOBAL_TENANT_ID internally.
    */
   async updateEvent(
     eventId: string,
@@ -584,11 +557,10 @@ export class OrganizerDashboardService {
     organizerId?: string,
   ) {
     this.assertOrganizerId(organizerId);
-    const tenantId = GLOBAL_TENANT_ID;
 
     // Load event with tiers
     const event = await this.prisma.event.findFirst({
-      where: { id: eventId, tenantId, organizerId, isActive: true },
+      where: { id: eventId, organizerId, isActive: true },
       include: { address: true, tiers: { where: { isActive: true } } },
     });
 
@@ -625,7 +597,6 @@ export class OrganizerDashboardService {
       if (dto.endDate !== undefined) coreData.endDate = new Date(dto.endDate);
       if (dto.expectedFootfall !== undefined) coreData.expectedFootfall = dto.expectedFootfall;
       if (dto.website !== undefined) coreData.website = dto.website;
-      if (dto.logoUrl !== undefined) coreData.logoUrl = dto.logoUrl;
       if (dto.category !== undefined) coreData.category = dto.category;
       if (dto.contactPhone !== undefined) coreData.contactPhone = dto.contactPhone;
       if (dto.contactEmail !== undefined) coreData.contactEmail = dto.contactEmail;
@@ -652,7 +623,6 @@ export class OrganizerDashboardService {
             data: {
               ...dto.address,
               eventId,
-              tenantId,
             } as any,
           });
         }
@@ -698,7 +668,6 @@ export class OrganizerDashboardService {
             
             await tx.sponsorshipTier.create({
               data: {
-                tenantId,
                 eventId,
                 tierType: tierDto.tierType as any,
                 customName: tierDto.customName || null,
@@ -744,8 +713,6 @@ export class OrganizerDashboardService {
    *
    * Returns paginated proposals for events owned by this organizer.
    * Includes nested sponsor and event info.
-   * 
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   async getProposals(
     organizerId: string | undefined,
@@ -753,12 +720,10 @@ export class OrganizerDashboardService {
   ) {
     this.assertOrganizerId(organizerId);
 
-    const tenantId = GLOBAL_TENANT_ID;
     const { page, page_size, status, event_id } = query;
     const skip = (page - 1) * page_size;
 
     const where: any = {
-      tenantId,
       isActive: true,
       sponsorship: {
         event: {
@@ -797,8 +762,7 @@ export class OrganizerDashboardService {
                 select: {
                   id: true,
                   name: true,
-                  logoUrl: true,
-                  // contactEmail is not on Company — use first user's email
+                  // logoUrl removed from schema
                 },
               },
             },
@@ -820,7 +784,7 @@ export class OrganizerDashboardService {
         sponsor: {
           id: p.sponsorship.company.id,
           name: p.sponsorship.company.name,
-          logo_url: p.sponsorship.company.logoUrl || null,
+          logo_url: null,
           email: '', // Company doesn't store email directly
         },
         event: {
@@ -846,18 +810,13 @@ export class OrganizerDashboardService {
    * GET /organizer/proposals/:id
    *
    * Returns a single proposal for an event owned by this organizer.
-   * 
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   async getProposalById(proposalId: string, organizerId?: string) {
     this.assertOrganizerId(organizerId);
 
-    const tenantId = GLOBAL_TENANT_ID;
-
     const p = await this.prisma.proposal.findFirst({
       where: {
         id: proposalId,
-        tenantId,
         isActive: true,
         sponsorship: { event: { organizerId } },
       },
@@ -877,7 +836,7 @@ export class OrganizerDashboardService {
             id: true,
             eventId: true,
             event: { select: { id: true, title: true } },
-            company: { select: { id: true, name: true, logoUrl: true } },
+            company: { select: { id: true, name: true } },
           },
         },
       },
@@ -898,7 +857,7 @@ export class OrganizerDashboardService {
       sponsor: {
         id: p.sponsorship.company.id,
         name: p.sponsorship.company.name,
-        logo_url: p.sponsorship.company.logoUrl || null,
+        logo_url: null,
         email: '',
       },
       event: {
@@ -924,8 +883,6 @@ export class OrganizerDashboardService {
    * - Maps action to ProposalStatus (approve → APPROVED, reject → REJECTED)
    * - Validates status transition (must be UNDER_MANAGER_REVIEW or SUBMITTED; auto-transitions SUBMITTED→UNDER_MANAGER_REVIEW→APPROVED/REJECTED)
    * - Records audit log and emits domain event
-   * 
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   async reviewProposal(
     proposalId: string,
@@ -935,17 +892,15 @@ export class OrganizerDashboardService {
   ) {
     this.assertOrganizerId(organizerId);
 
-    const tenantId = GLOBAL_TENANT_ID;
-
     // 1. Load proposal with full relationship chain for ownership check
     const proposal = await this.prisma.proposal.findFirst({
-      where: { id: proposalId, tenantId, isActive: true },
+      where: { id: proposalId, isActive: true },
       include: {
         sponsorship: {
           include: {
             event: { select: { id: true, organizerId: true, title: true } },
             company: {
-              select: { id: true, name: true, logoUrl: true },
+              select: { id: true, name: true },
             },
           },
         },
@@ -1048,7 +1003,6 @@ export class OrganizerDashboardService {
 
     // 6. Audit log — proposal status change
     this.auditLogService.log({
-      tenantId,
       actorId,
       actorRole: 'ORGANIZER',
       action: 'proposal.status_changed',
@@ -1065,7 +1019,6 @@ export class OrganizerDashboardService {
     // 6b. If approved and tier exists, also log the slot sale
     if (targetStatus === ProposalStatus.APPROVED && proposal.tierId) {
       this.auditLogService.log({
-        tenantId,
         actorId,
         actorRole: 'ORGANIZER',
         action: 'tier.slot_sold',
@@ -1085,7 +1038,6 @@ export class OrganizerDashboardService {
       PROPOSAL_STATUS_CHANGED_EVENT,
       new ProposalStatusChangedEvent({
         proposalId,
-        tenantId,
         actorId,
         actorRole: 'ORGANIZER',
         previousStatus: currentStatus,
@@ -1110,7 +1062,7 @@ export class OrganizerDashboardService {
       sponsor: {
         id: proposal.sponsorship.company.id,
         name: proposal.sponsorship.company.name,
-        logo_url: proposal.sponsorship.company.logoUrl || null,
+        logo_url: null,
         email: '',
       },
       event: {

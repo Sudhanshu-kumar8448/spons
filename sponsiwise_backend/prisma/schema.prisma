@@ -25,12 +25,6 @@ enum Role {
   SUPER_ADMIN
 }
 
-enum TenantStatus {
-  ACTIVE
-  SUSPENDED
-  DEACTIVATED
-}
-
 enum EmailStatus {
   SENT
   FAILED
@@ -43,13 +37,47 @@ enum NotificationSeverity {
   ERROR
 }
 
+enum EventCategory {
+  TECHNOLOGY
+  MUSIC_ENTERTAINMENT
+  BUSINESS
+  EDUCATION
+  SPORTS
+  CULTURAL
+  ART_CREATIVE
+  LIFESTYLE
+  OTHER
+}
+
 // ============================================
 // ENUMS FOR SPONSORSHIP INVENTORY
 // ============================================
 
 enum CompanyType {
-  SPONSOR
-  ORGANIZER
+  TECHNOLOGY
+  FINANCE
+  FMCG
+  HEALTHCARE_PHARMA
+  RETAIL_ECOMMERCE
+  MANUFACTURING_INDUSTRIAL
+  MEDIA_ENTERTAINMENT
+  EDUCATION
+  ENERGY_UTILITIES
+  REAL_ESTATE_CONSTRUCTION
+  LOGISTICS_TRANSPORTATION
+  TELECOM
+  OTHER
+}
+
+// Organizer Type enum - for classifying organizer entities
+enum OrganizerType {
+  INDIVIDUAL
+  COMPANY
+  NON_PROFIT
+  GOVERNMENT
+  EDUCATIONAL_INSTITUTION
+  CLUB_SOCIETY
+  OTHER
 }
 
 enum EventStatus {
@@ -81,6 +109,12 @@ enum ProposalStatus {
   WITHDRAWN
 }
 
+enum OrganizerApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum VerificationStatus {
   PENDING
   VERIFIED
@@ -98,43 +132,11 @@ enum TierType {
 }
 
 // ============================================
-// TENANT MODEL (root domain entity)
-// ============================================
-
-model Tenant {
-  id        String       @id @default(uuid()) @db.Uuid
-  name      String       @db.VarChar(255)
-  slug      String       @unique @db.VarChar(255)
-  status    TenantStatus @default(ACTIVE)
-  createdAt DateTime     @default(now()) @map("created_at")
-  updatedAt DateTime     @updatedAt @map("updated_at")
-
-  // Relations
-  users        User[]
-  companies    Company[]
-  organizers   Organizer[]
-  events       Event[]
-  sponsorships Sponsorship[]
-  proposals    Proposal[]
-  auditLogs    AuditLog[]
-  emailLogs    EmailLog[]
-  notifications Notification[]
-  addresses    Address[]
-  sponsorshipTiers SponsorshipTier[]
-
-  // Indexes
-  @@index([slug])
-  @@index([status])
-  @@map("tenants")
-}
-
-// ============================================
 // AUTH MODELS
 // ============================================
 
 model User {
   id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
   companyId   String?  @map("company_id") @db.Uuid
   organizerId String?  @map("organizer_id") @db.Uuid
   email       String   @unique
@@ -145,14 +147,18 @@ model User {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  company       Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  organizer     Organizer?     @relation(fields: [organizerId], references: [id], onDelete: SetNull)
-  refreshTokens RefreshToken[]
-  notifications Notification[]
+  company        Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  organizer      Organizer?     @relation(fields: [organizerId], references: [id], onDelete: SetNull)
+  refreshTokens  RefreshToken[]
+  notifications  Notification[]
+  eventsApproved Event[]        @relation("EventApprovedBy")
+
+  companiesApproved          Company[]         @relation("CompanyApprovedBy")
+  proposalsOrganizerApproved Proposal[]        @relation("ProposalOrganizerApprovedBy")
+  proposalsReviewed          Proposal[]        @relation("ProposalReviewedBy")
+  proposalMessagesSent       ProposalMessage[]
 
   // Indexes
-  @@index([tenantId])
   @@index([email])
   @@index([companyId])
   @@index([organizerId])
@@ -185,29 +191,32 @@ model RefreshToken {
 
 model Company {
   id                 String             @id @default(uuid()) @db.Uuid
-  tenantId           String             @map("tenant_id") @db.Uuid
   name               String             @db.VarChar(255)
   slug               String?            @unique @db.VarChar(255)
   type               CompanyType
   website            String?            @db.VarChar(500)
-  description        String?            @db.Text
-  logoUrl            String?            @map("logo_url") @db.VarChar(500)
+  strategicIntent    String?            @db.Text
   verificationStatus VerificationStatus @default(PENDING) @map("verification_status")
   isActive           Boolean            @default(true) @map("is_active")
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
 
+  // Approval tracking fields
+  approvedById    String?   @map("approved_by_id") @db.Uuid
+  approvedAt      DateTime? @map("approved_at")
+  rejectionReason String?   @map("rejection_reason") @db.Text
+
   // Relations
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   users        User[]
   sponsorships Sponsorship[]
 
+  approvedBy User? @relation("CompanyApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
   // Indexes
-  @@index([tenantId])
   @@index([type])
-  @@index([tenantId, type])
   @@index([verificationStatus])
   @@index([slug])
+  @@index([approvedById])
   @@map("companies")
 }
 
@@ -216,27 +225,25 @@ model Company {
 // ============================================
 
 model Organizer {
-  id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @map("tenant_id") @db.Uuid
-  name         String   @db.VarChar(255)
-  description  String?  @db.Text
-  contactEmail String?  @map("contact_email") @db.VarChar(255)
-  contactPhone String?  @map("contact_phone") @db.VarChar(50)
-  website      String?  @db.VarChar(500)
-  logoUrl      String?  @map("logo_url") @db.VarChar(500)
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id           String        @id @default(uuid()) @db.Uuid
+  name         String        @db.VarChar(255)
+  type         OrganizerType @default(INDIVIDUAL)
+  pastRecords  String?       @db.Text
+  socialLinks  Json?         @map("social_links") @db.JsonB // e.g. { "twitter": "url", "linkedin": "url" }
+  taxId        String?       @map("tax_id") @db.VarChar(100)
+  contactPhone String?       @map("contact_phone") @db.VarChar(50)
+  website      String?       @db.VarChar(500)
+  isActive     Boolean       @default(true) @map("is_active")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
 
   // Relations
-  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   events Event[]
   users  User[]
 
   // Indexes
-  @@index([tenantId])
   @@index([isActive])
-  @@index([tenantId, isActive])
+  @@index([type])
   @@map("organizers")
 }
 
@@ -246,7 +253,6 @@ model Organizer {
 
 model Event {
   id                 String             @id @default(uuid()) @db.Uuid
-  tenantId           String             @map("tenant_id") @db.Uuid
   organizerId        String             @map("organizer_id") @db.Uuid
   title              String             @db.VarChar(255)
   description        String?            @db.Text
@@ -255,34 +261,38 @@ model Event {
   endDate            DateTime           @map("end_date")
   status             EventStatus        @default(DRAFT)
   website            String?            @db.VarChar(500)
-  logoUrl            String?            @map("logo_url") @db.VarChar(500)
   verificationStatus VerificationStatus @default(PENDING) @map("verification_status")
   isActive           Boolean            @default(true) @map("is_active")
-  
+
   // New fields for sponsorship inventory
-  category           String?            @db.VarChar(100)
-  pptDeckUrl         String?            @map("ppt_deck_url") @db.VarChar(500)
-  contactPhone       String?            @map("contact_phone") @db.VarChar(50)
-  contactEmail       String?            @map("contact_email") @db.VarChar(255)
-  
-  createdAt          DateTime           @default(now()) @map("created_at")
-  updatedAt          DateTime           @updatedAt @map("updated_at")
+  category     EventCategory
+  pptDeckUrl   String?       @map("ppt_deck_url") @db.VarChar(500)
+  contactPhone String?       @map("contact_phone") @db.VarChar(50)
+  contactEmail String?       @map("contact_email") @db.VarChar(255)
+
+  // Approval tracking fields
+  approvedById    String?   @map("approved_by_id") @db.Uuid
+  approvedAt      DateTime? @map("approved_at")
+  rejectionReason String?   @map("rejection_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  organizer    Organizer        @relation(fields: [organizerId], references: [id], onDelete: Cascade)
-  sponsorships Sponsorship[]
-  tiers        SponsorshipTier[]
-  address      Address?
+  organizer       Organizer             @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  sponsorships    Sponsorship[]
+  tiers           SponsorshipTier[]
+  address         Address?
+  audienceProfile EventAudienceProfile?
+  approvedBy      User?                 @relation("EventApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
 
   // Indexes
-  @@index([tenantId])
   @@index([organizerId])
   @@index([status])
-  @@index([tenantId, status])
   @@index([organizerId, status])
   @@index([verificationStatus])
   @@index([isActive, status, verificationStatus])
+  @@index([approvedById])
   @@map("events")
 }
 
@@ -291,23 +301,20 @@ model Event {
 // ============================================
 
 model Address {
-  id           String  @id @default(uuid()) @db.Uuid
-  tenantId     String  @map("tenant_id") @db.Uuid
-  eventId      String  @map("event_id") @db.Uuid @unique
-  addressLine1 String  @map("address_line_1") @db.VarChar(255)
-  addressLine2 String? @map("address_line_2") @db.VarChar(255)
-  city         String  @db.VarChar(100)
-  state        String  @db.VarChar(100)
-  country      String  @db.VarChar(100)
-  postalCode   String  @map("postal_code") @db.VarChar(20)
+  id           String   @id @default(uuid()) @db.Uuid
+  eventId      String   @unique @map("event_id") @db.Uuid
+  addressLine1 String   @map("address_line_1") @db.VarChar(255)
+  addressLine2 String?  @map("address_line_2") @db.VarChar(255)
+  city         String   @db.VarChar(100)
+  state        String   @db.VarChar(100)
+  country      String   @db.VarChar(100)
+  postalCode   String   @map("postal_code") @db.VarChar(20)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId])
   @@map("addresses")
 }
 
@@ -316,36 +323,130 @@ model Address {
 // ============================================
 
 model SponsorshipTier {
-  id           String    @id @default(uuid()) @db.Uuid
-  tenantId     String    @map("tenant_id") @db.Uuid
-  eventId      String    @map("event_id") @db.Uuid
-  tierType     TierType
-  customName   String?   @map("custom_name") @db.VarChar(255)
-  askingPrice  Decimal   @map("asking_price") @db.Decimal(12, 2)
-  totalSlots   Int       @default(1) @map("total_slots")
-  soldSlots    Int       @default(0) @map("sold_slots")
-  isLocked     Boolean   @default(false) @map("is_locked")
-  isActive     Boolean   @default(true) @map("is_active")
+  id          String   @id @default(uuid()) @db.Uuid
+  eventId     String   @map("event_id") @db.Uuid
+  tierType    TierType
+  customName  String?  @map("custom_name") @db.VarChar(255)
+  askingPrice Decimal  @map("asking_price") @db.Decimal(12, 2)
+  totalSlots  Int      @default(1) @map("total_slots")
+  soldSlots   Int      @default(0) @map("sold_slots")
+  isLocked    Boolean  @default(false) @map("is_locked")
+  isActive    Boolean  @default(true) @map("is_active")
   // Benefits stored as JSON string - parsed at application level
-  benefits     String    @default("[]") @db.Text
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  benefits    String   @default("[]") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  event      Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  proposals  Proposal[]
+  event     Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  proposals Proposal[]
 
   // NOTE: Unique constraint removed. Predefined tiers uniqueness is enforced in service layer.
   // CUSTOM tierType allows multiple tiers per event.
 
   // Indexes
-  @@index([tenantId])
   @@index([eventId])
-  @@index([tenantId, eventId])
   @@index([isLocked])
   @@index([tierType])
   @@map("sponsorship_tiers")
+}
+
+// ============================================
+// ATTENDEES PROFILE MODEL (Event -> EventAudienceProfile link)
+// ============================================
+
+model EventAudienceProfile {
+  id      String @id @default(uuid()) @db.Uuid
+  eventId String @unique @map("event_id") @db.Uuid
+
+  totalExpectedAudience Int @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  genders AudienceGender[]
+  ages    AudienceAgeGroup[]
+  incomes AudienceIncomeGroup[]
+  regions AudienceRegionDistribution[]
+
+  @@map("event_audience_profiles")
+}
+
+// Gender Distribution
+enum GenderType {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model AudienceGender {
+  id         String     @id @default(uuid()) @db.Uuid
+  profileId  String     @map("profile_id") @db.Uuid
+  gender     GenderType
+  percentage Float
+
+  profile EventAudienceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, gender])
+  @@map("audience_genders")
+}
+
+// Age Distribution
+enum AgeBracket {
+  AGE_5_12
+  AGE_12_17
+  AGE_17_28
+  AGE_28_45
+  AGE_45_PLUS
+}
+
+model AudienceAgeGroup {
+  id         String     @id @default(uuid()) @db.Uuid
+  profileId  String     @map("profile_id") @db.Uuid
+  bracket    AgeBracket
+  percentage Float
+
+  profile EventAudienceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, bracket])
+  @@map("audience_age_groups")
+}
+
+//Income Distribution
+enum IncomeBracket {
+  BELOW_2L
+  BETWEEN_2L_5L
+  BETWEEN_5L_10L
+  BETWEEN_10L_25L
+  ABOVE_25L
+}
+
+model AudienceIncomeGroup {
+  id         String        @id @default(uuid()) @db.Uuid
+  profileId  String        @map("profile_id") @db.Uuid
+  bracket    IncomeBracket
+  percentage Float
+
+  profile EventAudienceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, bracket])
+  @@map("audience_income_groups")
+}
+
+//Region / City Distribution
+model AudienceRegionDistribution {
+  id         String @id @default(uuid()) @db.Uuid
+  profileId  String @map("profile_id") @db.Uuid
+  city       String @db.VarChar(100)
+  state      String @db.VarChar(100)
+  percentage Float
+
+  profile EventAudienceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@map("audience_regions")
 }
 
 // ============================================
@@ -353,33 +454,28 @@ model SponsorshipTier {
 // ============================================
 
 model Sponsorship {
-  id          String            @id @default(uuid()) @db.Uuid
-  tenantId    String            @map("tenant_id") @db.Uuid
-  companyId   String            @map("company_id") @db.Uuid
-  eventId     String            @map("event_id") @db.Uuid
-  status      SponsorshipStatus @default(PENDING)
-  tier        String?           @db.VarChar(100)
-  notes       String?           @db.Text
-  isActive    Boolean           @default(true) @map("is_active")
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
+  id        String            @id @default(uuid()) @db.Uuid
+  companyId String            @map("company_id") @db.Uuid
+  eventId   String            @map("event_id") @db.Uuid
+  status    SponsorshipStatus @default(PENDING)
+  tier      String?           @db.VarChar(100)
+  notes     String?           @db.Text
+  isActive  Boolean           @default(true) @map("is_active")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
 
   // Relations
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  event     Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
   proposals Proposal[]
 
   // Unique constraint: one sponsorship per company–event pair
   @@unique([companyId, eventId])
-
   // Indexes
-  @@index([tenantId])
   @@index([companyId])
   @@index([eventId])
   @@index([status])
-  @@index([tenantId, status])
-  @@index([tenantId, isActive])
+  @@index([isActive])
   @@map("sponsorships")
 }
 
@@ -389,7 +485,6 @@ model Sponsorship {
 
 model Proposal {
   id             String         @id @default(uuid()) @db.Uuid
-  tenantId       String         @map("tenant_id") @db.Uuid
   sponsorshipId  String         @map("sponsorship_id") @db.Uuid
   tierId         String?        @map("tier_id") @db.Uuid
   status         ProposalStatus @default(DRAFT)
@@ -399,23 +494,53 @@ model Proposal {
   notes          String?        @db.Text
   submittedAt    DateTime?      @map("submitted_at")
   reviewedAt     DateTime?      @map("reviewed_at")
-  isActive       Boolean        @default(true) @map("is_active")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  // Manager review tracking
+  reviewedById      String? @map("reviewed_by_id") @db.Uuid
+  reviewedByRole    Role?   @map("reviewed_by_role")
+  managerReviewNote String? @map("manager_review_note") @db.Text
+
+  // Organizer approval tracking
+  organizerApprovalStatus OrganizerApprovalStatus @default(PENDING) @map("organizer_approval_status")
+  organizerApprovedById   String?                 @map("organizer_approved_by_id") @db.Uuid
+  organizerApprovedAt     DateTime?               @map("organizer_approved_at")
+  organizerRejectionNote  String?                 @map("organizer_rejection_note") @db.Text
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  sponsorship Sponsorship      @relation(fields: [sponsorshipId], references: [id], onDelete: Cascade)
-  tier        SponsorshipTier? @relation(fields: [tierId], references: [id], onDelete: SetNull)
+  sponsorship         Sponsorship       @relation(fields: [sponsorshipId], references: [id], onDelete: Cascade)
+  tier                SponsorshipTier?  @relation(fields: [tierId], references: [id], onDelete: SetNull)
+  organizerApprovedBy User?             @relation("ProposalOrganizerApprovedBy", fields: [organizerApprovedById], references: [id], onDelete: SetNull)
+  reviewedBy          User?             @relation("ProposalReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  messages            ProposalMessage[]
 
   // Indexes
-  @@index([tenantId])
   @@index([sponsorshipId])
   @@index([tierId])
   @@index([status])
-  @@index([tenantId, status])
   @@index([sponsorshipId, status])
+  @@index([reviewedById])
   @@map("proposals")
+}
+
+model ProposalMessage {
+  id         String   @id @default(uuid()) @db.Uuid
+  proposalId String   @map("proposal_id") @db.Uuid
+  senderId   String   @map("sender_id") @db.Uuid
+  senderRole Role     @map("sender_role")
+  message    String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  sender   User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
+  @@index([senderId])
+  @@map("proposal_messages")
 }
 
 // ============================================
@@ -423,35 +548,29 @@ model Proposal {
 // ============================================
 
 model AuditLog {
-  id        String   @id @default(uuid()) @db.Uuid
-  tenantId  String   @map("tenant_id") @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
   // Who performed the action
-  actorId   String   @map("actor_id") @db.Uuid
-  actorRole String   @map("actor_role") @db.VarChar(50)
+  actorId   String @map("actor_id") @db.Uuid
+  actorRole String @map("actor_role") @db.VarChar(50)
 
   // What happened
-  action    String   @db.VarChar(100) // e.g. "proposal.created", "proposal.status_changed"
+  action String @db.VarChar(100) // e.g. "proposal.created", "proposal.status_changed"
 
   // Which entity was affected
-  entityType String  @map("entity_type") @db.VarChar(50)  // e.g. "Proposal", "Sponsorship"
-  entityId   String  @map("entity_id") @db.Uuid
+  entityType String @map("entity_type") @db.VarChar(50) // e.g. "Proposal", "Sponsorship"
+  entityId   String @map("entity_id") @db.Uuid
 
   // Arbitrary JSON payload (old/new values, context, etc.)
-  metadata  Json?    @default("{}") @db.JsonB
+  metadata Json? @default("{}") @db.JsonB
 
   // Immutable timestamp
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relations
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   // Indexes for efficient querying
-  @@index([tenantId])
   @@index([actorId])
   @@index([entityType, entityId])
   @@index([action])
-  @@index([tenantId, createdAt])
   @@index([createdAt])
   @@map("audit_logs")
 }
@@ -462,7 +581,6 @@ model AuditLog {
 
 model EmailLog {
   id           String      @id @default(uuid()) @db.Uuid
-  tenantId     String      @map("tenant_id") @db.Uuid
   recipient    String      @db.VarChar(255)
   subject      String      @db.VarChar(500)
   jobName      String      @map("job_name") @db.VarChar(100)
@@ -472,14 +590,10 @@ model EmailLog {
   errorMessage String?     @map("error_message") @db.Text
   createdAt    DateTime    @default(now()) @map("created_at")
 
-  // Relations
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   // Indexes
-  @@index([tenantId])
   @@index([jobName])
   @@index([status])
-  @@index([tenantId, createdAt])
+  @@index([createdAt])
   @@map("email_logs")
 }
 
@@ -489,7 +603,6 @@ model EmailLog {
 
 model Notification {
   id         String               @id @default(uuid()) @db.Uuid
-  tenantId   String               @map("tenant_id") @db.Uuid
   userId     String               @map("user_id") @db.Uuid
   title      String               @db.VarChar(255)
   message    String               @db.Text
@@ -501,14 +614,11 @@ model Notification {
   createdAt  DateTime             @default(now()) @map("created_at")
 
   // Relations
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Indexes
-  @@index([tenantId])
   @@index([userId])
   @@index([userId, read])
-  @@index([tenantId, createdAt])
+  @@index([createdAt])
   @@map("notifications")
 }
-

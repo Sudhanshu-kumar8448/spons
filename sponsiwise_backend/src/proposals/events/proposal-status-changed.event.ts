@@ -16,7 +16,6 @@ export const PROPOSAL_STATUS_CHANGED_EVENT = 'proposal.status_changed';
  * ```json
  * {
  *   "proposalId": "clxyz123...",
- *   "tenantId": "tenant_abc",
  *   "actorId": "user_456",
  *   "actorRole": "ADMIN",
  *   "previousStatus": "UNDER_MANAGER_REVIEW",
@@ -31,9 +30,6 @@ export class ProposalStatusChangedEvent {
 
   /** ID of the proposal whose status changed */
   readonly proposalId: string;
-
-  /** Tenant the proposal belongs to */
-  readonly tenantId: string;
 
   /** User who triggered the status change */
   readonly actorId: string;
@@ -52,14 +48,12 @@ export class ProposalStatusChangedEvent {
 
   constructor(params: {
     proposalId: string;
-    tenantId: string;
     actorId: string;
     actorRole: string;
     previousStatus: ProposalStatus;
     newStatus: ProposalStatus;
   }) {
     this.proposalId = params.proposalId;
-    this.tenantId = params.tenantId;
     this.actorId = params.actorId;
     this.actorRole = params.actorRole;
     this.previousStatus = params.previousStatus;

@@ -3,7 +3,7 @@ import { ProposalStatus } from '@prisma/client';
 
 /**
  * DTO for updating an existing proposal.
- * sponsorshipId, tenantId, and id are immutable after creation.
+ * sponsorshipId and id are immutable after creation.
  */
 export class UpdateProposalDto {
   @IsOptional()

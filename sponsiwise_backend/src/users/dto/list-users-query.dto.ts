@@ -3,7 +3,7 @@ import { Type } from 'class-transformer';
 import { Role } from '@prisma/client';
 
 /**
- * DTO for listing / filtering users within a tenant.
+ * DTO for listing / filtering users.
  * All fields are optional query parameters.
  */
 export class ListUsersQueryDto {

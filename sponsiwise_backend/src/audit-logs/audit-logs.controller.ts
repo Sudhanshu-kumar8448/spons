@@ -3,8 +3,7 @@ import { IsOptional, IsString, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Role } from '@prisma/client';
 import { AuthGuard, RoleGuard } from '../common/guards';
-import { Roles, CurrentUser } from '../common/decorators';
-import type { JwtPayloadWithClaims } from '../auth/interfaces';
+import { Roles } from '../common/decorators';
 import { AuditLogService } from './audit-log.service';
 
 // ── Query DTO ──────────────────────────────────────────────────────
@@ -38,7 +37,7 @@ class AuditLogsQueryDto {
  * AuditLogsController — read-only access to audit log entries.
  *
  * Endpoints:
- *  - GET /audit-logs            → paginated, tenant-scoped, filterable
+ *  - GET /audit-logs            → paginated, filterable
  *  - GET /audit-logs/entity/:entityType/:entityId → entity history
  *
  * Accessible by MANAGER, ADMIN, and SUPER_ADMIN roles.
@@ -52,16 +51,14 @@ export class AuditLogsController {
     /**
      * GET /audit-logs
      *
-     * Returns paginated audit logs scoped to the requesting user's tenant.
+     * Returns paginated audit logs.
      * Supports optional filtering by entityType and action.
      */
     @Get()
     async findAll(
         @Query() query: AuditLogsQueryDto,
-        @CurrentUser() user: JwtPayloadWithClaims,
     ) {
-        const { data, total } = await this.auditLogService.findByTenant({
-            tenantId: user.tenant_id,
+        const { data, total } = await this.auditLogService.findAll({
             skip: (query.page - 1) * query.pageSize,
             take: query.pageSize,
             entityType: query.entityType,

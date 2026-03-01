@@ -1,12 +1,11 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   BadRequestException,
   Logger,
 } from '@nestjs/common';
 import type { Proposal } from '@prisma/client';
-import { Role, ProposalStatus } from '@prisma/client';
+import { ProposalStatus } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ProposalRepository } from './proposal.repository';
 import { SponsorshipRepository } from '../sponsorships/sponsorship.repository';
@@ -19,16 +18,11 @@ import {
   PROPOSAL_STATUS_CHANGED_EVENT,
 } from './events';
 import { CreateProposalDto, UpdateProposalDto, ListProposalsQueryDto } from './dto';
-import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * ProposalService — business logic for proposal management.
  *
- * AFTER SOFT-DISABLE MULTI-TENANCY:
- * - All operations use GLOBAL_TENANT_ID internally
- * - Tenant isolation is handled at the guard level
- * - Role checks remain for authorization (ADMIN, MANAGER, ORGANIZER, etc.)
- * - Status workflow: DRAFT → SUBMITTED → UNDER_MANAGER_REVIEW → APPROVED / REJECTED
+ * Status workflow: DRAFT → SUBMITTED → UNDER_MANAGER_REVIEW → APPROVED / REJECTED
  */
 @Injectable()
 export class ProposalService {
@@ -46,27 +40,13 @@ export class ProposalService {
 
   /**
    * Create a new proposal.
-   * - Sponsorship must exist and be accessible by the caller's tenant
-   * - tenantId is derived from the Sponsorship
-   * - ADMIN: sponsorship must be within their own tenant
-   * - SUPER_ADMIN: any sponsorship
+   * Sponsorship must exist.
    */
-  async create(
-    dto: CreateProposalDto,
-    callerRole: Role,
-    callerTenantId: string,
-  ): Promise<Proposal> {
-    // 1. Validate sponsorship exists and enforce tenant access
-    const sponsorship = await this.validateSponsorship(
-      dto.sponsorshipId,
-      callerRole,
-      callerTenantId,
-    );
+  async create(dto: CreateProposalDto, actorId?: string, actorRole?: string): Promise<Proposal> {
+    // 1. Validate sponsorship exists
+    await this.validateSponsorship(dto.sponsorshipId);
 
-    // 2. Derive tenantId from sponsorship
-    const tenantId = sponsorship.tenantId;
-
-    // 3. Set submittedAt if status is SUBMITTED or beyond
+    // 2. Set submittedAt if status is SUBMITTED or beyond
     const submittedAt = dto.status && dto.status !== ProposalStatus.DRAFT ? new Date() : undefined;
 
     const proposal = await this.proposalRepository.create({
@@ -78,19 +58,17 @@ export class ProposalService {
       ...(dto.message !== undefined && { message: dto.message }),
       ...(dto.notes !== undefined && { notes: dto.notes }),
       ...(submittedAt !== undefined && { submittedAt }),
-      tenant: { connect: { id: tenantId } },
       sponsorship: { connect: { id: dto.sponsorshipId } },
     });
 
     this.logger.log(
-      `Proposal ${proposal.id} created for sponsorship ${dto.sponsorshipId} in tenant ${tenantId}`,
+      `Proposal ${proposal.id} created for sponsorship ${dto.sponsorshipId}`,
     );
 
-    // Fire-and-forget audit log — never blocks the response
+    // Fire-and-forget audit log
     this.auditLogService.log({
-      tenantId,
-      actorId: callerTenantId, // caller's ID used as actor
-      actorRole: callerRole,
+      actorId: actorId || 'system',
+      actorRole: actorRole || 'SYSTEM',
       action: 'proposal.created',
       entityType: 'Proposal',
       entityId: proposal.id,
@@ -101,14 +79,13 @@ export class ProposalService {
       },
     });
 
-    // Emit domain event — after DB write, before return
+    // Emit domain event
     this.eventEmitter.emit(
       PROPOSAL_CREATED_EVENT,
       new ProposalCreatedEvent({
         proposalId: proposal.id,
-        tenantId,
-        actorId: callerTenantId,
-        actorRole: callerRole,
+        actorId: actorId || 'system',
+        actorRole: actorRole || 'SYSTEM',
         newStatus: proposal.status,
         sponsorshipId: dto.sponsorshipId,
         proposedAmount: dto.proposedAmount ? Number(dto.proposedAmount) : undefined,
@@ -125,17 +102,9 @@ export class ProposalService {
 
   /**
    * Get a single proposal by ID.
-   * - USER / ADMIN: must be within their own tenant
-   * - SUPER_ADMIN: any tenant
    */
-  async findById(proposalId: string, callerRole: Role, callerTenantId: string): Promise<Proposal> {
-    let proposal: Proposal | null;
-
-    if (callerRole === Role.SUPER_ADMIN) {
-      proposal = await this.proposalRepository.findById(proposalId);
-    } else {
-      proposal = await this.proposalRepository.findByIdAndTenant(proposalId, callerTenantId);
-    }
+  async findById(proposalId: string): Promise<Proposal> {
+    const proposal = await this.proposalRepository.findById(proposalId);
 
     if (!proposal) {
       throw new NotFoundException('Proposal not found');
@@ -145,15 +114,9 @@ export class ProposalService {
   }
 
   /**
-   * List proposals.
-   * - USER / ADMIN: scoped to their own tenant
-   * - SUPER_ADMIN: across all tenants
+   * List proposals with optional filters.
    */
-  async findAll(
-    query: ListProposalsQueryDto,
-    callerRole: Role,
-    callerTenantId: string,
-  ): Promise<{
+  async findAll(query: ListProposalsQueryDto): Promise<{
     data: Proposal[];
     total: number;
     page: number;
@@ -163,12 +126,9 @@ export class ProposalService {
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    // Build a deterministic cache key from query params
-    const scope = callerRole === Role.SUPER_ADMIN ? 'global' : `tenant:${callerTenantId}`;
     const cacheKey = CacheService.key(
       'proposals',
       'list',
-      scope,
       `p${page}`,
       `l${limit}`,
       `s${query.status ?? 'any'}`,
@@ -176,34 +136,19 @@ export class ProposalService {
       `a${query.isActive ?? 'any'}`,
     );
 
-    // Try cache first
     const cached = await this.cacheService.get<{ data: Proposal[]; total: number }>(cacheKey);
     if (cached) {
       return { ...cached, page, limit };
     }
 
-    let result: { data: Proposal[]; total: number };
+    const result = await this.proposalRepository.findAll({
+      skip,
+      take: limit,
+      status: query.status,
+      sponsorshipId: query.sponsorshipId,
+      isActive: query.isActive,
+    });
 
-    if (callerRole === Role.SUPER_ADMIN) {
-      result = await this.proposalRepository.findAll({
-        skip,
-        take: limit,
-        status: query.status,
-        sponsorshipId: query.sponsorshipId,
-        isActive: query.isActive,
-      });
-    } else {
-      result = await this.proposalRepository.findByTenant({
-        tenantId: callerTenantId,
-        skip,
-        take: limit,
-        status: query.status,
-        sponsorshipId: query.sponsorshipId,
-        isActive: query.isActive,
-      });
-    }
-
-    // Populate cache (60s TTL)
     this.cacheService.set(cacheKey, result, 60);
 
     return { ...result, page, limit };
@@ -213,20 +158,10 @@ export class ProposalService {
 
   /**
    * Update a proposal.
-   * - ADMIN: within their own tenant
-   * - SUPER_ADMIN: any tenant
-   *
-   * sponsorshipId and tenantId are immutable after creation.
    * Status transitions are validated.
    */
-  async update(
-    proposalId: string,
-    dto: UpdateProposalDto,
-    callerRole: Role,
-    callerTenantId: string,
-  ): Promise<Proposal> {
-    // Ensure the proposal exists and is within the caller's tenant
-    const existing = await this.findById(proposalId, callerRole, callerTenantId);
+  async update(proposalId: string, dto: UpdateProposalDto, actorId?: string, actorRole?: string): Promise<Proposal> {
+    const existing = await this.findById(proposalId);
 
     // Validate status transition if status is being changed
     if (dto.status !== undefined) {
@@ -254,25 +189,14 @@ export class ProposalService {
       ...timestampUpdates,
     };
 
-    let proposal: Proposal;
+    const proposal = await this.proposalRepository.updateById(proposalId, data);
 
-    if (callerRole === Role.SUPER_ADMIN) {
-      proposal = await this.proposalRepository.updateById(proposalId, data);
-    } else {
-      proposal = await this.proposalRepository.updateByIdAndTenant(
-        proposalId,
-        callerTenantId,
-        data,
-      );
-    }
+    this.logger.log(`Proposal ${proposalId} updated`);
 
-    this.logger.log(`Proposal ${proposalId} updated by ${callerRole} (tenant: ${callerTenantId})`);
-
-    // Fire-and-forget audit log — never blocks the response
+    // Fire-and-forget audit log
     this.auditLogService.log({
-      tenantId: existing.tenantId,
-      actorId: callerTenantId,
-      actorRole: callerRole,
+      actorId: actorId || 'system',
+      actorRole: actorRole || 'SYSTEM',
       action: dto.status ? 'proposal.status_changed' : 'proposal.updated',
       entityType: 'Proposal',
       entityId: proposalId,
@@ -291,9 +215,8 @@ export class ProposalService {
         PROPOSAL_STATUS_CHANGED_EVENT,
         new ProposalStatusChangedEvent({
           proposalId,
-          tenantId: existing.tenantId,
-          actorId: callerTenantId,
-          actorRole: callerRole,
+          actorId: actorId || 'system',
+          actorRole: actorRole || 'SYSTEM',
           previousStatus: existing.status,
           newStatus: dto.status,
         }),
@@ -309,29 +232,14 @@ export class ProposalService {
   // ─── PRIVATE HELPERS ─────────────────────────────────────
 
   /**
-   * Validate that the Sponsorship exists and the caller has access.
-   *
+   * Validate that the Sponsorship exists.
    * Throws NotFoundException if sponsorship doesn't exist.
-   * Throws ForbiddenException if cross-tenant access.
    */
-  private async validateSponsorship(
-    sponsorshipId: string,
-    callerRole: Role,
-    callerTenantId: string,
-  ) {
+  private async validateSponsorship(sponsorshipId: string) {
     const sponsorship = await this.sponsorshipRepository.findById(sponsorshipId);
 
     if (!sponsorship) {
       throw new NotFoundException('Sponsorship not found');
-    }
-
-    // For non-super-admins, the sponsorship must be in the caller's tenant
-    if (callerRole !== Role.SUPER_ADMIN) {
-      if (sponsorship.tenantId !== callerTenantId) {
-        throw new ForbiddenException(
-          'Cannot create proposals for sponsorships outside your tenant',
-        );
-      }
     }
 
     return sponsorship;

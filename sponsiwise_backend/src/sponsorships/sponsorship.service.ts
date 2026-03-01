@@ -1,26 +1,17 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   ConflictException,
   Logger,
 } from '@nestjs/common';
 import type { Sponsorship } from '@prisma/client';
-import { Role } from '@prisma/client';
 import { SponsorshipRepository } from './sponsorship.repository';
 import { CompanyRepository } from '../companies/company.repository';
 import { EventRepository } from '../events/event.repository';
 import { CreateSponsorshipDto, UpdateSponsorshipDto, ListSponsorshipsQueryDto } from './dto';
-import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * SponsorshipService — business logic for sponsorship management.
- *
- * AFTER SOFT-DISABLE MULTI-TENANCY:
- * - All operations use GLOBAL_TENANT_ID internally
- * - Tenant isolation is handled at the guard level
- * - Role checks remain for authorization (ADMIN, MANAGER, SPONSOR, etc.)
- * - Sponsorship links Company to Event
  */
 @Injectable()
 export class SponsorshipService {
@@ -35,24 +26,11 @@ export class SponsorshipService {
   // ─── CREATE ──────────────────────────────────────────────
 
   /**
-   * Create a new sponsorship.
-   * - ADMIN: company & event must be within their own tenant
-   * - SUPER_ADMIN: company & event must share the same tenant
-   *
-   * tenantId is always derived from the validated Company/Event.
+   * Create a new sponsorship linking a Company to an Event.
    */
-  async create(
-    dto: CreateSponsorshipDto,
-    callerRole: Role,
-    callerTenantId: string,
-  ): Promise<Sponsorship> {
-    // 1. Validate company and event, enforce same-tenant rule
-    const { company, event } = await this.validateCompanyAndEvent(
-      dto.companyId,
-      dto.eventId,
-      callerRole,
-      callerTenantId,
-    );
+  async create(dto: CreateSponsorshipDto): Promise<Sponsorship> {
+    // 1. Validate company and event exist
+    await this.validateCompanyAndEvent(dto.companyId, dto.eventId);
 
     // 2. Check for duplicate sponsorship
     const existing = await this.sponsorshipRepository.findByCompanyAndEvent(
@@ -63,20 +41,16 @@ export class SponsorshipService {
       throw new ConflictException('A sponsorship already exists for this company–event pair');
     }
 
-    // 3. Derive tenantId from the company (guaranteed same as event)
-    const tenantId = company.tenantId;
-
     const sponsorship = await this.sponsorshipRepository.create({
       ...(dto.status !== undefined && { status: dto.status }),
       ...(dto.tier !== undefined && { tier: dto.tier }),
       ...(dto.notes !== undefined && { notes: dto.notes }),
-      tenant: { connect: { id: tenantId } },
       company: { connect: { id: dto.companyId } },
       event: { connect: { id: dto.eventId } },
     });
 
     this.logger.log(
-      `Sponsorship ${sponsorship.id} created: company ${dto.companyId} → event ${dto.eventId} in tenant ${tenantId}`,
+      `Sponsorship ${sponsorship.id} created: company ${dto.companyId} → event ${dto.eventId}`,
     );
     return sponsorship;
   }
@@ -85,24 +59,9 @@ export class SponsorshipService {
 
   /**
    * Get a single sponsorship by ID.
-   * - USER / ADMIN: must be within their own tenant
-   * - SUPER_ADMIN: any tenant
    */
-  async findById(
-    sponsorshipId: string,
-    callerRole: Role,
-    callerTenantId: string,
-  ): Promise<Sponsorship> {
-    let sponsorship: Sponsorship | null;
-
-    if (callerRole === Role.SUPER_ADMIN) {
-      sponsorship = await this.sponsorshipRepository.findById(sponsorshipId);
-    } else {
-      sponsorship = await this.sponsorshipRepository.findByIdAndTenant(
-        sponsorshipId,
-        callerTenantId,
-      );
-    }
+  async findById(sponsorshipId: string): Promise<Sponsorship> {
+    const sponsorship = await this.sponsorshipRepository.findById(sponsorshipId);
 
     if (!sponsorship) {
       throw new NotFoundException('Sponsorship not found');
@@ -112,14 +71,10 @@ export class SponsorshipService {
   }
 
   /**
-   * List sponsorships.
-   * - USER / ADMIN: scoped to their own tenant
-   * - SUPER_ADMIN: across all tenants
+   * List sponsorships with optional filters.
    */
   async findAll(
     query: ListSponsorshipsQueryDto,
-    callerRole: Role,
-    callerTenantId: string,
   ): Promise<{
     data: Sponsorship[];
     total: number;
@@ -130,28 +85,14 @@ export class SponsorshipService {
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    let result: { data: Sponsorship[]; total: number };
-
-    if (callerRole === Role.SUPER_ADMIN) {
-      result = await this.sponsorshipRepository.findAll({
-        skip,
-        take: limit,
-        status: query.status,
-        companyId: query.companyId,
-        eventId: query.eventId,
-        isActive: query.isActive,
-      });
-    } else {
-      result = await this.sponsorshipRepository.findByTenant({
-        tenantId: callerTenantId,
-        skip,
-        take: limit,
-        status: query.status,
-        companyId: query.companyId,
-        eventId: query.eventId,
-        isActive: query.isActive,
-      });
-    }
+    const result = await this.sponsorshipRepository.findAll({
+      skip,
+      take: limit,
+      status: query.status,
+      companyId: query.companyId,
+      eventId: query.eventId,
+      isActive: query.isActive,
+    });
 
     return { ...result, page, limit };
   }
@@ -160,19 +101,13 @@ export class SponsorshipService {
 
   /**
    * Update a sponsorship.
-   * - ADMIN: within their own tenant
-   * - SUPER_ADMIN: any tenant
-   *
-   * companyId, eventId, and tenantId are immutable after creation.
+   * companyId and eventId are immutable after creation.
    */
   async update(
     sponsorshipId: string,
     dto: UpdateSponsorshipDto,
-    callerRole: Role,
-    callerTenantId: string,
   ): Promise<Sponsorship> {
-    // Ensure the sponsorship exists and is within the caller's tenant
-    await this.findById(sponsorshipId, callerRole, callerTenantId);
+    await this.findById(sponsorshipId);
 
     const data = {
       ...(dto.status !== undefined && { status: dto.status }),
@@ -181,40 +116,18 @@ export class SponsorshipService {
       ...(dto.isActive !== undefined && { isActive: dto.isActive }),
     };
 
-    let sponsorship: Sponsorship;
+    const sponsorship = await this.sponsorshipRepository.updateById(sponsorshipId, data);
 
-    if (callerRole === Role.SUPER_ADMIN) {
-      sponsorship = await this.sponsorshipRepository.updateById(sponsorshipId, data);
-    } else {
-      sponsorship = await this.sponsorshipRepository.updateByIdAndTenant(
-        sponsorshipId,
-        callerTenantId,
-        data,
-      );
-    }
-
-    this.logger.log(
-      `Sponsorship ${sponsorshipId} updated by ${callerRole} (tenant: ${callerTenantId})`,
-    );
+    this.logger.log(`Sponsorship ${sponsorshipId} updated`);
     return sponsorship;
   }
 
   // ─── PRIVATE HELPERS ─────────────────────────────────────
 
   /**
-   * Validate that both Company and Event exist AND belong to the same tenant.
-   * For non-SUPER_ADMIN callers, both must also belong to the caller's tenant.
-   *
-   * Throws NotFoundException if company or event doesn't exist.
-   * Throws ForbiddenException if cross-tenant access or tenant mismatch.
+   * Validate that both Company and Event exist.
    */
-  private async validateCompanyAndEvent(
-    companyId: string,
-    eventId: string,
-    callerRole: Role,
-    callerTenantId: string,
-  ) {
-    // Fetch both entities in parallel
+  private async validateCompanyAndEvent(companyId: string, eventId: string) {
     const [company, event] = await Promise.all([
       this.companyRepository.findById(companyId),
       this.eventRepository.findById(eventId),
@@ -226,18 +139,6 @@ export class SponsorshipService {
 
     if (!event) {
       throw new NotFoundException('Event not found');
-    }
-
-    // Company and Event MUST share the same tenant
-    if (company.tenantId !== event.tenantId) {
-      throw new ForbiddenException('Company and Event must belong to the same tenant');
-    }
-
-    // For non-super-admins, the entities must be in the caller's tenant
-    if (callerRole !== Role.SUPER_ADMIN) {
-      if (company.tenantId !== callerTenantId) {
-        throw new ForbiddenException('Cannot create sponsorships for entities outside your tenant');
-      }
     }
 
     return { company, event };

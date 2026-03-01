@@ -1,5 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException, ForbiddenException, Logger } from '@nestjs/common';
-import { TenantStatus } from '@prisma/client';
+import { Injectable, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/providers/prisma.service';
@@ -9,7 +8,6 @@ import type { JwtConfig } from '../common/config';
 import type { StringValue } from 'ms';
 import * as bcrypt from 'bcrypt';
 import { createHash } from 'crypto';
-import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * AuthService handles all authentication-related business logic.
@@ -40,7 +38,6 @@ export class AuthService {
         id: true,
         email: true,
         role: true,
-        tenantId: true,
         companyId: true,
         organizerId: true,
         isActive: true,
@@ -64,7 +61,6 @@ export class AuthService {
    * Register a new user and auto-login by generating tokens.
    * - Checks for existing email
    * - Hashes password with bcrypt
-   * - Uses GLOBAL_TENANT_ID (single-tenant mode)
    * - Creates user with default role USER
    * - Generates JWT access + refresh tokens (auto-login)
    */
@@ -81,21 +77,17 @@ export class AuthService {
     // Hash password
     const hashedPassword = await bcrypt.hash(dto.password, this.SALT_ROUNDS);
 
-    // Use GLOBAL_TENANT_ID for single-tenant mode
-    const tenantId = GLOBAL_TENANT_ID;
-
-    // Create user within the global tenant
+    // Create user
     const user = await this.prisma.user.create({
       data: {
         email: dto.email.toLowerCase(),
         password: hashedPassword,
-        tenantId,
         // role defaults to USER in schema
         // isActive defaults to true in schema
       },
     });
 
-    this.logger.log(`User ${user.id} registered with global tenant ${GLOBAL_TENANT_ID}`);
+    this.logger.log(`User ${user.id} registered`);
 
     // Generate tokens for auto-login (mirrors login flow)
     const { accessToken, refreshToken } = await this.generateTokens(user);
@@ -120,7 +112,6 @@ export class AuthService {
    * - Validates email exists
    * - Checks user is active
    * - Verifies password with bcrypt
-   * - Checks global tenant status
    * - Returns JWT access token
    */
   async login(dto: LoginDto): Promise<{ accessToken: string; refreshToken: string; user: object }> {
@@ -144,16 +135,6 @@ export class AuthService {
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
-    }
-
-    // Check if global tenant is active
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: GLOBAL_TENANT_ID },
-      select: { status: true },
-    });
-
-    if (!tenant || tenant.status === TenantStatus.SUSPENDED || tenant.status === TenantStatus.DEACTIVATED) {
-      throw new ForbiddenException('System is currently unavailable. Please contact support.');
     }
 
     // Generate tokens using shared method
@@ -233,16 +214,6 @@ export class AuthService {
       throw new UnauthorizedException('User not found or deactivated');
     }
 
-    // Check if global tenant is still active
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: GLOBAL_TENANT_ID },
-      select: { status: true },
-    });
-
-    if (!tenant || tenant.status === TenantStatus.SUSPENDED || tenant.status === TenantStatus.DEACTIVATED) {
-      throw new ForbiddenException('System is currently unavailable.');
-    }
-
     // 7. Rotate: revoke the old token and mark rotatedAt
     await this.prisma.refreshToken.update({
       where: { id: storedToken.id },
@@ -266,20 +237,16 @@ export class AuthService {
    * Generates a new pair of access and refresh tokens for a user.
    * Publicly accessible for modules that need to refresh auth state (e.g. role upgrades).
    * 
-   * IMPORTANT: tenant_id is no longer included in JWT payload.
-   * GLOBAL_TENANT_ID is used internally for all database operations.
    */
   async generateTokens(user: {
     id: string;
     role: any;
-    tenantId: string;
     companyId: string | null;
     organizerId: string | null;
   }): Promise<{ accessToken: string; refreshToken: string }> {
     const payload: JwtPayload = {
       sub: user.id,
       role: user.role,
-      // tenant_id removed from JWT - using GLOBAL_TENANT_ID internally
       ...(user.companyId && { company_id: user.companyId }),
       ...(user.organizerId && { organizer_id: user.organizerId }),
     };

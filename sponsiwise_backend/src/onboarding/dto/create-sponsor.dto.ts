@@ -3,19 +3,26 @@ import {
     IsNotEmpty,
     IsOptional,
     IsUrl,
+    IsEnum,
     MaxLength,
 } from 'class-validator';
+import { CompanyType } from '@prisma/client';
 
 /**
  * DTO for sponsor onboarding.
- * Creates a Company with type SPONSOR.
- * tenantId and ownerId are derived from the JWT — never from the body.
+ * Creates a Company record.
+ * ownerId is derived from the JWT — never from the body.
  */
 export class CreateSponsorDto {
     @IsString()
     @IsNotEmpty({ message: 'Company name is required' })
     @MaxLength(255, { message: 'Company name must be 255 characters or fewer' })
     name!: string;
+
+    @IsEnum(CompanyType, {
+        message: `Type must be one of: ${Object.values(CompanyType).join(', ')}`,
+    })
+    type!: CompanyType;
 
     @IsOptional()
     @IsUrl({}, { message: 'Website must be a valid URL' })
@@ -24,10 +31,5 @@ export class CreateSponsorDto {
 
     @IsOptional()
     @IsString()
-    description?: string;
-
-    @IsOptional()
-    @IsUrl({}, { message: 'Logo URL must be a valid URL' })
-    @MaxLength(500, { message: 'Logo URL must be 500 characters or fewer' })
-    logoUrl?: string;
+    strategicIntent?: string;
 }

@@ -41,9 +41,6 @@ export class SponsorshipTierController {
     private readonly s3Service: S3Service,
   ) {}
 
-  /**
-   * Create a new tier for an event
-   */
   @Post('event/:eventId')
   @Roles(Role.ORGANIZER, Role.MANAGER, Role.ADMIN)
   async create(
@@ -51,18 +48,9 @@ export class SponsorshipTierController {
     @Body() dto: CreateSponsorshipTierDto,
     @Request() req: any,
   ) {
-    return this.tierService.create(
-      eventId,
-      dto,
-      req.user.role,
-      req.user.tenantId,
-      req.user.id,
-    );
+    return this.tierService.create(eventId, dto, req.user.role, req.user.id);
   }
 
-  /**
-   * Create multiple tiers at once
-   */
   @Post('event/:eventId/bulk')
   @Roles(Role.ORGANIZER, Role.MANAGER, Role.ADMIN)
   async createBulk(
@@ -70,50 +58,24 @@ export class SponsorshipTierController {
     @Body() body: { tiers: CreateSponsorshipTierDto[] },
     @Request() req: any,
   ) {
-    return this.tierService.createBulk(
-      eventId,
-      body.tiers,
-      req.user.role,
-      req.user.tenantId,
-      req.user.id,
-    );
+    return this.tierService.createBulk(eventId, body.tiers, req.user.role, req.user.id);
   }
 
-  /**
-   * Get all tiers for an event
-   */
   @Get('event/:eventId')
-  async findByEvent(@Param('eventId') eventId: string, @Request() req: any) {
-    return this.tierService.findByEventId(
-      eventId,
-      req.user?.role || Role.USER,
-      req.user?.tenantId,
-    );
+  async findByEvent(@Param('eventId') eventId: string) {
+    return this.tierService.findByEventId(eventId);
   }
 
-  /**
-   * Get available tiers for sponsors (public view)
-   */
   @Get('event/:eventId/available')
   async findAvailable(@Param('eventId') eventId: string) {
     return this.tierService.findAvailableForEvent(eventId);
   }
 
-  /**
-   * Get a single tier by ID
-   */
   @Get(':tierId')
-  async findById(@Param('tierId') tierId: string, @Request() req: any) {
-    return this.tierService.findById(
-      tierId,
-      req.user?.role || Role.USER,
-      req.user?.tenantId,
-    );
+  async findById(@Param('tierId') tierId: string) {
+    return this.tierService.findById(tierId);
   }
 
-  /**
-   * Update a tier
-   */
   @Put(':tierId')
   @Roles(Role.ORGANIZER, Role.MANAGER, Role.ADMIN)
   async update(
@@ -121,66 +83,33 @@ export class SponsorshipTierController {
     @Body() dto: UpdateSponsorshipTierDto,
     @Request() req: any,
   ) {
-    return this.tierService.update(
-      tierId,
-      dto,
-      req.user.role,
-      req.user.tenantId,
-      req.user.id,
-    );
+    return this.tierService.update(tierId, dto, req.user.role, req.user.id);
   }
 
-  /**
-   * Lock all tiers for an event (manager approval)
-   */
   @Post('event/:eventId/lock')
   @Roles(Role.MANAGER, Role.ADMIN)
   async lockAll(
     @Param('eventId') eventId: string,
     @Request() req: any,
   ) {
-    return this.tierService.lockAllTiers(
-      eventId,
-      req.user.role,
-      req.user.tenantId,
-      req.user.id,
-    );
+    return this.tierService.lockAllTiers(eventId, req.user.role, req.user.id);
   }
 
-  /**
-   * Unlock all tiers for an event (manager only)
-   */
   @Post('event/:eventId/unlock')
   @Roles(Role.MANAGER, Role.ADMIN)
   async unlockAll(
     @Param('eventId') eventId: string,
     @Request() req: any,
   ) {
-    return this.tierService.unlockAllTiers(
-      eventId,
-      req.user.role,
-      req.user.tenantId,
-      req.user.id,
-    );
+    return this.tierService.unlockAllTiers(eventId, req.user.role, req.user.id);
   }
 
-  /**
-   * Delete a tier
-   */
   @Delete(':tierId')
   @Roles(Role.ORGANIZER, Role.MANAGER, Role.ADMIN)
   async delete(@Param('tierId') tierId: string, @Request() req: any) {
-    return this.tierService.delete(
-      tierId,
-      req.user.role,
-      req.user.tenantId,
-      req.user.id,
-    );
+    return this.tierService.delete(tierId, req.user.role, req.user.id);
   }
 
-  /**
-   * Upload PPT deck for an event
-   */
   @Post('event/:eventId/ppt-deck')
   @Roles(Role.ORGANIZER, Role.MANAGER, Role.ADMIN)
   @UseInterceptors(FileInterceptor('file'))
@@ -193,7 +122,6 @@ export class SponsorshipTierController {
       throw new BadRequestException('No file uploaded');
     }
 
-    // Validate file type
     const allowedMimeTypes = [
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       'application/vnd.ms-powerpoint',
@@ -204,8 +132,7 @@ export class SponsorshipTierController {
       throw new BadRequestException('Invalid file type. Only PPT and PDF files are allowed');
     }
 
-    // Validate file size (max 50MB)
-    const maxSize = 50 * 1024 * 1024; // 50MB
+    const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {
       throw new BadRequestException('File size exceeds 50MB limit');
     }

@@ -9,11 +9,11 @@ import {
   IsInt,
   Min,
 } from 'class-validator';
-import { EventStatus } from '@prisma/client';
+import { EventStatus, EventCategory } from '@prisma/client';
 
 /**
  * DTO for updating an existing event.
- * organizerId, tenantId, and id are immutable after creation.
+ * organizerId and id are immutable after creation.
  */
 export class UpdateEventDto {
   @IsOptional()
@@ -55,9 +55,10 @@ export class UpdateEventDto {
   website?: string;
 
   @IsOptional()
-  @IsUrl({}, { message: 'Logo URL must be a valid URL' })
-  @MaxLength(500, { message: 'Logo URL must be 500 characters or fewer' })
-  logoUrl?: string;
+  @IsEnum(EventCategory, {
+    message: `Category must be one of: ${Object.values(EventCategory).join(', ')}`,
+  })
+  category?: EventCategory;
 
   @IsOptional()
   @IsInt({ message: 'expectedFootfall must be an integer' })

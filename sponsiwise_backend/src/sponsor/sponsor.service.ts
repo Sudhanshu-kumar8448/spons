@@ -15,7 +15,7 @@ import { CacheService } from '../common/providers/cache.service';
  * SponsorService — read-only aggregation layer for sponsor-scoped data.
  *
  * Every method requires a valid companyId (resolved from JWT, never from request).
- * All queries are tenant-scoped AND company-scoped.
+ * All queries are company-scoped.
  */
 @Injectable()
 export class SponsorService {
@@ -39,10 +39,10 @@ export class SponsorService {
 
   // ─── Dashboard Stats ─────────────────────────────────────
 
-  async getDashboardStats(tenantId: string, companyId?: string) {
+  async getDashboardStats(companyId?: string) {
     this.assertCompanyId(companyId);
 
-    const cacheKey = CacheService.key('sponsor', 'dashboard', tenantId, companyId);
+    const cacheKey = CacheService.key('sponsor', 'dashboard', companyId);
     const cached = await this.cacheService.get(cacheKey);
     if (cached) {
       return cached;
@@ -59,14 +59,12 @@ export class SponsorService {
     ] = await Promise.all([
       this.prisma.proposal.count({
         where: {
-          tenantId,
           isActive: true,
           sponsorship: { companyId },
         },
       }),
       this.prisma.proposal.count({
         where: {
-          tenantId,
           isActive: true,
           sponsorship: { companyId },
           status: ProposalStatus.SUBMITTED,
@@ -74,7 +72,6 @@ export class SponsorService {
       }),
       this.prisma.proposal.count({
         where: {
-          tenantId,
           isActive: true,
           sponsorship: { companyId },
           status: ProposalStatus.APPROVED,
@@ -82,7 +79,6 @@ export class SponsorService {
       }),
       this.prisma.proposal.count({
         where: {
-          tenantId,
           isActive: true,
           sponsorship: { companyId },
           status: ProposalStatus.REJECTED,
@@ -90,7 +86,6 @@ export class SponsorService {
       }),
       this.prisma.sponsorship.count({
         where: {
-          tenantId,
           companyId,
           isActive: true,
           status: SponsorshipStatus.ACTIVE,
@@ -101,7 +96,6 @@ export class SponsorService {
     // Sum the proposed amounts from active sponsorships
     const totalInvestedResult = await this.prisma.sponsorship.findMany({
       where: {
-        tenantId,
         companyId,
         isActive: true,
         status: SponsorshipStatus.ACTIVE,
@@ -144,7 +138,7 @@ export class SponsorService {
    * INVENTORY RULE: Only show events that are VERIFIED and have at least 1 available tier
    * (soldSlots < totalSlots). Events where ALL tiers are sold out are hidden.
    */
-  async getEvents(tenantId: string, companyId: string | undefined, query: SponsorEventsQueryDto) {
+  async getEvents(companyId: string | undefined, query: SponsorEventsQueryDto) {
     this.assertCompanyId(companyId);
 
     const { page, page_size, search, category } = query;
@@ -153,7 +147,6 @@ export class SponsorService {
     // Prisma doesn't support field-to-field comparison (soldSlots < totalSlots) in where clause.
     // We use a two-step approach: fetch verified events with tiers, then filter in-memory.
     const where: any = {
-      tenantId,
       isActive: true,
       status: { in: [EventStatus.PUBLISHED, EventStatus.VERIFIED] },
       verificationStatus: VerificationStatus.VERIFIED,
@@ -178,9 +171,8 @@ export class SponsorService {
           startDate: true,
           endDate: true,
           expectedFootfall: true,
-          logoUrl: true,
           organizer: {
-            select: { id: true, name: true, logoUrl: true },
+            select: { id: true, name: true },
           },
           address: {
             select: {
@@ -241,13 +233,13 @@ export class SponsorService {
           end_date: e.endDate.toISOString(),
           location: e.address ? `${e.address.addressLine1}, ${e.address.city}, ${e.address.state}, ${e.address.country}` : '',
           expected_footfall: e.expectedFootfall ?? 0,
-          image_url: e.logoUrl || null,
+          image_url: null,
           category: e.category || '',
           status: 'published',
           organizer: {
             id: e.organizer.id,
             name: e.organizer.name,
-            logo_url: e.organizer.logoUrl || null,
+            logo_url: null,
           },
           sponsorship_tiers: availableTiers,
           tags: [],
@@ -262,7 +254,6 @@ export class SponsorService {
   // ─── Proposals ───────────────────────────────────────────
 
   async getProposals(
-    tenantId: string,
     companyId: string | undefined,
     query: SponsorProposalsQueryDto,
   ) {
@@ -272,7 +263,6 @@ export class SponsorService {
     const skip = (page - 1) * page_size;
 
     const where: any = {
-      tenantId,
       isActive: true,
       sponsorship: {
         companyId,
@@ -354,7 +344,6 @@ export class SponsorService {
   // ─── Sponsorships ───────────────────────────────────────
 
   async getSponsorships(
-    tenantId: string,
     companyId: string | undefined,
     query: SponsorSponsorshipsQueryDto,
   ) {
@@ -364,7 +353,6 @@ export class SponsorService {
     const skip = (page - 1) * page_size;
 
     const where: any = {
-      tenantId,
       companyId,
       isActive: true,
       ...(status && { status: status.toUpperCase() }),
@@ -444,13 +432,12 @@ export class SponsorService {
    * Returns event detail with available sponsorship tiers.
    * Only shows tiers where soldSlots < totalSlots.
    */
-  async getEventById(tenantId: string, companyId: string | undefined, eventId: string) {
+  async getEventById(companyId: string | undefined, eventId: string) {
     this.assertCompanyId(companyId);
 
     const event = await this.prisma.event.findFirst({
       where: {
         id: eventId,
-        tenantId,
         isActive: true,
         status: { in: [EventStatus.PUBLISHED, EventStatus.VERIFIED] },
         verificationStatus: VerificationStatus.VERIFIED,
@@ -467,9 +454,8 @@ export class SponsorService {
         startDate: true,
         endDate: true,
         expectedFootfall: true,
-        logoUrl: true,
         organizer: {
-          select: { id: true, name: true, logoUrl: true },
+          select: { id: true, name: true },
         },
         address: {
           select: {
@@ -524,7 +510,7 @@ export class SponsorService {
       end_date: event.endDate.toISOString(),
       location: event.address ? `${event.address.addressLine1}, ${event.address.city}, ${event.address.state}, ${event.address.country}` : '',
       expected_footfall: event.expectedFootfall ?? 0,
-      image_url: event.logoUrl || null,
+      image_url: null,
       category: event.category || '',
       website: event.website || null,
       contact_phone: event.contactPhone || null,
@@ -533,7 +519,7 @@ export class SponsorService {
       organizer: {
         id: event.organizer.id,
         name: event.organizer.name,
-        logo_url: event.organizer.logoUrl || null,
+        logo_url: null,
       },
       address: event.address ? {
         address_line_1: event.address.addressLine1,
@@ -550,13 +536,12 @@ export class SponsorService {
 
   // ─── Single Proposal Detail ─────────────────────────────────
 
-  async getProposalById(tenantId: string, companyId: string | undefined, proposalId: string) {
+  async getProposalById(companyId: string | undefined, proposalId: string) {
     this.assertCompanyId(companyId);
 
     const proposal = await this.prisma.proposal.findFirst({
       where: {
         id: proposalId,
-        tenantId,
         isActive: true,
         sponsorship: { companyId },
       },
@@ -633,14 +618,13 @@ export class SponsorService {
    * - Sponsor cannot modify tier pricing
    * - proposedAmount defaults to tier's askingPrice if not provided
    */
-  async createProposal(tenantId: string, companyId: string | undefined, dto: CreateProposalDto) {
+  async createProposal(companyId: string | undefined, dto: CreateProposalDto) {
     this.assertCompanyId(companyId);
 
     // 1. Verify the event exists, is published/verified
     const event = await this.prisma.event.findFirst({
       where: {
         id: dto.eventId,
-        tenantId,
         isActive: true,
         status: { in: [EventStatus.PUBLISHED, EventStatus.VERIFIED] },
         verificationStatus: VerificationStatus.VERIFIED,
@@ -682,7 +666,6 @@ export class SponsorService {
         where: {
           companyId,
           eventId: dto.eventId,
-          tenantId,
         },
       });
 
@@ -691,7 +674,6 @@ export class SponsorService {
           data: {
             companyId,
             eventId: dto.eventId,
-            tenantId,
             status: SponsorshipStatus.PENDING,
             tier: tier.tierType,
           },
@@ -702,7 +684,6 @@ export class SponsorService {
       const proposal = await tx.proposal.create({
         data: {
           sponsorshipId: sponsorship.id,
-          tenantId,
           tierId: dto.tierId,
           proposedAmount: proposedAmount,
           proposedTier: tier.tierType,
@@ -753,7 +734,6 @@ export class SponsorService {
 
     // 5. Audit log
     this.auditLogService.log({
-      tenantId,
       actorId: companyId,
       actorRole: 'SPONSOR',
       action: 'proposal.submitted',
@@ -796,13 +776,12 @@ export class SponsorService {
 
   // ─── Withdraw Proposal ──────────────────────────────────────
 
-  async withdrawProposal(tenantId: string, companyId: string | undefined, proposalId: string) {
+  async withdrawProposal(companyId: string | undefined, proposalId: string) {
     this.assertCompanyId(companyId);
 
     const proposal = await this.prisma.proposal.findFirst({
       where: {
         id: proposalId,
-        tenantId,
         isActive: true,
         sponsorship: { companyId },
       },

@@ -6,7 +6,7 @@ import { PublicEventsQueryDto, PublicCompaniesQueryDto } from './dto';
  * PublicController — unauthenticated, read-only endpoints for public pages.
  *
  * NO AuthGuard, NO RoleGuard, NO cookies.
- * All methods return cache-friendly, tenant-safe responses.
+ * All methods return cache-friendly responses.
  */
 @Controller('public')
 export class PublicController {

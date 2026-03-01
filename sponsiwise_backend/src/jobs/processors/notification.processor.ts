@@ -96,7 +96,6 @@ export class NotificationProcessor extends WorkerHost {
 
     // Notify the actor (the user who owns the proposal context)
     await this.notificationsService.create({
-      tenantId: data.tenantId,
       userId: data.actorId,
       title: config.title,
       message: `Proposal ${data.proposalId} status changed to ${data.newStatus}.`,
@@ -131,13 +130,13 @@ export class NotificationProcessor extends WorkerHost {
 
     if (data.entityType === 'Company') {
       const users = await this.prisma.user.findMany({
-        where: { companyId: data.entityId, tenantId: data.tenantId },
+        where: { companyId: data.entityId },
         select: { id: true },
       });
       recipientUserIds = users.map((u) => u.id);
     } else if (data.entityType === 'Event') {
       const event = await this.prisma.event.findFirst({
-        where: { id: data.entityId, tenantId: data.tenantId },
+        where: { id: data.entityId },
         select: {
           organizer: {
             select: {
@@ -166,7 +165,6 @@ export class NotificationProcessor extends WorkerHost {
     await Promise.all(
       recipientUserIds.map((userId) =>
         this.notificationsService.create({
-          tenantId: data.tenantId,
           userId,
           title,
           message,

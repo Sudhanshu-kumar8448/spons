@@ -31,10 +31,9 @@ export class AuditLogRepository {
   }
 
   /**
-   * List audit logs for a given tenant, ordered newest-first.
+   * List audit logs ordered newest-first.
    */
-  async findByTenant(params: {
-    tenantId: string;
+  async findAll(params: {
     skip?: number;
     take?: number;
     entityType?: string;
@@ -43,7 +42,6 @@ export class AuditLogRepository {
     action?: string;
   }): Promise<{ data: AuditLog[]; total: number }> {
     const where: Prisma.AuditLogWhereInput = {
-      tenantId: params.tenantId,
       ...(params.entityType !== undefined && { entityType: params.entityType }),
       ...(params.entityId !== undefined && { entityId: params.entityId }),
       ...(params.actorId !== undefined && { actorId: params.actorId }),

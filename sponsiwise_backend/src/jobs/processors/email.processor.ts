@@ -20,7 +20,7 @@ import { PrismaService } from '../../common/providers';
  *
  * Resolves real recipient emails via Prisma before sending.
  * Deduplicates recipients with Set().
- * Passes tracking metadata (tenantId, jobName, entityType, entityId) to EmailService.
+ * Passes tracking metadata (jobName, entityType, entityId) to EmailService.
  *
  * Idempotency: deterministic jobIds prevent duplicate processing.
  * Retry behaviour is configured at the producer level (3 attempts, exp backoff).
@@ -118,7 +118,6 @@ export class EmailProcessor extends WorkerHost {
           `<p style="margin-top:16px;color:#666;">Log in to your dashboard to review this proposal.</p>`,
         ].join('\n'),
         text: `New proposal submitted (${data.proposalId}). Amount: ${data.proposedAmount ?? 'N/A'}. Status: ${data.newStatus}.`,
-        tenantId: data.tenantId,
         jobName,
         entityType: 'Proposal',
         entityId: data.proposalId,
@@ -152,7 +151,6 @@ export class EmailProcessor extends WorkerHost {
           `<p style="margin-top:16px;color:#666;">Log in to your dashboard to view the details.</p>`,
         ].join('\n'),
         text: `Your proposal (${data.proposalId}) has been approved. Status: ${data.newStatus}.`,
-        tenantId: data.tenantId,
         jobName,
         entityType: 'Proposal',
         entityId: data.proposalId,
@@ -186,7 +184,6 @@ export class EmailProcessor extends WorkerHost {
           `<p style="margin-top:16px;color:#666;">Log in to your dashboard for more details or to submit a revised proposal.</p>`,
         ].join('\n'),
         text: `Your proposal (${data.proposalId}) has been rejected. Status: ${data.newStatus}.`,
-        tenantId: data.tenantId,
         jobName,
         entityType: 'Proposal',
         entityId: data.proposalId,
@@ -225,7 +222,6 @@ export class EmailProcessor extends WorkerHost {
           `<p style="margin-top:16px;color:#666;">Log in to your dashboard to see full details.</p>`,
         ].join('\n'),
         text: `Your company (${data.entityId}) has been ${outcome}.${data.reviewerNotes ? ` Notes: ${data.reviewerNotes}` : ''}`,
-        tenantId: data.tenantId,
         jobName,
         entityType: 'Company',
         entityId: data.entityId,
@@ -262,7 +258,6 @@ export class EmailProcessor extends WorkerHost {
           `<p style="margin-top:16px;color:#666;">Log in to your dashboard to see full details.</p>`,
         ].join('\n'),
         text: `Your event (${data.entityId}) has been ${outcome}.${data.reviewerNotes ? ` Notes: ${data.reviewerNotes}` : ''}`,
-        tenantId: data.tenantId,
         jobName,
         entityType: 'Event',
         entityId: data.entityId,
@@ -296,7 +291,6 @@ export class EmailProcessor extends WorkerHost {
                 organizer: {
                   select: {
                     id: true,
-                    contactEmail: true,
                     users: {
                       where: { role: 'ORGANIZER', isActive: true },
                       select: { email: true },
@@ -313,10 +307,8 @@ export class EmailProcessor extends WorkerHost {
     const organizer = proposal?.sponsorship?.event?.organizer;
     if (!organizer) return [];
 
-    const emails = organizer.users.map((u) => u.email).filter(Boolean);
+    const emails = organizer.users.map((u: { email: string }) => u.email).filter(Boolean);
     if (emails.length > 0) return this.dedupe(emails);
-
-    if (organizer.contactEmail) return [organizer.contactEmail];
 
     return [];
   }
@@ -345,7 +337,7 @@ export class EmailProcessor extends WorkerHost {
       },
     });
 
-    const emails = proposal?.sponsorship?.company?.users.map((u) => u.email).filter(Boolean) ?? [];
+    const emails = proposal?.sponsorship?.company?.users.map((u: { email: string }) => u.email).filter(Boolean) ?? [];
 
     return this.dedupe(emails);
   }
@@ -374,7 +366,6 @@ export class EmailProcessor extends WorkerHost {
       select: {
         organizer: {
           select: {
-            contactEmail: true,
             users: {
               where: { role: 'ORGANIZER', isActive: true },
               select: { email: true },
@@ -387,10 +378,8 @@ export class EmailProcessor extends WorkerHost {
     const organizer = event?.organizer;
     if (!organizer) return [];
 
-    const emails = organizer.users.map((u) => u.email).filter(Boolean);
+    const emails = organizer.users.map((u: { email: string }) => u.email).filter(Boolean);
     if (emails.length > 0) return this.dedupe(emails);
-
-    if (organizer.contactEmail) return [organizer.contactEmail];
 
     return [];
   }

@@ -45,7 +45,6 @@ export class EmailService {
     subject: string;
     html: string;
     text?: string;
-    tenantId: string;
     jobName: string;
     entityType?: string;
     entityId?: string;
@@ -65,7 +64,6 @@ export class EmailService {
 
       // Fire-and-forget — never block on log persistence
       this.emailLogsService.log({
-        tenantId: options.tenantId,
         recipient: options.to,
         subject: options.subject,
         jobName: options.jobName,
@@ -83,7 +81,6 @@ export class EmailService {
 
       // Log failure — fire-and-forget
       this.emailLogsService.log({
-        tenantId: options.tenantId,
         recipient: options.to,
         subject: options.subject,
         jobName: options.jobName,

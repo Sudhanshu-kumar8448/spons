@@ -11,15 +11,9 @@ import {
   COMPANY_REJECTED_EVENT,
 } from '../common/events';
 import { CreateCompanyDto, UpdateCompanyDto, ListCompaniesQueryDto } from './dto';
-import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * CompanyService — business logic for company management.
- *
- * AFTER SOFT-DISABLE MULTI-TENANCY:
- * - All operations use GLOBAL_TENANT_ID internally
- * - Tenant isolation is handled at the guard level
- * - Role checks remain for authorization (ADMIN, MANAGER, etc.)
  */
 @Injectable()
 export class CompanyService {
@@ -35,30 +29,16 @@ export class CompanyService {
 
   /**
    * Create a new company.
-   * - ADMIN: company is created within their own tenant
-   * - SUPER_ADMIN: may specify any tenantId (falls back to callerTenantId)
    */
-  async create(
-    dto: CreateCompanyDto,
-    callerRole: Role,
-    callerTenantId: string,
-    tenantIdOverride?: string,
-  ): Promise<Company> {
-    // ADMIN always creates in their own tenant.
-    // SUPER_ADMIN can optionally target a different tenant.
-    const tenantId =
-      callerRole === Role.SUPER_ADMIN && tenantIdOverride ? tenantIdOverride : callerTenantId;
-
+  async create(dto: CreateCompanyDto): Promise<Company> {
     const company = await this.companyRepository.create({
       name: dto.name,
       type: dto.type,
       ...(dto.website !== undefined && { website: dto.website }),
-      ...(dto.description !== undefined && { description: dto.description }),
-      ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
-      tenant: { connect: { id: tenantId } },
+      ...(dto.strategicIntent !== undefined && { strategicIntent: dto.strategicIntent }),
     });
 
-    this.logger.log(`Company ${company.id} created by ${callerRole} in tenant ${tenantId}`);
+    this.logger.log(`Company ${company.id} created`);
     return company;
   }
 
@@ -66,17 +46,9 @@ export class CompanyService {
 
   /**
    * Get a single company by ID.
-   * - USER / ADMIN: must be within their own tenant
-   * - SUPER_ADMIN: any tenant
    */
-  async findById(companyId: string, callerRole: Role, callerTenantId: string): Promise<Company> {
-    let company: Company | null;
-
-    if (callerRole === Role.SUPER_ADMIN) {
-      company = await this.companyRepository.findById(companyId);
-    } else {
-      company = await this.companyRepository.findByIdAndTenant(companyId, callerTenantId);
-    }
+  async findById(companyId: string): Promise<Company> {
+    const company = await this.companyRepository.findById(companyId);
 
     if (!company) {
       throw new NotFoundException('Company not found');
@@ -86,14 +58,10 @@ export class CompanyService {
   }
 
   /**
-   * List companies.
-   * - USER / ADMIN: scoped to their own tenant
-   * - SUPER_ADMIN: across all tenants
+   * List companies with optional filters.
    */
   async findAll(
     query: ListCompaniesQueryDto,
-    callerRole: Role,
-    callerTenantId: string,
   ): Promise<{
     data: Company[];
     total: number;
@@ -104,24 +72,12 @@ export class CompanyService {
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    let result: { data: Company[]; total: number };
-
-    if (callerRole === Role.SUPER_ADMIN) {
-      result = await this.companyRepository.findAll({
-        skip,
-        take: limit,
-        type: query.type,
-        isActive: query.isActive,
-      });
-    } else {
-      result = await this.companyRepository.findByTenant({
-        tenantId: callerTenantId,
-        skip,
-        take: limit,
-        type: query.type,
-        isActive: query.isActive,
-      });
-    }
+    const result = await this.companyRepository.findAll({
+      skip,
+      take: limit,
+      type: query.type,
+      isActive: query.isActive,
+    });
 
     return { ...result, page, limit };
   }
@@ -130,35 +86,20 @@ export class CompanyService {
 
   /**
    * Update a company.
-   * - ADMIN: within their own tenant
-   * - SUPER_ADMIN: any tenant
    */
-  async update(
-    companyId: string,
-    dto: UpdateCompanyDto,
-    callerRole: Role,
-    callerTenantId: string,
-  ): Promise<Company> {
-    // Ensure target company exists (and is within tenant for non-super-admins)
-    await this.findById(companyId, callerRole, callerTenantId);
+  async update(companyId: string, dto: UpdateCompanyDto): Promise<Company> {
+    await this.findById(companyId);
 
     const data = {
       ...(dto.name !== undefined && { name: dto.name }),
       ...(dto.website !== undefined && { website: dto.website }),
-      ...(dto.description !== undefined && { description: dto.description }),
-      ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
+      ...(dto.strategicIntent !== undefined && { strategicIntent: dto.strategicIntent }),
       ...(dto.isActive !== undefined && { isActive: dto.isActive }),
     };
 
-    let company: Company;
+    const company = await this.companyRepository.updateById(companyId, data);
 
-    if (callerRole === Role.SUPER_ADMIN) {
-      company = await this.companyRepository.updateById(companyId, data);
-    } else {
-      company = await this.companyRepository.updateByIdAndTenant(companyId, callerTenantId, data);
-    }
-
-    this.logger.log(`Company ${companyId} updated by ${callerRole} (tenant: ${callerTenantId})`);
+    this.logger.log(`Company ${companyId} updated`);
     return company;
   }
 
@@ -166,34 +107,26 @@ export class CompanyService {
 
   /**
    * Verify a company.
-   * - ADMIN: within their own tenant
-   * - SUPER_ADMIN: any tenant
-   *
    * Sets the company as active and emits a CompanyVerifiedEvent.
    */
   async verify(
     companyId: string,
     reviewerId: string,
     reviewerRole: Role,
-    reviewerTenantId: string,
     reviewerNotes?: string,
   ): Promise<Company> {
-    const existing = await this.findById(companyId, reviewerRole, reviewerTenantId);
+    await this.findById(companyId);
 
-    const company =
-      reviewerRole === Role.SUPER_ADMIN
-        ? await this.companyRepository.updateById(companyId, { isActive: true })
-        : await this.companyRepository.updateByIdAndTenant(companyId, reviewerTenantId, {
-            isActive: true,
-          });
+    const company = await this.companyRepository.updateById(companyId, {
+      isActive: true,
+      verificationStatus: 'VERIFIED' as any,
+      approvedBy: { connect: { id: reviewerId } },
+      approvedAt: new Date(),
+    });
 
-    this.logger.log(
-      `Company ${companyId} verified by ${reviewerRole}:${reviewerId} (tenant: ${existing.tenantId})`,
-    );
+    this.logger.log(`Company ${companyId} verified by ${reviewerRole}:${reviewerId}`);
 
-    // Audit log — immutable record of the decision
     this.auditLogService.log({
-      tenantId: existing.tenantId,
       actorId: reviewerId,
       actorRole: reviewerRole,
       action: 'company.verified',
@@ -205,12 +138,10 @@ export class CompanyService {
       },
     });
 
-    // Domain event — after DB write, before return
     this.eventEmitter.emit(
       COMPANY_VERIFIED_EVENT,
       new CompanyVerifiedEvent({
         entityId: companyId,
-        tenantId: existing.tenantId,
         reviewerId,
         reviewerRole,
         reviewerNotes,
@@ -222,34 +153,27 @@ export class CompanyService {
 
   /**
    * Reject a company.
-   * - ADMIN: within their own tenant
-   * - SUPER_ADMIN: any tenant
-   *
    * Deactivates the company and emits a CompanyRejectedEvent.
    */
   async reject(
     companyId: string,
     reviewerId: string,
     reviewerRole: Role,
-    reviewerTenantId: string,
     reviewerNotes?: string,
   ): Promise<Company> {
-    const existing = await this.findById(companyId, reviewerRole, reviewerTenantId);
+    await this.findById(companyId);
 
-    const company =
-      reviewerRole === Role.SUPER_ADMIN
-        ? await this.companyRepository.updateById(companyId, { isActive: false })
-        : await this.companyRepository.updateByIdAndTenant(companyId, reviewerTenantId, {
-            isActive: false,
-          });
+    const company = await this.companyRepository.updateById(companyId, {
+      isActive: false,
+      verificationStatus: 'REJECTED' as any,
+      rejectionReason: reviewerNotes ?? null,
+      approvedBy: { connect: { id: reviewerId } },
+      approvedAt: new Date(),
+    });
 
-    this.logger.log(
-      `Company ${companyId} rejected by ${reviewerRole}:${reviewerId} (tenant: ${existing.tenantId})`,
-    );
+    this.logger.log(`Company ${companyId} rejected by ${reviewerRole}:${reviewerId}`);
 
-    // Audit log — immutable record of the decision
     this.auditLogService.log({
-      tenantId: existing.tenantId,
       actorId: reviewerId,
       actorRole: reviewerRole,
       action: 'company.rejected',
@@ -261,12 +185,10 @@ export class CompanyService {
       },
     });
 
-    // Domain event — after DB write, before return
     this.eventEmitter.emit(
       COMPANY_REJECTED_EVENT,
       new CompanyRejectedEvent({
         entityId: companyId,
-        tenantId: existing.tenantId,
         reviewerId,
         reviewerRole,
         reviewerNotes,

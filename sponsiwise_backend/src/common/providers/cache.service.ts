@@ -11,7 +11,6 @@ const DEFAULT_TTL = 60;
  * Design principles:
  *  - Transparent: callers use get/set/del — JSON serialisation is internal
  *  - Optional: every method catches errors and returns null / void on failure
- *  - Tenant-aware: callers build scoped keys; helpers provided for patterns
  *  - No business logic: this is pure infrastructure
  *
  * If Redis is unreachable the system falls back to DB queries automatically
@@ -70,7 +69,7 @@ export class CacheService {
   }
 
   /**
-   * Delete all keys matching a pattern (e.g. "events:list:tenant:abc*").
+   * Delete all keys matching a pattern (e.g. "events:list:abc*").
    * Uses SCAN to avoid blocking Redis on large key-spaces.
    */
   async delByPattern(pattern: string): Promise<void> {
@@ -94,8 +93,8 @@ export class CacheService {
 
   /**
    * Build a colon-separated cache key from segments.
-   * Example: CacheService.key('events', 'list', 'tenant', tenantId)
-   *          → "events:list:tenant:<tenantId>"
+   * Example: CacheService.key('events', 'list', 'page', '1')
+   *          → "events:list:page:1"
    */
   static key(...segments: string[]): string {
     return segments.join(':');

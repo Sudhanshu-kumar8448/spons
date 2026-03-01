@@ -13,7 +13,6 @@
 
 export interface ProposalEmailPayload {
   proposalId: string;
-  tenantId: string;
   actorId: string;
   actorRole: string;
   /** Current status after the transition */
@@ -30,7 +29,6 @@ export interface ProposalEmailPayload {
 export interface VerificationEmailPayload {
   entityType: 'Company' | 'Event';
   entityId: string;
-  tenantId: string;
   reviewerId: string;
   reviewerRole: string;
   decision: 'VERIFIED' | 'REJECTED';
@@ -42,7 +40,6 @@ export interface VerificationEmailPayload {
 
 export interface ProposalNotificationPayload {
   proposalId: string;
-  tenantId: string;
   actorId: string;
   newStatus: string;
   previousStatus?: string;
@@ -52,7 +49,6 @@ export interface ProposalNotificationPayload {
 export interface VerificationNotificationPayload {
   entityType: 'Company' | 'Event';
   entityId: string;
-  tenantId: string;
   decision: 'VERIFIED' | 'REJECTED';
   timestamp: string;
 }

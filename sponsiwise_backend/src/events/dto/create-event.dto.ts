@@ -8,11 +8,12 @@ import {
   IsNumber,
   Min,
   IsArray,
+  IsNotEmpty,
   registerDecorator,
   ValidationOptions,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { EventStatus, TierType } from '@prisma/client';
+import { EventStatus, EventCategory, TierType } from '@prisma/client';
 import { CreateAddressDto } from './create-tier.dto';
 
 /**
@@ -43,7 +44,6 @@ export function IsUrlAllowLocalhost(validationOptions?: ValidationOptions) {
 /**
  * DTO for creating a new event.
  * organizerId is required — the Organizer that owns this event.
- * tenantId is derived from the Organizer's tenantId — never from body.
  */
 export class CreateEventDto {
   @IsUUID('4', { message: 'organizerId must be a valid UUID' })
@@ -81,13 +81,11 @@ export class CreateEventDto {
   @IsUrlAllowLocalhost({ message: 'Website must be a valid URL' })
   website?: string;
 
-  @IsOptional()
-  @IsUrlAllowLocalhost({ message: 'Logo URL must be a valid URL' })
-  logoUrl?: string;
-
-  @IsOptional()
-  @IsString()
-  category?: string;
+  @IsEnum(EventCategory, {
+    message: `Category must be one of: ${Object.values(EventCategory).join(', ')}`,
+  })
+  @IsNotEmpty({ message: 'Category is required' })
+  category!: EventCategory;
 
   // New fields
   @IsOptional()

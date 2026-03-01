@@ -23,7 +23,7 @@ import { OrganizerEventsQueryDto, OrganizerProposalsQueryDto, ReviewProposalDto,
  *  - Require valid JWT (AuthGuard)
  *  - Require ORGANIZER role (RoleGuard + @Roles)
  *  - Resolve organizer from JWT organizer_id (NEVER from query/body)
- *  - Scoped to the organizer's tenant + organizer entity
+ *  - Scoped to the organizer entity
  */
 @Controller('organizer')
 @UseGuards(AuthGuard, RoleGuard)
@@ -35,7 +35,6 @@ export class OrganizerDashboardController {
    * GET /organizer/dashboard/stats
    *
    * Returns aggregate stats for the organizer dashboard overview.
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Get('dashboard/stats')
   async getDashboardStats(@CurrentUser() user: JwtPayloadWithClaims) {
@@ -48,7 +47,6 @@ export class OrganizerDashboardController {
    * Creates a new event owned by this organizer.
    * organizerId is derived from the JWT — never from the request body.
    * The event is created in DRAFT status with PENDING verification.
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Post('events')
   async createEvent(
@@ -62,7 +60,6 @@ export class OrganizerDashboardController {
    * GET /organizer/events
    *
    * Returns paginated list of events owned by this organizer.
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Get('events')
   async getEvents(
@@ -76,7 +73,6 @@ export class OrganizerDashboardController {
    * GET /organizer/events/:id
    *
    * Returns a single event owned by this organizer.
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Get('events/:id')
   async getEventById(
@@ -90,7 +86,6 @@ export class OrganizerDashboardController {
    * PATCH /organizer/events/:id
    *
    * Updates an event owned by this organizer.
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Patch('events/:id')
   async updateEvent(
@@ -105,7 +100,6 @@ export class OrganizerDashboardController {
    * GET /organizer/proposals
    *
    * Returns paginated proposals for events owned by this organizer.
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Get('proposals')
   async getProposals(
@@ -119,7 +113,6 @@ export class OrganizerDashboardController {
    * GET /organizer/proposals/:id
    *
    * Returns a single proposal for an event owned by this organizer.
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Get('proposals/:id')
   async getProposalById(
@@ -133,7 +126,6 @@ export class OrganizerDashboardController {
    * POST /organizer/proposals/:id/review
    *
    * Allows the organizer to approve or reject a proposal on their events.
-   * Uses GLOBAL_TENANT_ID internally (soft-disabled multi-tenancy).
    */
   @Post('proposals/:id/review')
   async reviewProposal(

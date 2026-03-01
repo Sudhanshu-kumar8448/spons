@@ -3,7 +3,7 @@ import { SponsorshipStatus } from '@prisma/client';
 
 /**
  * DTO for updating an existing sponsorship.
- * companyId, eventId, tenantId, and id are immutable after creation.
+ * companyId, eventId, and id are immutable after creation.
  */
 export class UpdateSponsorshipDto {
   @IsOptional()

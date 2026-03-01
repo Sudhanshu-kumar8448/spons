@@ -55,7 +55,6 @@ export class ProposalJobProducer {
   async onProposalCreated(event: ProposalCreatedEvent): Promise<void> {
     const emailPayload: ProposalEmailPayload = {
       proposalId: event.proposalId,
-      tenantId: event.tenantId,
       actorId: event.actorId,
       actorRole: event.actorRole,
       newStatus: event.newStatus,
@@ -66,7 +65,6 @@ export class ProposalJobProducer {
 
     const notifyPayload: ProposalNotificationPayload = {
       proposalId: event.proposalId,
-      tenantId: event.tenantId,
       actorId: event.actorId,
       newStatus: event.newStatus,
       timestamp: event.timestamp,
@@ -103,7 +101,6 @@ export class ProposalJobProducer {
 
     const emailPayload: ProposalEmailPayload = {
       proposalId: event.proposalId,
-      tenantId: event.tenantId,
       actorId: event.actorId,
       actorRole: event.actorRole,
       newStatus: event.newStatus,
@@ -113,7 +110,6 @@ export class ProposalJobProducer {
 
     const notifyPayload: ProposalNotificationPayload = {
       proposalId: event.proposalId,
-      tenantId: event.tenantId,
       actorId: event.actorId,
       newStatus: event.newStatus,
       previousStatus: event.previousStatus,

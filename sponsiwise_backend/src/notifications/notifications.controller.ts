@@ -26,7 +26,7 @@ export class NotificationsController {
     @Query('pageSize') pageSize?: string,
     @Query('read') read?: string,
   ) {
-    return this.service.findAll(user.sub, user.tenant_id, {
+    return this.service.findAll(user.sub, {
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
       read: read !== undefined ? read === 'true' : undefined,
@@ -37,7 +37,7 @@ export class NotificationsController {
   async markAllAsRead(
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.service.markAllAsRead(user.sub, user.tenant_id);
+    return this.service.markAllAsRead(user.sub);
   }
 
   @Get(':id')
@@ -45,7 +45,7 @@ export class NotificationsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.service.findById(id, user.sub, user.tenant_id);
+    return this.service.findById(id, user.sub);
   }
 
   @Patch(':id/read')
@@ -53,6 +53,6 @@ export class NotificationsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.service.markAsRead(id, user.sub, user.tenant_id);
+    return this.service.markAsRead(id, user.sub);
   }
 }

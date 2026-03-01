@@ -6,7 +6,6 @@ import { EmailLogsRepository } from './email-logs.repository';
  * Payload for creating an email log entry.
  */
 export interface CreateEmailLogEntry {
-  tenantId: string;
   recipient: string;
   subject: string;
   jobName: string;
@@ -20,7 +19,7 @@ export interface CreateEmailLogEntry {
 export class EmailLogsService {
   private readonly logger = new Logger(EmailLogsService.name);
 
-  constructor(private readonly emailLogsRepository: EmailLogsRepository) {}
+  constructor(private readonly emailLogsRepository: EmailLogsRepository) { }
 
   /**
    * Persist an email log entry. Errors are caught and logged — they never
@@ -29,7 +28,6 @@ export class EmailLogsService {
   async log(entry: CreateEmailLogEntry): Promise<EmailLog | null> {
     try {
       return await this.emailLogsRepository.create({
-        tenant: { connect: { id: entry.tenantId } },
         recipient: entry.recipient,
         subject: entry.subject,
         jobName: entry.jobName,
@@ -48,18 +46,16 @@ export class EmailLogsService {
   }
 
   /**
-   * Query email logs for a tenant with optional filters (manager endpoint).
+   * Query email logs with optional filters (manager endpoint).
    */
-  async findByTenant(params: {
-    tenantId: string;
+  async findAll(params: {
     page: number;
     pageSize: number;
     status?: EmailStatus;
     jobName?: string;
     search?: string;
   }): Promise<{ data: EmailLog[]; total: number; page: number; pageSize: number }> {
-    const { data, total } = await this.emailLogsRepository.findByTenant({
-      tenantId: params.tenantId,
+    const { data, total } = await this.emailLogsRepository.findAll({
       skip: (params.page - 1) * params.pageSize,
       take: params.pageSize,
       status: params.status,

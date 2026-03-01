@@ -11,7 +11,6 @@ export type SafeUser = Omit<User, 'password'>;
 /** Fields to select when returning safe user objects. */
 const SAFE_USER_SELECT = {
   id: true,
-  tenantId: true,
   companyId: true,
   organizerId: true,
   email: true,
@@ -42,47 +41,7 @@ export class UserRepository {
   }
 
   /**
-   * Find a single user by ID within a specific tenant (password excluded).
-   */
-  async findByIdAndTenant(id: string, tenantId: string): Promise<SafeUser | null> {
-    return this.prisma.user.findFirst({
-      where: { id, tenantId },
-      select: SAFE_USER_SELECT,
-    });
-  }
-
-  /**
-   * List users within a tenant with optional filters and pagination.
-   */
-  async findByTenant(params: {
-    tenantId: string;
-    skip?: number;
-    take?: number;
-    role?: Role;
-    isActive?: boolean;
-  }): Promise<{ data: SafeUser[]; total: number }> {
-    const where: Prisma.UserWhereInput = {
-      tenantId: params.tenantId,
-      ...(params.role !== undefined && { role: params.role }),
-      ...(params.isActive !== undefined && { isActive: params.isActive }),
-    };
-
-    const [data, total] = await Promise.all([
-      this.prisma.user.findMany({
-        where,
-        select: SAFE_USER_SELECT,
-        skip: params.skip,
-        take: params.take,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.user.count({ where }),
-    ]);
-
-    return { data, total };
-  }
-
-  /**
-   * List all users across all tenants (SUPER_ADMIN only).
+   * List users with optional filters and pagination.
    */
   async findAll(params: {
     skip?: number;
@@ -110,22 +69,7 @@ export class UserRepository {
   }
 
   /**
-   * Update a user, scoped to a tenant.
-   */
-  async updateByIdAndTenant(
-    id: string,
-    tenantId: string,
-    data: Prisma.UserUpdateInput,
-  ): Promise<SafeUser> {
-    return this.prisma.user.update({
-      where: { id, tenantId },
-      data,
-      select: SAFE_USER_SELECT,
-    });
-  }
-
-  /**
-   * Update a user by ID (no tenant scope — SUPER_ADMIN).
+   * Update a user by ID.
    */
   async updateById(id: string, data: Prisma.UserUpdateInput): Promise<SafeUser> {
     return this.prisma.user.update({

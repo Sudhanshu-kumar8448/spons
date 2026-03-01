@@ -18,7 +18,6 @@ import {
  *  - Require valid JWT (AuthGuard)
  *  - Require SPONSOR role (RoleGuard + @Roles)
  *  - Resolve company from JWT company_id (NEVER from query/body)
- *  - Scoped to the sponsor's tenant + company
  */
 @Controller('sponsor')
 @UseGuards(AuthGuard, RoleGuard)
@@ -31,7 +30,7 @@ export class SponsorController {
    */
   @Get('dashboard/stats')
   async getDashboardStats(@CurrentUser() user: JwtPayloadWithClaims) {
-    return this.sponsorService.getDashboardStats(user.tenant_id, user.company_id);
+    return this.sponsorService.getDashboardStats(user.company_id);
   }
 
   /**
@@ -42,7 +41,7 @@ export class SponsorController {
     @Query() query: SponsorEventsQueryDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.sponsorService.getEvents(user.tenant_id, user.company_id, query);
+    return this.sponsorService.getEvents(user.company_id, query);
   }
 
   /**
@@ -53,7 +52,7 @@ export class SponsorController {
     @Param('id', ParseUUIDPipe) eventId: string,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.sponsorService.getEventById(user.tenant_id, user.company_id, eventId);
+    return this.sponsorService.getEventById(user.company_id, eventId);
   }
 
   /**
@@ -64,7 +63,7 @@ export class SponsorController {
     @Query() query: SponsorProposalsQueryDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.sponsorService.getProposals(user.tenant_id, user.company_id, query);
+    return this.sponsorService.getProposals(user.company_id, query);
   }
 
   /**
@@ -75,7 +74,7 @@ export class SponsorController {
     @Param('id', ParseUUIDPipe) proposalId: string,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.sponsorService.getProposalById(user.tenant_id, user.company_id, proposalId);
+    return this.sponsorService.getProposalById(user.company_id, proposalId);
   }
 
   /**
@@ -87,7 +86,7 @@ export class SponsorController {
     @Body() dto: CreateProposalDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.sponsorService.createProposal(user.tenant_id, user.company_id, dto);
+    return this.sponsorService.createProposal(user.company_id, dto);
   }
 
   /**
@@ -99,7 +98,7 @@ export class SponsorController {
     @Param('id', ParseUUIDPipe) proposalId: string,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.sponsorService.withdrawProposal(user.tenant_id, user.company_id, proposalId);
+    return this.sponsorService.withdrawProposal(user.company_id, proposalId);
   }
 
   /**
@@ -110,7 +109,7 @@ export class SponsorController {
     @Query() query: SponsorSponsorshipsQueryDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.sponsorService.getSponsorships(user.tenant_id, user.company_id, query);
+    return this.sponsorService.getSponsorships(user.company_id, query);
   }
 }
 

@@ -3,15 +3,11 @@ import { Role } from '@prisma/client';
 import { UserRepository } from './user.repository';
 import type { SafeUser } from './user.repository';
 import { UpdateUserDto, ListUsersQueryDto } from './dto';
-import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * UserService — business logic for user management.
  *
- * AFTER SOFT-DISABLE MULTI-TENANCY:
- * - All operations use GLOBAL_TENANT_ID internally
- * - Tenant isolation is handled at the guard level
- * - Role checks remain for authorization (ADMIN, SUPER_ADMIN, etc.)
+ * Role checks remain for authorization (ADMIN, SUPER_ADMIN, etc.)
  */
 @Injectable()
 export class UserService {
@@ -36,21 +32,9 @@ export class UserService {
 
   /**
    * Get a single user by ID.
-   * - ADMIN: must be within their own tenant
-   * - SUPER_ADMIN: any tenant
    */
-  async findById(
-    targetUserId: string,
-    callerRole: Role,
-    callerTenantId: string,
-  ): Promise<SafeUser> {
-    let user: SafeUser | null;
-
-    if (callerRole === Role.SUPER_ADMIN) {
-      user = await this.userRepository.findById(targetUserId);
-    } else {
-      user = await this.userRepository.findByIdAndTenant(targetUserId, callerTenantId);
-    }
+  async findById(targetUserId: string): Promise<SafeUser> {
+    const user = await this.userRepository.findById(targetUserId);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -60,14 +44,10 @@ export class UserService {
   }
 
   /**
-   * List users.
-   * - ADMIN: scoped to their own tenant
-   * - SUPER_ADMIN: across all tenants
+   * List users with optional filters.
    */
   async findAll(
     query: ListUsersQueryDto,
-    callerRole: Role,
-    callerTenantId: string,
   ): Promise<{
     data: SafeUser[];
     total: number;
@@ -78,24 +58,12 @@ export class UserService {
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    let result: { data: SafeUser[]; total: number };
-
-    if (callerRole === Role.SUPER_ADMIN) {
-      result = await this.userRepository.findAll({
-        skip,
-        take: limit,
-        role: query.role,
-        isActive: query.isActive,
-      });
-    } else {
-      result = await this.userRepository.findByTenant({
-        tenantId: callerTenantId,
-        skip,
-        take: limit,
-        role: query.role,
-        isActive: query.isActive,
-      });
-    }
+    const result = await this.userRepository.findAll({
+      skip,
+      take: limit,
+      role: query.role,
+      isActive: query.isActive,
+    });
 
     return { ...result, page, limit };
   }
@@ -104,37 +72,29 @@ export class UserService {
 
   /**
    * Update a user.
-   * - ADMIN: within their own tenant; cannot set SUPER_ADMIN role
-   * - SUPER_ADMIN: any tenant, any role
+   * - Non-SUPER_ADMIN cannot set SUPER_ADMIN role
    */
   async update(
     targetUserId: string,
     dto: UpdateUserDto,
     callerRole: Role,
-    callerTenantId: string,
   ): Promise<SafeUser> {
-    // Prevent ADMIN from escalating to SUPER_ADMIN
+    // Prevent non-SUPER_ADMIN from escalating to SUPER_ADMIN
     if (callerRole !== Role.SUPER_ADMIN && dto.role === Role.SUPER_ADMIN) {
       throw new ForbiddenException('Only SUPER_ADMIN can assign SUPER_ADMIN role');
     }
 
-    // Ensure target user exists (and is within tenant for ADMIN)
-    await this.findById(targetUserId, callerRole, callerTenantId);
-
-    let user: SafeUser;
+    // Ensure target user exists
+    await this.findById(targetUserId);
 
     const data = {
       ...(dto.role !== undefined && { role: dto.role }),
       ...(dto.isActive !== undefined && { isActive: dto.isActive }),
     };
 
-    if (callerRole === Role.SUPER_ADMIN) {
-      user = await this.userRepository.updateById(targetUserId, data);
-    } else {
-      user = await this.userRepository.updateByIdAndTenant(targetUserId, callerTenantId, data);
-    }
+    const user = await this.userRepository.updateById(targetUserId, data);
 
-    this.logger.log(`User ${targetUserId} updated by ${callerRole} (tenant: ${callerTenantId})`);
+    this.logger.log(`User ${targetUserId} updated by ${callerRole}`);
     return user;
   }
 }

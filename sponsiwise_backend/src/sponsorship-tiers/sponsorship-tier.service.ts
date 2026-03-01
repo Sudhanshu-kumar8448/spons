@@ -16,7 +16,7 @@ import type { SponsorshipTier } from '@prisma/client';
 
 /**
  * SponsorshipTierService — business logic for sponsorship tier management.
- * 
+ *
  * Manages inventory of sponsorship slots per event with locking mechanism.
  */
 @Injectable()
@@ -35,25 +35,19 @@ export class SponsorshipTierService {
 
   /**
    * Create a new sponsorship tier for an event.
-   * - ORGANIZER: can create for their own events (if not locked)
-   * - MANAGER/ADMIN: can create for any event
    */
   async create(
     eventId: string,
     dto: CreateSponsorshipTierDto,
     callerRole: Role,
-    callerTenantId: string,
     callerId: string,
   ): Promise<SponsorshipTier> {
-    // Validate event exists and is accessible
-    const event = await this.validateEventAccess(eventId, callerRole, callerTenantId);
+    const event = await this.validateEventAccess(eventId);
 
-    // Check if tier is locked
     if (event.status !== EventStatus.DRAFT && event.status !== 'UNDER_MANAGER_REVIEW') {
       throw new ForbiddenException('Cannot add tiers to a locked event. Contact manager to unlock.');
     }
 
-    // Check if tier type already exists for this event
     const existingTiers = await this.tierRepository.findByEventId(eventId);
     const tierExists = existingTiers.some((t: SponsorshipTier) => t.tierType === dto.tierType);
     if (tierExists) {
@@ -61,7 +55,6 @@ export class SponsorshipTierService {
     }
 
     const tier = await this.tierRepository.create({
-      tenantId: callerTenantId,
       eventId,
       tierType: dto.tierType,
       askingPrice: dto.askingPrice,
@@ -73,9 +66,7 @@ export class SponsorshipTierService {
 
     this.logger.log(`Tier ${tier.id} created for event ${eventId}`);
 
-    // Audit log
     this.auditLogService.log({
-      tenantId: callerTenantId,
       actorId: callerId,
       actorRole: callerRole,
       action: 'tier.created',
@@ -88,7 +79,6 @@ export class SponsorshipTierService {
       },
     });
 
-    // Invalidate cache
     this.cacheService.delByPattern(`event:${eventId}:tiers:*`);
 
     return tier;
@@ -101,24 +91,22 @@ export class SponsorshipTierService {
     eventId: string,
     dtos: CreateSponsorshipTierDto[],
     callerRole: Role,
-    callerTenantId: string,
     callerId: string,
   ): Promise<SponsorshipTier[]> {
-    const event = await this.validateEventAccess(eventId, callerRole, callerTenantId);
+    const event = await this.validateEventAccess(eventId);
 
     if (event.status !== EventStatus.DRAFT && event.status !== 'UNDER_MANAGER_REVIEW') {
       throw new ForbiddenException('Cannot add tiers to a locked event');
     }
 
     const tiers: SponsorshipTier[] = [];
-    
+
     for (const dto of dtos) {
       const existingTiers = await this.tierRepository.findByEventId(eventId);
       const tierExists = existingTiers.some((t: SponsorshipTier) => t.tierType === dto.tierType);
-      
+
       if (!tierExists) {
         const tier = await this.tierRepository.create({
-          tenantId: callerTenantId,
           eventId,
           tierType: dto.tierType,
           askingPrice: dto.askingPrice,
@@ -131,9 +119,7 @@ export class SponsorshipTierService {
       }
     }
 
-    // Audit log
     this.auditLogService.log({
-      tenantId: callerTenantId,
       actorId: callerId,
       actorRole: callerRole,
       action: 'tiers.bulk_created',
@@ -152,16 +138,11 @@ export class SponsorshipTierService {
   /**
    * Get a single tier by ID
    */
-  async findById(tierId: string, callerRole: Role, callerTenantId: string): Promise<SponsorshipTier> {
+  async findById(tierId: string): Promise<SponsorshipTier> {
     const tier = await this.tierRepository.findById(tierId);
 
     if (!tier) {
       throw new NotFoundException('Tier not found');
-    }
-
-    // Tenant check
-    if (callerRole !== Role.SUPER_ADMIN && tier.tenantId !== callerTenantId) {
-      throw new ForbiddenException('Access denied');
     }
 
     return tier;
@@ -170,10 +151,8 @@ export class SponsorshipTierService {
   /**
    * Get all tiers for an event
    */
-  async findByEventId(eventId: string, callerRole: Role, callerTenantId: string): Promise<SponsorshipTier[]> {
-    // Validate event access
-    await this.validateEventAccess(eventId, callerRole, callerTenantId);
-
+  async findByEventId(eventId: string): Promise<SponsorshipTier[]> {
+    await this.validateEventAccess(eventId);
     return this.tierRepository.findByEventId(eventId);
   }
 
@@ -189,25 +168,17 @@ export class SponsorshipTierService {
 
   /**
    * Update a tier
-   * - ORGANIZER: can only update if event is not locked
-   * - MANAGER/ADMIN: can always update
    */
   async update(
     tierId: string,
     dto: UpdateSponsorshipTierDto,
     callerRole: Role,
-    callerTenantId: string,
     callerId: string,
   ): Promise<SponsorshipTier> {
     const tierWithEvent = await this.tierRepository.findByIdWithEvent(tierId);
 
     if (!tierWithEvent) {
       throw new NotFoundException('Tier not found');
-    }
-
-    // Check tier ownership
-    if (callerRole !== Role.SUPER_ADMIN && tierWithEvent.tenantId !== callerTenantId) {
-      throw new ForbiddenException('Access denied');
     }
 
     // Check if tier is locked (organizers can't edit locked tiers)
@@ -230,9 +201,7 @@ export class SponsorshipTierService {
 
     this.logger.log(`Tier ${tierId} updated by ${callerRole}`);
 
-    // Audit log
     this.auditLogService.log({
-      tenantId: callerTenantId,
       actorId: callerId,
       actorRole: callerRole,
       action: 'tier.updated',
@@ -252,18 +221,15 @@ export class SponsorshipTierService {
   async lockAllTiers(
     eventId: string,
     callerRole: Role,
-    callerTenantId: string,
     callerId: string,
   ): Promise<any> {
-    await this.validateEventAccess(eventId, callerRole, callerTenantId);
+    await this.validateEventAccess(eventId);
 
     const result = await this.tierRepository.updateByEventId(eventId, { isLocked: true });
 
     this.logger.log(`All tiers locked for event ${eventId}`);
 
-    // Audit log
     this.auditLogService.log({
-      tenantId: callerTenantId,
       actorId: callerId,
       actorRole: callerRole,
       action: 'tiers.locked',
@@ -281,22 +247,19 @@ export class SponsorshipTierService {
   async unlockAllTiers(
     eventId: string,
     callerRole: Role,
-    callerTenantId: string,
     callerId: string,
   ): Promise<void> {
     if (callerRole !== Role.ADMIN && callerRole !== Role.MANAGER && callerRole !== Role.SUPER_ADMIN) {
       throw new ForbiddenException('Only managers can unlock tiers');
     }
 
-    await this.validateEventAccess(eventId, callerRole, callerTenantId);
+    await this.validateEventAccess(eventId);
 
     const result = await this.tierRepository.updateByEventId(eventId, { isLocked: false });
 
     this.logger.log(`All tiers unlocked for event ${eventId}`);
 
-    // Audit log
     this.auditLogService.log({
-      tenantId: callerTenantId,
       actorId: callerId,
       actorRole: callerRole,
       action: 'tiers.unlocked',
@@ -316,7 +279,6 @@ export class SponsorshipTierService {
   async delete(
     tierId: string,
     callerRole: Role,
-    callerTenantId: string,
     callerId: string,
   ): Promise<void> {
     const tierWithEvent = await this.tierRepository.findByIdWithEvent(tierId);
@@ -325,26 +287,17 @@ export class SponsorshipTierService {
       throw new NotFoundException('Tier not found');
     }
 
-    // Check ownership
-    if (callerRole !== Role.SUPER_ADMIN && tierWithEvent.tenantId !== callerTenantId) {
-      throw new ForbiddenException('Access denied');
-    }
-
-    // Can't delete if tier has sold slots
     if (tierWithEvent.soldSlots > 0) {
       throw new BadRequestException('Cannot delete a tier that has sold slots');
     }
 
-    // Can't delete if tier is locked
     if (tierWithEvent.isLocked) {
       throw new ForbiddenException('Cannot delete a locked tier');
     }
 
     await this.tierRepository.deleteById(tierId);
 
-    // Audit log
     this.auditLogService.log({
-      tenantId: callerTenantId,
       actorId: callerId,
       actorRole: callerRole,
       action: 'tier.deleted',
@@ -376,16 +329,11 @@ export class SponsorshipTierService {
 
   // ─── PRIVATE HELPERS ─────────────────────────────────────
 
-  private async validateEventAccess(eventId: string, callerRole: Role, callerTenantId: string) {
+  private async validateEventAccess(eventId: string) {
     const event = await this.eventRepository.findById(eventId);
 
     if (!event) {
       throw new NotFoundException('Event not found');
-    }
-
-    // For non-super-admins, the event must be in the caller's tenant
-    if (callerRole !== Role.SUPER_ADMIN && event.tenantId !== callerTenantId) {
-      throw new ForbiddenException('Cannot access events outside your tenant');
     }
 
     return event;

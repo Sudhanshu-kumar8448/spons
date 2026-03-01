@@ -31,43 +31,7 @@ export class CompanyRepository {
   }
 
   /**
-   * Find a single company by ID within a specific tenant.
-   */
-  async findByIdAndTenant(id: string, tenantId: string): Promise<Company | null> {
-    return this.prisma.company.findFirst({ where: { id, tenantId } });
-  }
-
-  /**
-   * List companies within a tenant with optional filters and pagination.
-   */
-  async findByTenant(params: {
-    tenantId: string;
-    skip?: number;
-    take?: number;
-    type?: CompanyType;
-    isActive?: boolean;
-  }): Promise<{ data: Company[]; total: number }> {
-    const where: Prisma.CompanyWhereInput = {
-      tenantId: params.tenantId,
-      ...(params.type !== undefined && { type: params.type }),
-      ...(params.isActive !== undefined && { isActive: params.isActive }),
-    };
-
-    const [data, total] = await Promise.all([
-      this.prisma.company.findMany({
-        where,
-        skip: params.skip,
-        take: params.take,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.company.count({ where }),
-    ]);
-
-    return { data, total };
-  }
-
-  /**
-   * List all companies across all tenants (SUPER_ADMIN only).
+   * List companies with optional filters and pagination.
    */
   async findAll(params: {
     skip?: number;
@@ -96,21 +60,7 @@ export class CompanyRepository {
   // ─── UPDATE ──────────────────────────────────────────────
 
   /**
-   * Update a company, scoped to a tenant.
-   */
-  async updateByIdAndTenant(
-    id: string,
-    tenantId: string,
-    data: Prisma.CompanyUpdateInput,
-  ): Promise<Company> {
-    return this.prisma.company.update({
-      where: { id, tenantId },
-      data,
-    });
-  }
-
-  /**
-   * Update a company by ID (no tenant scope — SUPER_ADMIN).
+   * Update a company by ID.
    */
   async updateById(id: string, data: Prisma.CompanyUpdateInput): Promise<Company> {
     return this.prisma.company.update({

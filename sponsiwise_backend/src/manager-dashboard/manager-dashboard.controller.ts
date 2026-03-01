@@ -45,7 +45,7 @@ import {
  *  - POST /manager/events/:id/verify
  *  - PATCH /manager/proposals/:id
  *
- * All endpoints require MANAGER role and scope to the caller's tenant.
+ * All endpoints require MANAGER role.
  */
 @Controller('manager')
 @UseGuards(AuthGuard, RoleGuard)
@@ -56,26 +56,20 @@ export class ManagerDashboardController {
   // ─── Dashboard Stats ─────────────────────────────────────
 
   @Get('dashboard/stats')
-  async getDashboardStats(@CurrentUser() user: JwtPayloadWithClaims) {
-    return this.service.getDashboardStats(user.tenant_id);
+  async getDashboardStats() {
+    return this.service.getDashboardStats();
   }
 
   // ─── Companies ───────────────────────────────────────────
 
   @Get('companies')
-  async getCompanies(
-    @Query() query: ManagerCompaniesQueryDto,
-    @CurrentUser() user: JwtPayloadWithClaims,
-  ) {
-    return this.service.getCompanies(user.tenant_id, query);
+  async getCompanies(@Query() query: ManagerCompaniesQueryDto) {
+    return this.service.getCompanies(query);
   }
 
   @Get('companies/:id')
-  async getCompanyById(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: JwtPayloadWithClaims,
-  ) {
-    return this.service.getCompanyById(user.tenant_id, id);
+  async getCompanyById(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.getCompanyById(id);
   }
 
   @Post('companies/:id/verify')
@@ -84,25 +78,19 @@ export class ManagerDashboardController {
     @Body() dto: VerifyEntityDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.service.verifyCompany(user.tenant_id, id, dto, user.sub, user.role);
+    return this.service.verifyCompany(id, dto, user.sub, user.role);
   }
 
   // ─── Events ──────────────────────────────────────────────
 
   @Get('events')
-  async getEvents(
-    @Query() query: ManagerEventsQueryDto,
-    @CurrentUser() user: JwtPayloadWithClaims,
-  ) {
-    return this.service.getEvents(user.tenant_id, query);
+  async getEvents(@Query() query: ManagerEventsQueryDto) {
+    return this.service.getEvents(query);
   }
 
   @Get('events/:id')
-  async getEventById(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: JwtPayloadWithClaims,
-  ) {
-    return this.service.getEventById(user.tenant_id, id);
+  async getEventById(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.getEventById(id);
   }
 
   @Patch('events/:id')
@@ -111,7 +99,7 @@ export class ManagerDashboardController {
     @Body() dto: UpdateManagerEventDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.service.updateEvent(user.tenant_id, id, dto, user.sub, user.role);
+    return this.service.updateEvent(id, dto, user.sub, user.role);
   }
 
   @Post('events/:id/verify')
@@ -120,7 +108,7 @@ export class ManagerDashboardController {
     @Body() dto: VerifyEntityDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.service.verifyEvent(user.tenant_id, id, dto, user.sub, user.role);
+    return this.service.verifyEvent(id, dto, user.sub, user.role);
   }
 
   // ─── Tier Management ─────────────────────────────────────
@@ -131,13 +119,7 @@ export class ManagerDashboardController {
     @Body() dto: CreateEventTierDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.service.createTier(
-      user.tenant_id,
-      eventId,
-      dto,
-      user.sub,
-      user.role,
-    );
+    return this.service.createTier(eventId, dto, user.sub, user.role);
   }
 
   @Put('events/:eventId/tiers/:tierId')
@@ -147,42 +129,26 @@ export class ManagerDashboardController {
     @Body() dto: UpdateEventTierDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.service.updateTier(
-      user.tenant_id,
-      eventId,
-      tierId,
-      dto,
-      user.sub,
-      user.role,
-    );
+    return this.service.updateTier(eventId, tierId, dto, user.sub, user.role);
   }
 
   // ─── Activity Log ────────────────────────────────────────
 
   @Get('activity')
-  async getActivity(
-    @Query() query: ManagerActivityQueryDto,
-    @CurrentUser() user: JwtPayloadWithClaims,
-  ) {
-    return this.service.getActivity(user.tenant_id, query);
+  async getActivity(@Query() query: ManagerActivityQueryDto) {
+    return this.service.getActivity(query);
   }
 
   // ─── Proposals ───────────────────────────────────────────
 
   @Get('proposals')
-  async getProposals(
-    @Query() query: ManagerProposalsQueryDto,
-    @CurrentUser() user: JwtPayloadWithClaims,
-  ) {
-    return this.service.getProposals(user.tenant_id, query);
+  async getProposals(@Query() query: ManagerProposalsQueryDto) {
+    return this.service.getProposals(query);
   }
 
   @Get('proposals/:id')
-  async getProposalById(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: JwtPayloadWithClaims,
-  ) {
-    return this.service.getProposalById(user.tenant_id, id);
+  async getProposalById(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.getProposalById(id);
   }
 
   @Patch('proposals/:id')
@@ -191,6 +157,6 @@ export class ManagerDashboardController {
     @Body() dto: UpdateManagerProposalDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.service.updateProposal(user.tenant_id, id, dto, user.sub, user.role);
+    return this.service.updateProposal(id, dto, user.sub, user.role);
   }
 }

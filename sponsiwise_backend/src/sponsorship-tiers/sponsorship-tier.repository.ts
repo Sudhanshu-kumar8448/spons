@@ -47,9 +47,8 @@ export class SponsorshipTierRepository {
     `;
   }
 
-  async findByTenant(tenantId: string, options?: { skip?: number; take?: number }) {
+  async findAll(options?: { skip?: number; take?: number }) {
     return this.prisma.sponsorshipTier.findMany({
-      where: { tenantId },
       include: {
         event: {
           include: {
@@ -106,12 +105,6 @@ export class SponsorshipTierRepository {
         AND "sold_slots" > 0
     `;
     return result;
-  }
-
-  async countByTenant(tenantId: string) {
-    return this.prisma.sponsorshipTier.count({
-      where: { tenantId },
-    });
   }
 }
 

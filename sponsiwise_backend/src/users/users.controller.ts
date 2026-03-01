@@ -20,13 +20,9 @@ import { UpdateUserDto, ListUsersQueryDto } from './dto';
  *
  * RBAC rules:
  *  - GET    /users/me          → any authenticated user (own profile)
- *  - GET    /users             → ADMIN (own tenant) / SUPER_ADMIN (all)
- *  - GET    /users/:id         → ADMIN (own tenant) / SUPER_ADMIN (all)
- *  - PATCH  /users/:id         → ADMIN (own tenant) / SUPER_ADMIN (all)
- *
- * Tenant isolation is enforced at the service layer:
- *  - ADMIN operations are scoped to callerTenantId (from JWT)
- *  - SUPER_ADMIN bypasses tenant scoping
+ *  - GET    /users             → ADMIN / SUPER_ADMIN
+ *  - GET    /users/:id         → ADMIN / SUPER_ADMIN
+ *  - PATCH  /users/:id         → ADMIN / SUPER_ADMIN
  */
 @Controller('users')
 export class UsersController {
@@ -47,30 +43,23 @@ export class UsersController {
   /**
    * GET /users
    * List users with optional filters.
-   * - ADMIN:       own tenant only
-   * - SUPER_ADMIN: all tenants
    */
   @Get()
   @UseGuards(AuthGuard, RoleGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async findAll(@Query() query: ListUsersQueryDto, @CurrentUser() user: JwtPayloadWithClaims) {
-    return this.userService.findAll(query, user.role, user.tenant_id);
+  async findAll(@Query() query: ListUsersQueryDto) {
+    return this.userService.findAll(query);
   }
 
   /**
    * GET /users/:id
    * Get a single user by ID.
-   * - ADMIN:       only within their tenant
-   * - SUPER_ADMIN: any tenant
    */
   @Get(':id')
   @UseGuards(AuthGuard, RoleGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async findById(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: JwtPayloadWithClaims,
-  ) {
-    return this.userService.findById(id, user.role, user.tenant_id);
+  async findById(@Param('id', ParseUUIDPipe) id: string) {
+    return this.userService.findById(id);
   }
 
   // ─── UPDATE ──────────────────────────────────────────────
@@ -78,8 +67,6 @@ export class UsersController {
   /**
    * PATCH /users/:id
    * Update a user's role or isActive status.
-   * - ADMIN:       within own tenant, cannot set SUPER_ADMIN
-   * - SUPER_ADMIN: any tenant, any role
    */
   @Patch(':id')
   @UseGuards(AuthGuard, RoleGuard)
@@ -89,6 +76,6 @@ export class UsersController {
     @Body() dto: UpdateUserDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.userService.update(id, dto, user.role, user.tenant_id);
+    return this.userService.update(id, dto, user.role);
   }
 }

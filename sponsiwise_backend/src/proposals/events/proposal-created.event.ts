@@ -9,7 +9,7 @@ export const PROPOSAL_CREATED_EVENT = 'proposal.created';
 /**
  * Domain event emitted after a new proposal is successfully persisted.
  *
- * Carries the full actor + tenant context so that any future listener
+ * Carries the full actor context so that any future listener
  * (notification worker, analytics, webhook dispatcher) has everything
  * it needs without querying the database again.
  *
@@ -17,7 +17,6 @@ export const PROPOSAL_CREATED_EVENT = 'proposal.created';
  * ```json
  * {
  *   "proposalId": "clxyz123...",
- *   "tenantId": "tenant_abc",
  *   "actorId": "user_456",
  *   "actorRole": "ADMIN",
  *   "newStatus": "DRAFT",
@@ -33,9 +32,6 @@ export class ProposalCreatedEvent {
 
   /** ID of the newly created proposal */
   readonly proposalId: string;
-
-  /** Tenant the proposal belongs to */
-  readonly tenantId: string;
 
   /** User who created the proposal */
   readonly actorId: string;
@@ -57,7 +53,6 @@ export class ProposalCreatedEvent {
 
   constructor(params: {
     proposalId: string;
-    tenantId: string;
     actorId: string;
     actorRole: string;
     newStatus: ProposalStatus;
@@ -65,7 +60,6 @@ export class ProposalCreatedEvent {
     proposedAmount?: number;
   }) {
     this.proposalId = params.proposalId;
-    this.tenantId = params.tenantId;
     this.actorId = params.actorId;
     this.actorRole = params.actorRole;
     this.newStatus = params.newStatus;

@@ -2,8 +2,7 @@ import { IsString, IsNotEmpty, IsEnum, IsOptional, IsUrl, MaxLength } from 'clas
 import { CompanyType } from '@prisma/client';
 
 /**
- * DTO for creating a new company within a tenant.
- * tenantId is derived from the caller's JWT — never from body.
+ * DTO for creating a new company.
  */
 export class CreateCompanyDto {
   @IsString()
@@ -23,10 +22,5 @@ export class CreateCompanyDto {
 
   @IsOptional()
   @IsString()
-  description?: string;
-
-  @IsOptional()
-  @IsUrl({}, { message: 'Logo URL must be a valid URL' })
-  @MaxLength(500, { message: 'Logo URL must be 500 characters or fewer' })
-  logoUrl?: string;
+  strategicIntent?: string;
 }

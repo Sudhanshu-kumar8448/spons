@@ -21,8 +21,6 @@ import { AdminUsersQueryDto, UpdateRoleDto, UpdateStatusDto } from './dto';
  * All routes:
  *  - Require valid JWT (AuthGuard)
  *  - Require ADMIN or SUPER_ADMIN role (RoleGuard + @Roles)
- *  - ADMIN → tenant-scoped via JWT tenant_id
- *  - SUPER_ADMIN → cross-tenant
  */
 @Controller('admin')
 @UseGuards(AuthGuard, RoleGuard)
@@ -33,25 +31,22 @@ export class AdminController {
   // ── GET /admin/dashboard/stats ──────────────────────────────────────
 
   @Get('dashboard/stats')
-  async getDashboardStats(@CurrentUser() user: JwtPayloadWithClaims) {
-    return this.adminService.getDashboardStats(user.role, user.tenant_id);
+  async getDashboardStats() {
+    return this.adminService.getDashboardStats();
   }
 
   // ── GET /admin/users ────────────────────────────────────────────────
 
   @Get('users')
-  async getUsers(@Query() query: AdminUsersQueryDto, @CurrentUser() user: JwtPayloadWithClaims) {
-    return this.adminService.getUsers(user.role, user.tenant_id, query);
+  async getUsers(@Query() query: AdminUsersQueryDto) {
+    return this.adminService.getUsers(query);
   }
 
   // ── GET /admin/users/:id ────────────────────────────────────────────
 
   @Get('users/:id')
-  async getUserById(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: JwtPayloadWithClaims,
-  ) {
-    return this.adminService.getUserById(user.role, user.tenant_id, id);
+  async getUserById(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminService.getUserById(id);
   }
 
   // ── PATCH /admin/users/:id/role ─────────────────────────────────────
@@ -62,7 +57,7 @@ export class AdminController {
     @Body() dto: UpdateRoleDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.adminService.updateRole(user.sub, user.role, user.tenant_id, id, dto.role);
+    return this.adminService.updateRole(user.sub, user.role, id, dto.role);
   }
 
   // ── PATCH /admin/users/:id/status ───────────────────────────────────
@@ -73,6 +68,6 @@ export class AdminController {
     @Body() dto: UpdateStatusDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.adminService.updateStatus(user.sub, user.role, user.tenant_id, id, dto.status);
+    return this.adminService.updateStatus(user.sub, user.role, id, dto.status);
   }
 }

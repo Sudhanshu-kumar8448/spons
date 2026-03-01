@@ -10,7 +10,7 @@ import { PrismaService } from '../common/providers/prisma.service';
  */
 @Injectable()
 export class EventRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * Get the Prisma client for transactions.
@@ -38,45 +38,7 @@ export class EventRepository {
   }
 
   /**
-   * Find a single event by ID within a specific tenant.
-   */
-  async findByIdAndTenant(id: string, tenantId: string): Promise<Event | null> {
-    return this.prisma.event.findFirst({ where: { id, tenantId } });
-  }
-
-  /**
-   * List events within a tenant with optional filters and pagination.
-   */
-  async findByTenant(params: {
-    tenantId: string;
-    skip?: number;
-    take?: number;
-    status?: EventStatus;
-    organizerId?: string;
-    isActive?: boolean;
-  }): Promise<{ data: Event[]; total: number }> {
-    const where: Prisma.EventWhereInput = {
-      tenantId: params.tenantId,
-      ...(params.status !== undefined && { status: params.status }),
-      ...(params.organizerId !== undefined && { organizerId: params.organizerId }),
-      ...(params.isActive !== undefined && { isActive: params.isActive }),
-    };
-
-    const [data, total] = await Promise.all([
-      this.prisma.event.findMany({
-        where,
-        skip: params.skip,
-        take: params.take,
-        orderBy: { startDate: 'desc' },
-      }),
-      this.prisma.event.count({ where }),
-    ]);
-
-    return { data, total };
-  }
-
-  /**
-   * List all events across all tenants (SUPER_ADMIN only).
+   * List events with optional filters and pagination.
    */
   async findAll(params: {
     skip?: number;
@@ -136,21 +98,7 @@ export class EventRepository {
   // ─── UPDATE ──────────────────────────────────────────────
 
   /**
-   * Update an event, scoped to a tenant.
-   */
-  async updateByIdAndTenant(
-    id: string,
-    tenantId: string,
-    data: Prisma.EventUpdateInput,
-  ): Promise<Event> {
-    return this.prisma.event.update({
-      where: { id, tenantId },
-      data,
-    });
-  }
-
-  /**
-   * Update an event by ID (no tenant scope — SUPER_ADMIN).
+   * Update an event by ID.
    */
   async updateById(id: string, data: Prisma.EventUpdateInput): Promise<Event> {
     return this.prisma.event.update({

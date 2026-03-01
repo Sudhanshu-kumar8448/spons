@@ -15,7 +15,7 @@ import type { JwtConfig } from '../config';
  * AuthGuard — verifies that a valid access_token JWT exists in the
  * HTTP-only cookie and attaches the decoded payload to `req.user`.
  *
- * Execution order: ① AuthGuard → RoleGuard → TenantGuard
+ * Execution order: ① AuthGuard → RoleGuard
  *
  * Throws:
  *  - 401 if no cookie, invalid signature, or expired token
@@ -24,7 +24,7 @@ import type { JwtConfig } from '../config';
 export class AuthGuard implements CanActivate {
   private readonly logger = new Logger(AuthGuard.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) { }
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();

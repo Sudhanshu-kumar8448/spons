@@ -1,7 +1,6 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   BadRequestException,
   Logger,
 } from '@nestjs/common';
@@ -19,16 +18,9 @@ import {
   EVENT_REJECTED_EVENT,
 } from '../common/events';
 import { CreateEventDto, UpdateEventDto, ListEventsQueryDto } from './dto';
-import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * EventService — business logic for event management.
- *
- * AFTER SOFT-DISABLE MULTI-TENANCY:
- * - All operations use GLOBAL_TENANT_ID internally
- * - Tenant isolation is handled at the guard level
- * - Organizer ownership is still enforced for write operations
- * - Role checks remain for authorization (ADMIN, ORGANIZER, MANAGER, etc.)
  */
 @Injectable()
 export class EventService {
@@ -46,23 +38,15 @@ export class EventService {
 
   /**
    * Create a new event with tiers and address using a transaction.
-   * - ADMIN: event is created under an Organizer within their own tenant
-   * - SUPER_ADMIN: may create for any Organizer in any tenant
-   *
-   * The tenantId is always derived from the Organizer to prevent mismatch.
    */
-  async create(dto: CreateEventDto, callerRole: Role, callerTenantId: string): Promise<Event> {
+  async create(dto: CreateEventDto): Promise<Event> {
     // Validate organizerId is provided
     if (!dto.organizerId) {
       throw new BadRequestException('organizerId is required');
     }
 
-    // Validate the organizer exists and is within the caller's tenant
-    const organizer = await this.resolveAndValidateOrganizer(
-      dto.organizerId,
-      callerRole,
-      callerTenantId,
-    );
+    // Validate the organizer exists
+    const organizer = await this.resolveAndValidateOrganizer(dto.organizerId);
 
     // Validate date range
     if (!dto.startDate || !dto.endDate) {
@@ -98,12 +82,10 @@ export class EventService {
         endDate: new Date(dto.endDate!),
         ...(dto.status !== undefined && { status: dto.status }),
         ...(dto.website !== undefined && { website: dto.website }),
-        ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
-        ...(dto.category !== undefined && { category: dto.category }),
+        category: dto.category,
         ...(dto.pptDeckUrl !== undefined && { pptDeckUrl: dto.pptDeckUrl }),
         ...(dto.contactPhone !== undefined && { contactPhone: dto.contactPhone }),
         ...(dto.contactEmail !== undefined && { contactEmail: dto.contactEmail }),
-        tenant: { connect: { id: organizer.tenantId } },
         organizer: { connect: { id: organizer.id } },
       };
 
@@ -115,7 +97,6 @@ export class EventService {
       if (dto.address) {
         await tx.address.create({
           data: {
-            tenantId: organizer.tenantId,
             eventId: event.id,
             addressLine1: dto.address.addressLine1,
             addressLine2: dto.address.addressLine2,
@@ -134,7 +115,6 @@ export class EventService {
         
         await tx.sponsorshipTier.create({
           data: {
-            tenantId: organizer.tenantId,
             eventId: event.id,
             tierType: tierType,
             ...(tierType === TierType.CUSTOM && tier.customName && { customName: tier.customName }),
@@ -153,10 +133,10 @@ export class EventService {
     });
 
     this.logger.log(
-      `Event ${event.id} created by ${callerRole} for organizer ${organizer.id} in tenant ${organizer.tenantId} with ${tiers.length} tiers`,
+      `Event ${event.id} created for organizer ${organizer.id} with ${tiers.length} tiers`,
     );
 
-    // Invalidate event list caches for this tenant (+ global for SUPER_ADMIN)
+    // Invalidate event list caches
     this.cacheService.delByPattern('events:list:*');
 
     return event;
@@ -166,17 +146,9 @@ export class EventService {
 
   /**
    * Get a single event by ID.
-   * - USER / ADMIN: must be within their own tenant
-   * - SUPER_ADMIN: any tenant
    */
-  async findById(eventId: string, callerRole: Role, callerTenantId: string): Promise<Event> {
-    let event: Event | null;
-
-    if (callerRole === Role.SUPER_ADMIN) {
-      event = await this.eventRepository.findById(eventId);
-    } else {
-      event = await this.eventRepository.findByIdAndTenant(eventId, callerTenantId);
-    }
+  async findById(eventId: string): Promise<Event> {
+    const event = await this.eventRepository.findById(eventId);
 
     if (!event) {
       throw new NotFoundException('Event not found');
@@ -186,14 +158,10 @@ export class EventService {
   }
 
   /**
-   * List events.
-   * - USER / ADMIN: scoped to their own tenant
-   * - SUPER_ADMIN: across all tenants
+   * List events with optional filters.
    */
   async findAll(
     query: ListEventsQueryDto,
-    callerRole: Role,
-    callerTenantId: string,
   ): Promise<{
     data: Event[];
     total: number;
@@ -205,11 +173,9 @@ export class EventService {
     const skip = (page - 1) * limit;
 
     // Build a deterministic cache key from query params
-    const scope = callerRole === Role.SUPER_ADMIN ? 'global' : `tenant:${callerTenantId}`;
     const cacheKey = CacheService.key(
       'events',
       'list',
-      scope,
       `p${page}`,
       `l${limit}`,
       `s${query.status ?? 'any'}`,
@@ -223,26 +189,13 @@ export class EventService {
       return { ...cached, page, limit };
     }
 
-    let result: { data: Event[]; total: number };
-
-    if (callerRole === Role.SUPER_ADMIN) {
-      result = await this.eventRepository.findAll({
-        skip,
-        take: limit,
-        status: query.status,
-        organizerId: query.organizerId,
-        isActive: query.isActive,
-      });
-    } else {
-      result = await this.eventRepository.findByTenant({
-        tenantId: callerTenantId,
-        skip,
-        take: limit,
-        status: query.status,
-        organizerId: query.organizerId,
-        isActive: query.isActive,
-      });
-    }
+    const result = await this.eventRepository.findAll({
+      skip,
+      take: limit,
+      status: query.status,
+      organizerId: query.organizerId,
+      isActive: query.isActive,
+    });
 
     // Populate cache (60s TTL)
     this.cacheService.set(cacheKey, result, 60);
@@ -254,17 +207,12 @@ export class EventService {
 
   /**
    * Update an event.
-   * - ADMIN: within their own tenant (any organizer in that tenant)
-   * - SUPER_ADMIN: any tenant
    */
   async update(
     eventId: string,
     dto: UpdateEventDto,
-    callerRole: Role,
-    callerTenantId: string,
   ): Promise<Event> {
-    // Ensure the event exists and is within the caller's tenant
-    const existing = await this.findById(eventId, callerRole, callerTenantId);
+    const existing = await this.findById(eventId);
 
     // Validate date range if either date is being updated
     const startDate = dto.startDate ?? existing.startDate.toISOString();
@@ -281,19 +229,13 @@ export class EventService {
       ...(dto.endDate !== undefined && { endDate: new Date(dto.endDate) }),
       ...(dto.status !== undefined && { status: dto.status }),
       ...(dto.website !== undefined && { website: dto.website }),
-      ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
+      ...(dto.category !== undefined && { category: dto.category }),
       ...(dto.isActive !== undefined && { isActive: dto.isActive }),
     };
 
-    let event: Event;
+    const event = await this.eventRepository.updateById(eventId, data);
 
-    if (callerRole === Role.SUPER_ADMIN) {
-      event = await this.eventRepository.updateById(eventId, data);
-    } else {
-      event = await this.eventRepository.updateByIdAndTenant(eventId, callerTenantId, data);
-    }
-
-    this.logger.log(`Event ${eventId} updated by ${callerRole} (tenant: ${callerTenantId})`);
+    this.logger.log(`Event ${eventId} updated`);
 
     // Invalidate event list caches
     this.cacheService.delByPattern('events:list:*');
@@ -304,27 +246,15 @@ export class EventService {
   // ─── PRIVATE HELPERS ─────────────────────────────────────
 
   /**
-   * Resolve the organizer and validate tenant access.
-   * - ADMIN: organizer must belong to the caller's tenant
-   * - SUPER_ADMIN: any organizer
+   * Resolve the organizer and validate it exists.
    *
    * Throws NotFoundException if organizer doesn't exist.
-   * Throws ForbiddenException if cross-tenant access is attempted.
    */
-  private async resolveAndValidateOrganizer(
-    organizerId: string,
-    callerRole: Role,
-    callerTenantId: string,
-  ) {
+  private async resolveAndValidateOrganizer(organizerId: string) {
     const organizer = await this.organizerRepository.findById(organizerId);
 
     if (!organizer) {
       throw new NotFoundException('Organizer not found');
-    }
-
-    // For non-super-admins, the organizer MUST belong to the caller's tenant
-    if (callerRole !== Role.SUPER_ADMIN && organizer.tenantId !== callerTenantId) {
-      throw new ForbiddenException('Cannot create events for an organizer outside your tenant');
     }
 
     return organizer;
@@ -385,34 +315,25 @@ export class EventService {
 
   /**
    * Verify an event.
-   * - ADMIN: within their own tenant
-   * - SUPER_ADMIN: any tenant
-   *
    * Activates the event and emits an EventVerifiedEvent.
    */
   async verify(
     eventId: string,
     reviewerId: string,
     reviewerRole: Role,
-    reviewerTenantId: string,
     reviewerNotes?: string,
   ): Promise<Event> {
-    const existing = await this.findById(eventId, reviewerRole, reviewerTenantId);
+    await this.findById(eventId);
 
-    const event =
-      reviewerRole === Role.SUPER_ADMIN
-        ? await this.eventRepository.updateById(eventId, { isActive: true })
-        : await this.eventRepository.updateByIdAndTenant(eventId, reviewerTenantId, {
-          isActive: true,
-        });
+    const event = await this.eventRepository.updateById(eventId, {
+      isActive: true,
+      approvedBy: { connect: { id: reviewerId } },
+      approvedAt: new Date(),
+    });
 
-    this.logger.log(
-      `Event ${eventId} verified by ${reviewerRole}:${reviewerId} (tenant: ${existing.tenantId})`,
-    );
+    this.logger.log(`Event ${eventId} verified by ${reviewerRole}:${reviewerId}`);
 
-    // Audit log — immutable record of the decision
     this.auditLogService.log({
-      tenantId: existing.tenantId,
       actorId: reviewerId,
       actorRole: reviewerRole,
       action: 'event.verified',
@@ -424,12 +345,10 @@ export class EventService {
       },
     });
 
-    // Domain event — after DB write, before return
     this.eventEmitter.emit(
       EVENT_VERIFIED_EVENT,
       new EventVerifiedEvent({
         entityId: eventId,
-        tenantId: existing.tenantId,
         reviewerId,
         reviewerRole,
         reviewerNotes,
@@ -444,34 +363,26 @@ export class EventService {
 
   /**
    * Reject an event.
-   * - ADMIN: within their own tenant
-   * - SUPER_ADMIN: any tenant
-   *
    * Deactivates the event and emits an EventRejectedEvent.
    */
   async reject(
     eventId: string,
     reviewerId: string,
     reviewerRole: Role,
-    reviewerTenantId: string,
     reviewerNotes?: string,
   ): Promise<Event> {
-    const existing = await this.findById(eventId, reviewerRole, reviewerTenantId);
+    await this.findById(eventId);
 
-    const event =
-      reviewerRole === Role.SUPER_ADMIN
-        ? await this.eventRepository.updateById(eventId, { isActive: false })
-        : await this.eventRepository.updateByIdAndTenant(eventId, reviewerTenantId, {
-          isActive: false,
-        });
+    const event = await this.eventRepository.updateById(eventId, {
+      isActive: false,
+      rejectionReason: reviewerNotes ?? null,
+      approvedBy: { connect: { id: reviewerId } },
+      approvedAt: new Date(),
+    });
 
-    this.logger.log(
-      `Event ${eventId} rejected by ${reviewerRole}:${reviewerId} (tenant: ${existing.tenantId})`,
-    );
+    this.logger.log(`Event ${eventId} rejected by ${reviewerRole}:${reviewerId}`);
 
-    // Audit log — immutable record of the decision
     this.auditLogService.log({
-      tenantId: existing.tenantId,
       actorId: reviewerId,
       actorRole: reviewerRole,
       action: 'event.rejected',
@@ -483,12 +394,10 @@ export class EventService {
       },
     });
 
-    // Domain event — after DB write, before return
     this.eventEmitter.emit(
       EVENT_REJECTED_EVENT,
       new EventRejectedEvent({
         entityId: eventId,
-        tenantId: existing.tenantId,
         reviewerId,
         reviewerRole,
         reviewerNotes,
@@ -505,20 +414,13 @@ export class EventService {
 
   /**
    * Soft delete an event (set isActive = false).
-   * - ADMIN: within their own tenant
-   * - SUPER_ADMIN: any tenant
    */
-  async remove(eventId: string, callerRole: Role, callerTenantId: string): Promise<Event> {
-    const existing = await this.findById(eventId, callerRole, callerTenantId);
+  async remove(eventId: string): Promise<Event> {
+    await this.findById(eventId);
 
-    const event =
-      callerRole === Role.SUPER_ADMIN
-        ? await this.eventRepository.updateById(eventId, { isActive: false })
-        : await this.eventRepository.updateByIdAndTenant(eventId, callerTenantId, {
-          isActive: false,
-        });
+    const event = await this.eventRepository.updateById(eventId, { isActive: false });
 
-    this.logger.log(`Event ${eventId} soft-deleted by ${callerRole} (tenant: ${callerTenantId})`);
+    this.logger.log(`Event ${eventId} soft-deleted`);
 
     // Invalidate caches
     this.cacheService.delByPattern('events:list:*');

@@ -15,6 +15,7 @@ import {
     IsNumber,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
+import { EventCategory } from '@prisma/client';
 
 /**
  * Address DTO for event location
@@ -96,7 +97,6 @@ export class SponsorshipTierDto {
  * DTO for creating a new event from the Organizer dashboard.
  *
  * organizerId is derived from the JWT `organizer_id` claim — never from the body.
- * tenantId is derived from the Organizer's tenantId — never from the body.
  */
 export class CreateOrganizerEventDto {
     @IsString()
@@ -124,15 +124,10 @@ export class CreateOrganizerEventDto {
     @MaxLength(500, { message: 'Website must be 500 characters or fewer' })
     website?: string;
 
-    @IsOptional()
-    @IsUrl({}, { message: 'Logo URL must be a valid URL' })
-    @MaxLength(500, { message: 'Logo URL must be 500 characters or fewer' })
-    logoUrl?: string;
-
-    @IsOptional()
-    @IsString()
-    @MaxLength(100, { message: 'Category must be 100 characters or fewer' })
-    category?: string;
+    @IsEnum(EventCategory, {
+        message: `Category must be one of: ${Object.values(EventCategory).join(', ')}`,
+    })
+    category!: EventCategory;
 
     // Organizer Contact Details
     @IsOptional()

@@ -95,7 +95,6 @@ export class VerificationJobProducer {
     event: {
       entityType: 'Company' | 'Event';
       entityId: string;
-      tenantId: string;
       reviewerId: string;
       reviewerRole: string;
       decision: 'VERIFIED' | 'REJECTED';
@@ -108,7 +107,6 @@ export class VerificationJobProducer {
     const emailPayload: VerificationEmailPayload = {
       entityType: event.entityType,
       entityId: event.entityId,
-      tenantId: event.tenantId,
       reviewerId: event.reviewerId,
       reviewerRole: event.reviewerRole,
       decision: event.decision,
@@ -119,7 +117,6 @@ export class VerificationJobProducer {
     const notifyPayload: VerificationNotificationPayload = {
       entityType: event.entityType,
       entityId: event.entityId,
-      tenantId: event.tenantId,
       decision: event.decision,
       timestamp: event.timestamp,
     };

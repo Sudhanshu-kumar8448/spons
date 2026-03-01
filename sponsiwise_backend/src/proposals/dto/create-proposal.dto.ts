@@ -12,7 +12,7 @@ import { ProposalStatus } from '@prisma/client';
 
 /**
  * DTO for creating a new proposal.
- * sponsorshipId is required; tenantId is derived from the Sponsorship in the service.
+ * sponsorshipId is required.
  */
 export class CreateProposalDto {
   @IsUUID('4', { message: 'sponsorshipId must be a valid UUID' })

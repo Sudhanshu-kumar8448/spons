@@ -31,41 +31,7 @@ export class OrganizerRepository {
   }
 
   /**
-   * Find a single organizer by ID within a specific tenant.
-   */
-  async findByIdAndTenant(id: string, tenantId: string): Promise<Organizer | null> {
-    return this.prisma.organizer.findFirst({ where: { id, tenantId } });
-  }
-
-  /**
-   * List organizers within a tenant with optional filters and pagination.
-   */
-  async findByTenant(params: {
-    tenantId: string;
-    skip?: number;
-    take?: number;
-    isActive?: boolean;
-  }): Promise<{ data: Organizer[]; total: number }> {
-    const where: Prisma.OrganizerWhereInput = {
-      tenantId: params.tenantId,
-      ...(params.isActive !== undefined && { isActive: params.isActive }),
-    };
-
-    const [data, total] = await Promise.all([
-      this.prisma.organizer.findMany({
-        where,
-        skip: params.skip,
-        take: params.take,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.organizer.count({ where }),
-    ]);
-
-    return { data, total };
-  }
-
-  /**
-   * List all organizers across all tenants (SUPER_ADMIN only).
+   * List organizers with optional filters and pagination.
    */
   async findAll(params: {
     skip?: number;
@@ -92,21 +58,7 @@ export class OrganizerRepository {
   // ─── UPDATE ──────────────────────────────────────────────
 
   /**
-   * Update an organizer, scoped to a tenant.
-   */
-  async updateByIdAndTenant(
-    id: string,
-    tenantId: string,
-    data: Prisma.OrganizerUpdateInput,
-  ): Promise<Organizer> {
-    return this.prisma.organizer.update({
-      where: { id, tenantId },
-      data,
-    });
-  }
-
-  /**
-   * Update an organizer by ID (no tenant scope — SUPER_ADMIN).
+   * Update an organizer by ID.
    */
   async updateById(id: string, data: Prisma.OrganizerUpdateInput): Promise<Organizer> {
     return this.prisma.organizer.update({

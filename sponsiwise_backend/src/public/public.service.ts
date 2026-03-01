@@ -18,7 +18,6 @@ const COMPANY_TTL = 120; // 2 min
  *  • isActive = true
  *  • verificationStatus = VERIFIED
  *  • Events must also have status = PUBLISHED
- *  • tenantId is NEVER exposed in responses
  *  • All methods are safe for CDN / ISR caching
  */
 @Injectable()
@@ -84,14 +83,13 @@ export class PublicService {
           description: true,
           startDate: true,
           endDate: true,
-          logoUrl: true,
           status: true,
+          category: true,
           createdAt: true,
           organizer: {
             select: {
               id: true,
               name: true,
-              logoUrl: true,
             },
           },
           address: {
@@ -116,15 +114,12 @@ export class PublicService {
       start_date: e.startDate.toISOString(),
       end_date: e.endDate.toISOString(),
       location: e.address ? `${e.address.addressLine1}, ${e.address.city}, ${e.address.state}, ${e.address.country}` : '',
-      image_url: e.logoUrl,
-      category: '', // Not in schema — empty for now
+      category: e.category ?? '',
       status: 'published' as const,
       organizer: {
         id: e.organizer.id,
         name: e.organizer.name,
-        logo_url: e.organizer.logoUrl,
       },
-      tags: [] as string[], // Not in schema — empty for now
       created_at: e.createdAt.toISOString(),
     }));
 
@@ -154,14 +149,13 @@ export class PublicService {
         description: true,
         startDate: true,
         endDate: true,
-        logoUrl: true,
         status: true,
+        category: true,
         createdAt: true,
         organizer: {
           select: {
             id: true,
             name: true,
-            logoUrl: true,
           },
         },
         address: {
@@ -187,15 +181,12 @@ export class PublicService {
       start_date: event.startDate.toISOString(),
       end_date: event.endDate.toISOString(),
       location: event.address ? `${event.address.addressLine1}, ${event.address.city}, ${event.address.state}, ${event.address.country}` : '',
-      image_url: event.logoUrl,
-      category: '',
+      category: event.category ?? '',
       status: 'published' as const,
       organizer: {
         id: event.organizer.id,
         name: event.organizer.name,
-        logo_url: event.organizer.logoUrl,
       },
-      tags: [] as string[],
       created_at: event.createdAt.toISOString(),
     };
 
@@ -226,7 +217,7 @@ export class PublicService {
     if (query.search) {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
-        { description: { contains: query.search, mode: 'insensitive' } },
+        { strategicIntent: { contains: query.search, mode: 'insensitive' } },
       ];
     }
 
@@ -242,8 +233,7 @@ export class PublicService {
           id: true,
           name: true,
           slug: true,
-          description: true,
-          logoUrl: true,
+          strategicIntent: true,
           website: true,
           type: true,
         },
@@ -257,14 +247,8 @@ export class PublicService {
       name: c.name,
       slug: c.slug,
       type: c.type,
-      description: c.description ?? '',
-      logo_url: c.logoUrl,
+      strategic_intent: c.strategicIntent ?? '',
       website: c.website,
-      industry: null,
-      location: null,
-      founded_year: null,
-      social_links: {},
-      sponsored_events: [],
     }));
 
     await this.cache.set(cacheKey, { data, total }, COMPANY_TTL);
@@ -289,9 +273,9 @@ export class PublicService {
         id: true,
         name: true,
         slug: true,
-        description: true,
-        logoUrl: true,
+        strategicIntent: true,
         website: true,
+        type: true,
         sponsorships: {
           where: {
             isActive: true,
@@ -307,7 +291,6 @@ export class PublicService {
                 id: true,
                 title: true,
                 startDate: true,
-                logoUrl: true,
                 address: {
                   select: {
                     addressLine1: true,
@@ -327,25 +310,20 @@ export class PublicService {
       throw new NotFoundException('Company not found');
     }
 
-    // Map to frontend PublicCompany shape — no tenantId leaked
+    // Map to frontend PublicCompany shape
     const result = {
       id: company.id,
       name: company.name,
       slug: company.slug,
-      description: company.description ?? '',
-      logo_url: company.logoUrl,
+      type: company.type,
+      strategic_intent: company.strategicIntent ?? '',
       website: company.website,
-      industry: '', // Not in schema
-      location: '', // Not in schema
-      founded_year: null as number | null, // Not in schema
-      social_links: {} as Record<string, string>,
       sponsored_events: company.sponsorships.map((s: any) => ({
         id: s.event.id,
         title: s.event.title,
         slug: s.event.id, // Use id as slug
         start_date: s.event.startDate.toISOString(),
         location: s.event.address ? `${s.event.address.addressLine1}, ${s.event.address.city}` : '',
-        image_url: s.event.logoUrl,
       })),
     };
 
@@ -372,7 +350,6 @@ export class PublicService {
         where: {
           isActive: true,
           verificationStatus: VerificationStatus.VERIFIED,
-          type: 'SPONSOR',
         },
       }),
       this.prisma.organizer.count({

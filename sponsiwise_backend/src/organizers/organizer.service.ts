@@ -1,17 +1,10 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import type { Organizer } from '@prisma/client';
-import { Role } from '@prisma/client';
 import { OrganizerRepository } from './organizer.repository';
 import { CreateOrganizerDto, UpdateOrganizerDto, ListOrganizersQueryDto } from './dto';
-import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 /**
  * OrganizerService — business logic for organizer management.
- *
- * AFTER SOFT-DISABLE MULTI-TENANCY:
- * - All operations use GLOBAL_TENANT_ID internally
- * - Tenant isolation is handled at the guard level
- * - Role checks remain for authorization (ADMIN, MANAGER, etc.)
  */
 @Injectable()
 export class OrganizerService {
@@ -23,35 +16,21 @@ export class OrganizerService {
 
   /**
    * Create a new organizer.
-   * - ADMIN: organizer is created within their own tenant
-   * - SUPER_ADMIN: may specify any tenantId (falls back to callerTenantId)
    */
-  async create(
-    dto: CreateOrganizerDto,
-    callerRole: Role,
-    callerTenantId: string,
-    tenantIdOverride?: string,
-  ): Promise<Organizer> {
-    // ADMIN always creates in their own tenant.
-    // SUPER_ADMIN can optionally target a different tenant.
-    const tenantId =
-      callerRole === Role.SUPER_ADMIN && tenantIdOverride ? tenantIdOverride : callerTenantId;
-
+  async create(dto: CreateOrganizerDto): Promise<Organizer> {
     const organizer = await this.organizerRepository.create({
       name: dto.name,
-      ...(dto.description !== undefined && { description: dto.description }),
-      ...(dto.contactEmail !== undefined && {
-        contactEmail: dto.contactEmail,
-      }),
+      ...(dto.type !== undefined && { type: dto.type }),
       ...(dto.contactPhone !== undefined && {
         contactPhone: dto.contactPhone,
       }),
       ...(dto.website !== undefined && { website: dto.website }),
-      ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
-      tenant: { connect: { id: tenantId } },
+      ...(dto.pastRecords !== undefined && { pastRecords: dto.pastRecords }),
+      ...(dto.socialLinks !== undefined && { socialLinks: dto.socialLinks }),
+      ...(dto.taxId !== undefined && { taxId: dto.taxId }),
     });
 
-    this.logger.log(`Organizer ${organizer.id} created by ${callerRole} in tenant ${tenantId}`);
+    this.logger.log(`Organizer ${organizer.id} created`);
     return organizer;
   }
 
@@ -59,21 +38,9 @@ export class OrganizerService {
 
   /**
    * Get a single organizer by ID.
-   * - USER / ADMIN: must be within their own tenant
-   * - SUPER_ADMIN: any tenant
    */
-  async findById(
-    organizerId: string,
-    callerRole: Role,
-    callerTenantId: string,
-  ): Promise<Organizer> {
-    let organizer: Organizer | null;
-
-    if (callerRole === Role.SUPER_ADMIN) {
-      organizer = await this.organizerRepository.findById(organizerId);
-    } else {
-      organizer = await this.organizerRepository.findByIdAndTenant(organizerId, callerTenantId);
-    }
+  async findById(organizerId: string): Promise<Organizer> {
+    const organizer = await this.organizerRepository.findById(organizerId);
 
     if (!organizer) {
       throw new NotFoundException('Organizer not found');
@@ -83,14 +50,10 @@ export class OrganizerService {
   }
 
   /**
-   * List organizers.
-   * - USER / ADMIN: scoped to their own tenant
-   * - SUPER_ADMIN: across all tenants
+   * List organizers with optional filters.
    */
   async findAll(
     query: ListOrganizersQueryDto,
-    callerRole: Role,
-    callerTenantId: string,
   ): Promise<{
     data: Organizer[];
     total: number;
@@ -101,22 +64,11 @@ export class OrganizerService {
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    let result: { data: Organizer[]; total: number };
-
-    if (callerRole === Role.SUPER_ADMIN) {
-      result = await this.organizerRepository.findAll({
-        skip,
-        take: limit,
-        isActive: query.isActive,
-      });
-    } else {
-      result = await this.organizerRepository.findByTenant({
-        tenantId: callerTenantId,
-        skip,
-        take: limit,
-        isActive: query.isActive,
-      });
-    }
+    const result = await this.organizerRepository.findAll({
+      skip,
+      take: limit,
+      isActive: query.isActive,
+    });
 
     return { ...result, page, limit };
   }
@@ -125,47 +77,29 @@ export class OrganizerService {
 
   /**
    * Update an organizer.
-   * - ADMIN: within their own tenant
-   * - SUPER_ADMIN: any tenant
    */
   async update(
     organizerId: string,
     dto: UpdateOrganizerDto,
-    callerRole: Role,
-    callerTenantId: string,
   ): Promise<Organizer> {
-    // Ensure target organizer exists (and is within tenant for non-super-admins)
-    await this.findById(organizerId, callerRole, callerTenantId);
+    await this.findById(organizerId);
 
     const data = {
       ...(dto.name !== undefined && { name: dto.name }),
-      ...(dto.description !== undefined && { description: dto.description }),
-      ...(dto.contactEmail !== undefined && {
-        contactEmail: dto.contactEmail,
-      }),
+      ...(dto.type !== undefined && { type: dto.type }),
       ...(dto.contactPhone !== undefined && {
         contactPhone: dto.contactPhone,
       }),
       ...(dto.website !== undefined && { website: dto.website }),
-      ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
+      ...(dto.pastRecords !== undefined && { pastRecords: dto.pastRecords }),
+      ...(dto.socialLinks !== undefined && { socialLinks: dto.socialLinks }),
+      ...(dto.taxId !== undefined && { taxId: dto.taxId }),
       ...(dto.isActive !== undefined && { isActive: dto.isActive }),
     };
 
-    let organizer: Organizer;
+    const organizer = await this.organizerRepository.updateById(organizerId, data);
 
-    if (callerRole === Role.SUPER_ADMIN) {
-      organizer = await this.organizerRepository.updateById(organizerId, data);
-    } else {
-      organizer = await this.organizerRepository.updateByIdAndTenant(
-        organizerId,
-        callerTenantId,
-        data,
-      );
-    }
-
-    this.logger.log(
-      `Organizer ${organizerId} updated by ${callerRole} (tenant: ${callerTenantId})`,
-    );
+    this.logger.log(`Organizer ${organizerId} updated`);
     return organizer;
   }
 
@@ -173,22 +107,13 @@ export class OrganizerService {
 
   /**
    * Soft delete an organizer.
-   * - ADMIN: within own tenant
-   * - SUPER_ADMIN: any tenant
    */
-  async remove(organizerId: string, callerRole: Role, callerTenantId: string): Promise<Organizer> {
-    await this.findById(organizerId, callerRole, callerTenantId);
+  async remove(organizerId: string): Promise<Organizer> {
+    await this.findById(organizerId);
 
-    const organizer =
-      callerRole === Role.SUPER_ADMIN
-        ? await this.organizerRepository.updateById(organizerId, { isActive: false })
-        : await this.organizerRepository.updateByIdAndTenant(organizerId, callerTenantId, {
-          isActive: false,
-        });
+    const organizer = await this.organizerRepository.updateById(organizerId, { isActive: false });
 
-    this.logger.log(
-      `Organizer ${organizerId} soft-deleted by ${callerRole} (tenant: ${callerTenantId})`,
-    );
+    this.logger.log(`Organizer ${organizerId} soft-deleted`);
 
     return organizer;
   }

@@ -1,674 +1,1431 @@
-import { PrismaClient, Role, TenantStatus, CompanyType, EventStatus, SponsorshipStatus, ProposalStatus, VerificationStatus, EmailStatus, NotificationSeverity } from '@prisma/client';
+import 'dotenv/config';
+import {
+  AgeBracket,
+  CompanyType,
+  EmailStatus,
+  EventCategory,
+  EventStatus,
+  GenderType,
+  IncomeBracket,
+  NotificationSeverity,
+  OrganizerApprovalStatus,
+  OrganizerType,
+  Prisma,
+  PrismaClient,
+  ProposalStatus,
+  Role,
+  SponsorshipStatus,
+  TierType,
+  VerificationStatus,
+} from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import * as bcrypt from 'bcrypt';
-import { createHash } from 'crypto';
 
-const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:newpassword123@localhost:5432/postgres';
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error('DATABASE_URL is required to run the seed script.');
+}
+
 const pool = new Pool({
   connectionString,
   max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 2_000,
 });
+
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-// Constants
-const GLOBAL_TENANT_ID = '00000000-0000-0000-0000-000000000001';
 const SALT_ROUNDS = 12;
 const PASSWORD = 'password123';
+const now = new Date();
 
-async function hashToken(token: string): Promise<string> {
-  return createHash('sha256').update(token).digest('hex');
+function daysFromNow(days: number, hour = 10): Date {
+  const date = new Date(now);
+  date.setDate(date.getDate() + days);
+  date.setHours(hour, 0, 0, 0);
+  return date;
 }
 
-async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, SALT_ROUNDS);
+function daysAgo(days: number, hour = 10): Date {
+  return daysFromNow(-days, hour);
 }
 
-// Helper to generate future/past dates
-function addDays(date: Date, days: number): Date {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
+function slugify(value: string): string {
+  return value.toLowerCase().replace(/_/g, '-');
 }
 
-async function seed() {
-  console.log('🌱 Starting seed...');
+async function clearDatabase() {
+  console.log('🧹 Clearing existing data...');
 
-  // ========================================
-  // 0. SEED TENANTS (from tenants.csv)
-  // ========================================
-  console.log('🏢 Seeding tenants...');
-  
-  // Seed the global tenant from tenants.csv
-  const globalTenant = await prisma.tenant.upsert({
-    where: { id: GLOBAL_TENANT_ID },
-    update: {},
-    create: {
-      id: GLOBAL_TENANT_ID,
-      name: 'Global',
-      slug: 'global',
-      status: TenantStatus.ACTIVE,
-    },
+  await prisma.$transaction([
+    prisma.proposalMessage.deleteMany(),
+    prisma.notification.deleteMany(),
+    prisma.refreshToken.deleteMany(),
+    prisma.audienceGender.deleteMany(),
+    prisma.audienceAgeGroup.deleteMany(),
+    prisma.audienceIncomeGroup.deleteMany(),
+    prisma.audienceRegionDistribution.deleteMany(),
+    prisma.eventAudienceProfile.deleteMany(),
+    prisma.proposal.deleteMany(),
+    prisma.sponsorship.deleteMany(),
+    prisma.sponsorshipTier.deleteMany(),
+    prisma.address.deleteMany(),
+    prisma.event.deleteMany(),
+    prisma.auditLog.deleteMany(),
+    prisma.emailLog.deleteMany(),
+    prisma.user.deleteMany(),
+    prisma.company.deleteMany(),
+    prisma.organizer.deleteMany(),
+  ]);
+}
+
+async function main() {
+  console.log('🌱 Starting comprehensive seed...');
+  await clearDatabase();
+
+  // Hash password once
+  const hashedPassword = await bcrypt.hash(PASSWORD, SALT_ROUNDS);
+
+  const createUser = (input: {
+    email: string;
+    role: Role;
+    isActive?: boolean;
+    companyId?: string;
+    organizerId?: string;
+  }) =>
+    prisma.user.create({
+      data: {
+        email: input.email,
+        password: hashedPassword,
+        role: input.role,
+        isActive: input.isActive ?? true,
+        companyId: input.companyId,
+        organizerId: input.organizerId,
+      },
+    });
+
+  // ============================================
+  // USERS: ROLE COVERAGE + BASE ACTORS
+  // ============================================
+  console.log('Creating base users...');
+
+  const superAdmin = await createUser({
+    email: 'superadmin@spons.com',
+    role: Role.SUPER_ADMIN,
   });
-  console.log('  ✅ Created/verified global tenant:', globalTenant.name);
-
-  // Clean existing data (except Tenant - already seeded above)
-  console.log('🧹 Cleaning existing data...');
-  await prisma.notification.deleteMany({});
-  await prisma.emailLog.deleteMany({});
-  await prisma.auditLog.deleteMany({});
-  await prisma.proposal.deleteMany({});
-  await prisma.sponsorship.deleteMany({});
-  await prisma.event.deleteMany({});
-  await prisma.organizer.deleteMany({});
-  await prisma.company.deleteMany({});
-  await prisma.refreshToken.deleteMany({});
-  await prisma.user.deleteMany({});
-
-  console.log('✅ Cleaned all tables');
-
-  // ========================================
-  // 1. SEED USERS (19 users)
-  // ========================================
-  console.log('👥 Seeding users...');
-
-  const hashedPassword = await hashPassword(PASSWORD);
-
-  // Create Admin
-  const admin = await prisma.user.create({
-    data: {
-      tenantId: GLOBAL_TENANT_ID,
-      email: 'admin@spons.com',
-      password: hashedPassword,
-      role: Role.ADMIN,
-      isActive: true,
-    },
+  const admin = await createUser({
+    email: 'admin@spons.com',
+    role: Role.ADMIN,
   });
-  console.log('  ✅ Created admin:', admin.email);
+  const manager1 = await createUser({
+    email: 'manager1@spons.com',
+    role: Role.MANAGER,
+  });
+  const manager2 = await createUser({
+    email: 'manager2@spons.com',
+    role: Role.MANAGER,
+  });
+  const manager3 = await createUser({
+    email: 'manager3@spons.com',
+    role: Role.MANAGER,
+  });
+  const standaloneUser = await createUser({
+    email: 'user1@spons.com',
+    role: Role.USER,
+  });
+  const inactiveUser = await createUser({
+    email: 'inactive.user@spons.com',
+    role: Role.USER,
+    isActive: false,
+  });
 
-  // Create 5 Users
-  const users = [];
-  for (let i = 1; i <= 5; i++) {
-    const user = await prisma.user.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        email: `user${i}@spons.com`,
-        password: hashedPassword,
-        role: Role.USER,
-        isActive: true,
+  const usersByKey: Record<string, { id: string; email: string }> = {
+    superAdmin: { id: superAdmin.id, email: superAdmin.email },
+    admin: { id: admin.id, email: admin.email },
+    manager1: { id: manager1.id, email: manager1.email },
+    manager2: { id: manager2.id, email: manager2.email },
+    manager3: { id: manager3.id, email: manager3.email },
+    standaloneUser: { id: standaloneUser.id, email: standaloneUser.email },
+    inactiveUser: { id: inactiveUser.id, email: inactiveUser.email },
+  };
+
+  // ============================================
+  // ORGANIZERS + ORGANIZER USERS (ALL OrganizerType)
+  // ============================================
+  console.log('Creating organizers and organizer users...');
+
+  const organizerSeeds: Array<{
+    key: string;
+    userEmail: string;
+    userIsActive?: boolean;
+    name: string;
+    type: OrganizerType;
+    pastRecords?: string | null;
+    website?: string | null;
+    contactPhone?: string | null;
+    taxId?: string | null;
+    socialLinks?: Record<string, string> | null;
+    isActive?: boolean;
+  }> = [
+    {
+      key: 'individual',
+      userEmail: 'organizer.individual@spons.com',
+      name: 'Organizer Individual',
+      type: OrganizerType.INDIVIDUAL,
+      pastRecords: 'Runs founder-led startup meetups for 6 years.',
+      website: 'https://organizer-individual.example.com',
+      contactPhone: '+1-555-100-0001',
+      taxId: 'IND-7788',
+      socialLinks: {
+        linkedin: 'https://linkedin.com/company/organizer-individual',
+        twitter: 'https://x.com/organizer_individual',
       },
-    });
-    users.push(user);
-  }
-  console.log('  ✅ Created 5 users');
+    },
+    {
+      key: 'company',
+      userEmail: 'organizer.company@spons.com',
+      name: 'Organizer Company',
+      type: OrganizerType.COMPANY,
+      pastRecords: 'Enterprise expo organizer with 50+ B2B events.',
+      website: 'https://organizer-company.example.com',
+      contactPhone: '+1-555-100-0002',
+      socialLinks: { linkedin: 'https://linkedin.com/company/organizer-company' },
+    },
+    {
+      key: 'nonProfit',
+      userEmail: 'organizer.nonprofit@spons.com',
+      name: 'Organizer Non Profit',
+      type: OrganizerType.NON_PROFIT,
+      pastRecords: 'Community-focused events for underserved groups.',
+      website: 'https://organizer-nonprofit.example.org',
+      contactPhone: '+1-555-100-0003',
+      taxId: 'NPO-5566',
+    },
+    {
+      key: 'government',
+      userEmail: 'organizer.government@spons.com',
+      name: 'Organizer Government',
+      type: OrganizerType.GOVERNMENT,
+      pastRecords: 'Public programs and city events.',
+      contactPhone: '+1-555-100-0004',
+      website: null,
+    },
+    {
+      key: 'education',
+      userEmail: 'organizer.education@spons.com',
+      name: 'Organizer Educational',
+      type: OrganizerType.EDUCATIONAL_INSTITUTION,
+      pastRecords: 'Inter-college fests and academic conclaves.',
+      website: 'https://organizer-education.example.edu',
+      contactPhone: '+1-555-100-0005',
+      taxId: 'EDU-9911',
+    },
+    {
+      key: 'club',
+      userEmail: 'organizer.club@spons.com',
+      name: 'Organizer Club Society',
+      type: OrganizerType.CLUB_SOCIETY,
+      pastRecords: 'Local city clubs and social chapters.',
+      website: null,
+      contactPhone: '+1-555-100-0006',
+      socialLinks: { instagram: 'https://instagram.com/organizer.club' },
+    },
+    {
+      key: 'other',
+      userEmail: 'organizer.other@spons.com',
+      userIsActive: false,
+      name: 'Organizer Other',
+      type: OrganizerType.OTHER,
+      pastRecords: null,
+      website: 'https://organizer-other.example.com',
+      contactPhone: null,
+      socialLinks: null,
+      isActive: false,
+    },
+  ];
 
-  // Create 3 Managers
-  const managers = [];
-  for (let i = 1; i <= 3; i++) {
-    const manager = await prisma.user.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        email: `manager${i}@spons.com`,
-        password: hashedPassword,
-        role: Role.MANAGER,
-        isActive: true,
-      },
-    });
-    managers.push(manager);
-  }
-  console.log('  ✅ Created 3 managers');
+  const organizersByKey: Record<string, { id: string }> = {};
+  const organizerUsersByKey: Record<string, { id: string; email: string }> = {};
 
-  // Create 5 Organizers (with organizerId links)
-  const organizers = [];
-  for (let i = 1; i <= 5; i++) {
-    const organizer = await prisma.user.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        email: `organizer${i}@spons.com`,
-        password: hashedPassword,
-        role: Role.ORGANIZER,
-        isActive: true,
-      },
-    });
-    organizers.push(organizer);
-  }
-  console.log('  ✅ Created 5 organizer users');
-
-  // Create 5 Sponsors (with companyId links later)
-  const sponsors = [];
-  for (let i = 1; i <= 5; i++) {
-    const sponsor = await prisma.user.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        email: `sponsor${i}@spons.com`,
-        password: hashedPassword,
-        role: Role.SPONSOR,
-        isActive: true,
-      },
-    });
-    sponsors.push(sponsor);
-  }
-  console.log('  ✅ Created 5 sponsor users');
-
-  // ========================================
-  // 2. SEED COMPANIES (10 companies)
-  // ========================================
-  console.log('🏢 Seeding companies...');
-
-  // 5 Sponsor Companies
-  const sponsorCompanies = [];
-  for (let i = 1; i <= 5; i++) {
-    const company = await prisma.company.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        name: `Sponsor Company ${i}`,
-        slug: `sponsor-company-${i}`,
-        type: CompanyType.SPONSOR,
-        website: `https://sponsor${i}.example.com`,
-        description: `Leading sponsor company ${i} in the industry`,
-        verificationStatus: i <= 3 ? VerificationStatus.VERIFIED : VerificationStatus.PENDING,
-        isActive: true,
-      },
-    });
-    sponsorCompanies.push(company);
-  }
-  console.log('  ✅ Created 5 sponsor companies');
-
-  // Link sponsor users to sponsor companies
-  for (let i = 0; i < sponsors.length; i++) {
-    await prisma.user.update({
-      where: { id: sponsors[i].id },
-      data: { companyId: sponsorCompanies[i].id },
-    });
-  }
-  console.log('  ✅ Linked sponsor users to companies');
-
-  // 5 Organizer Companies
-  const organizerCompanies = [];
-  for (let i = 1; i <= 5; i++) {
-    const company = await prisma.company.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        name: `Organizer Company ${i}`,
-        slug: `organizer-company-${i}`,
-        type: CompanyType.ORGANIZER,
-        website: `https://organizer${i}.example.com`,
-        description: `Event organizer company ${i}`,
-        verificationStatus: VerificationStatus.VERIFIED,
-        isActive: true,
-      },
-    });
-    organizerCompanies.push(company);
-  }
-  console.log('  ✅ Created 5 organizer companies');
-
-  // ========================================
-  // 3. SEED ORGANIZERS (5 organizers)
-  // ========================================
-  console.log('🎪 Seeding organizers...');
-
-  const organizerEntities = [];
-  for (let i = 1; i <= 5; i++) {
+  for (const seed of organizerSeeds) {
     const organizer = await prisma.organizer.create({
       data: {
-        tenantId: GLOBAL_TENANT_ID,
-        name: `Organizer ${i}`,
-        description: `Professional event organizer ${i} managing conferences and events`,
-        contactEmail: `organizer${i}@spons.com`,
-        contactPhone: `+1234567${String(i).padStart(3, '0')}`,
-        website: `https://organizer${i}.example.com`,
-        isActive: true,
+        name: seed.name,
+        type: seed.type,
+        pastRecords: seed.pastRecords ?? null,
+        website: seed.website ?? null,
+        contactPhone: seed.contactPhone ?? null,
+        taxId: seed.taxId ?? null,
+        socialLinks:
+          seed.socialLinks === null
+            ? Prisma.JsonNull
+            : seed.socialLinks ?? undefined,
+        isActive: seed.isActive ?? true,
       },
     });
-    organizerEntities.push(organizer);
+
+    const organizerUser = await createUser({
+      email: seed.userEmail,
+      role: Role.ORGANIZER,
+      organizerId: organizer.id,
+      isActive: seed.userIsActive ?? true,
+    });
+
+    organizersByKey[seed.key] = { id: organizer.id };
+    organizerUsersByKey[seed.key] = {
+      id: organizerUser.id,
+      email: organizerUser.email,
+    };
   }
-  console.log('  ✅ Created 5 organizers');
 
-  // Link organizer users to organizers
-  for (let i = 0; i < organizers.length; i++) {
-    await prisma.user.update({
-      where: { id: organizers[i].id },
-      data: { organizerId: organizerEntities[i].id },
-    });
-  }
-  console.log('  ✅ Linked organizer users to organizers');
+  // ============================================
+  // COMPANIES + OWNER USERS (ALL CompanyType + verification edges)
+  // ============================================
+  console.log('Creating companies and sponsor owners...');
 
-  // ========================================
-  // 4. SEED EVENTS (15 events - 3 per organizer)
-  // ========================================
-  console.log('📅 Seeding events...');
-
-  const events = [];
-  const baseDate = new Date();
-
-  for (let i = 0; i < organizerEntities.length; i++) {
-    const organizer = organizerEntities[i];
-
-    // Event 1: PUBLISHED (Confirmed)
-    const event1 = await prisma.event.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        organizerId: organizer.id,
-        title: `${organizer.name} Annual Conference 2024`,
-        description: `The premier annual conference organized by ${organizer.name}`,
-        expectedFootfall: 5000 + (i * 1000),
-        startDate: addDays(baseDate, 30 + i * 10),
-        endDate: addDays(baseDate, 32 + i * 10),
-        status: EventStatus.PUBLISHED,
-        website: `https://event${i + 1}.example.com`,
-        verificationStatus: VerificationStatus.VERIFIED,
-        isActive: true,
-      },
-    });
-    events.push(event1);
-
-    // Create address for event 1
-    await prisma.address.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        eventId: event1.id,
-        addressLine1: `Convention Center, City ${i + 1}`,
-        city: `City ${i + 1}`,
-        state: `State ${i + 1}`,
-        country: 'USA',
-        postalCode: `${10000 + i}`,
-      },
-    });
-
-    // Event 2: PENDING
-    const event2 = await prisma.event.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        organizerId: organizer.id,
-        title: `${organizer.name} Tech Summit 2024`,
-        description: `Upcoming tech summit by ${organizer.name}`,
-        expectedFootfall: 3000 + (i * 500),
-        startDate: addDays(baseDate, 60 + i * 15),
-        endDate: addDays(baseDate, 62 + i * 15),
-        status: EventStatus.PUBLISHED,
-        website: `https://event${i + 6}.example.com`,
-        verificationStatus: VerificationStatus.PENDING,
-        isActive: true,
-      },
-    });
-    events.push(event2);
-
-    // Create address for event 2
-    await prisma.address.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        eventId: event2.id,
-        addressLine1: `Tech Park, City ${i + 1}`,
-        city: `City ${i + 1}`,
-        state: `State ${i + 1}`,
-        country: 'USA',
-        postalCode: `${20000 + i}`,
-      },
-    });
-
-    // Event 3: DRAFT
-    const event3 = await prisma.event.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        organizerId: organizer.id,
-        title: `${organizer.name} Workshop Series 2025`,
-        description: `Planning phase workshop series by ${organizer.name}`,
-        expectedFootfall: 1000,
-        startDate: addDays(baseDate, 120 + i * 20),
-        endDate: addDays(baseDate, 121 + i * 20),
-        status: EventStatus.DRAFT,
-        verificationStatus: VerificationStatus.PENDING,
-        isActive: true,
-      },
-    });
-    events.push(event3);
-
-    // Create address for event 3
-    await prisma.address.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        eventId: event3.id,
-        addressLine1: 'TBD',
-        city: `City ${i + 1}`,
-        state: `State ${i + 1}`,
-        country: 'USA',
-        postalCode: `${30000 + i}`,
-      },
-    });
-  }
-  console.log('  ✅ Created 15 events (3 per organizer)');
-
-  // ========================================
-  // 5. SEED SPONSORSHIPS (18 sponsorships)
-  // ========================================
-  console.log('🤝 Seeding sponsorships...');
-
-  const sponsorships = [];
-  const sponsorshipStatuses = [
-    SponsorshipStatus.ACTIVE,
-    SponsorshipStatus.PENDING,
-    SponsorshipStatus.PENDING,
-    SponsorshipStatus.ACTIVE,
-    SponsorshipStatus.COMPLETED,
-    SponsorshipStatus.PAUSED,
-  ];
-  const tiers = ['Platinum', 'Gold', 'Silver', 'Bronze', 'Platinum', 'Gold'];
-
-  // Create sponsorships connecting sponsors to events
-  let sponsorshipIndex = 0;
-  for (let i = 0; i < events.length; i++) {
-    // Create 1-2 sponsorships per event
-    const numSponsorships = i % 3 === 0 ? 2 : 1;
-    
-    for (let j = 0; j < numSponsorships && sponsorshipIndex < 18; j++) {
-      const sponsorCompany = sponsorCompanies[sponsorshipIndex % sponsorCompanies.length];
-      
-      const sponsorship = await prisma.sponsorship.create({
-        data: {
-          tenantId: GLOBAL_TENANT_ID,
-          companyId: sponsorCompany.id,
-          eventId: events[i].id,
-          status: sponsorshipStatuses[sponsorshipIndex % sponsorshipStatuses.length],
-          tier: tiers[sponsorshipIndex % tiers.length],
-          notes: `${tiers[sponsorshipIndex % tiers.length]} sponsorship for ${events[i].title}`,
-          isActive: true,
-        },
-      });
-      sponsorships.push(sponsorship);
-      sponsorshipIndex++;
-    }
-  }
-  console.log('  ✅ Created', sponsorships.length, 'sponsorships');
-
-  // ========================================
-  // 6. SEED PROPOSALS (18 proposals - covering all statuses)
-  // ========================================
-  console.log('📄 Seeding proposals...');
-
-  const proposalStatuses = [
-    ProposalStatus.DRAFT,
-    ProposalStatus.SUBMITTED,
-    ProposalStatus.UNDER_MANAGER_REVIEW,
-    ProposalStatus.APPROVED,
-    ProposalStatus.REJECTED,
-    ProposalStatus.WITHDRAWN,
+  const allCompanyTypes: CompanyType[] = [
+    CompanyType.TECHNOLOGY,
+    CompanyType.FINANCE,
+    CompanyType.FMCG,
+    CompanyType.HEALTHCARE_PHARMA,
+    CompanyType.RETAIL_ECOMMERCE,
+    CompanyType.MANUFACTURING_INDUSTRIAL,
+    CompanyType.MEDIA_ENTERTAINMENT,
+    CompanyType.EDUCATION,
+    CompanyType.ENERGY_UTILITIES,
+    CompanyType.REAL_ESTATE_CONSTRUCTION,
+    CompanyType.LOGISTICS_TRANSPORTATION,
+    CompanyType.TELECOM,
+    CompanyType.OTHER,
   ];
 
-  const amounts = [10000, 15000, 20000, 25000, 30000, 5000, 7500, 8000, 12000, 18000];
-  const proposalTiers = ['Platinum', 'Gold', 'Silver', 'Bronze', 'Platinum', 'Gold', 'Silver'];
+  const statusPattern: VerificationStatus[] = [
+    VerificationStatus.PENDING,
+    VerificationStatus.VERIFIED,
+    VerificationStatus.REJECTED,
+  ];
 
-  for (let i = 0; i < sponsorships.length; i++) {
-    const sponsorship = sponsorships[i];
-    const status = proposalStatuses[i % proposalStatuses.length];
-    const submittedAt = status !== ProposalStatus.DRAFT ? addDays(new Date(), -Math.floor(Math.random() * 30)) : null;
-    let reviewedAt: Date | null = null;
-    if (status === ProposalStatus.APPROVED || status === ProposalStatus.REJECTED) {
-      reviewedAt = addDays(new Date(), -Math.floor(Math.random() * 10));
-    }
+  const companiesByType: Partial<Record<CompanyType, { id: string }>> = {};
+  const sponsorUsersByType: Partial<Record<CompanyType, { id: string; email: string }>> = {};
 
-    await prisma.proposal.create({
+  for (const [index, type] of allCompanyTypes.entries()) {
+    const verificationStatus = statusPattern[index % statusPattern.length];
+    const companySlug = index === 2 ? null : `${slugify(type)}-sponsor-${index + 1}`;
+
+    const company = await prisma.company.create({
       data: {
-        tenantId: GLOBAL_TENANT_ID,
-        sponsorshipId: sponsorship.id,
-        status: status,
-        proposedTier: proposalTiers[i % proposalTiers.length],
-        proposedAmount: amounts[i % amounts.length],
-        message: `We are excited to propose a ${proposalTiers[i % proposalTiers.length]} sponsorship for your event.`,
-        notes: status === ProposalStatus.REJECTED ? 'Proposal did not meet requirements' : null,
-        submittedAt: submittedAt,
-        reviewedAt: reviewedAt,
-        isActive: true,
+        name: `${type.replace(/_/g, ' ')} Sponsor ${index + 1}`,
+        slug: companySlug,
+        type,
+        website:
+          index % 4 === 0
+            ? null
+            : `https://${slugify(type)}-sponsor-${index + 1}.example.com`,
+        strategicIntent:
+          index % 5 === 0
+            ? null
+            : `Increase brand reach in ${type.replace(/_/g, ' ').toLowerCase()} audiences.`,
+        verificationStatus,
+        isActive: index !== allCompanyTypes.length - 1,
+        approvedById:
+          verificationStatus === VerificationStatus.PENDING
+            ? null
+            : verificationStatus === VerificationStatus.VERIFIED
+              ? usersByKey.manager1.id
+              : usersByKey.manager2.id,
+        approvedAt:
+          verificationStatus === VerificationStatus.PENDING
+            ? null
+            : daysAgo(28 - index),
+        rejectionReason:
+          verificationStatus === VerificationStatus.REJECTED
+            ? 'Compliance documents are incomplete.'
+            : null,
+      },
+    });
+
+    const ownerUser = await createUser({
+      email: `sponsor${index + 1}@spons.com`,
+      role:
+        verificationStatus === VerificationStatus.VERIFIED
+          ? Role.SPONSOR
+          : Role.USER,
+      companyId: company.id,
+      isActive: index !== 8,
+    });
+
+    companiesByType[type] = { id: company.id };
+    sponsorUsersByType[type] = { id: ownerUser.id, email: ownerUser.email };
+  }
+
+  // ============================================
+  // EVENTS (ALL EventCategory + all EventStatus + all VerificationStatus)
+  // ============================================
+  console.log('Creating events...');
+
+  const eventSeeds: Array<{
+    key: string;
+    organizerKey: string;
+    title: string;
+    description?: string | null;
+    expectedFootfall: number;
+    startDate: Date;
+    endDate: Date;
+    status: EventStatus;
+    verificationStatus: VerificationStatus;
+    category: EventCategory;
+    website?: string | null;
+    contactPhone?: string | null;
+    contactEmail?: string | null;
+    pptDeckUrl?: string | null;
+    approvedById?: string | null;
+    approvedAt?: Date | null;
+    rejectionReason?: string | null;
+    isActive?: boolean;
+  }> = [
+    {
+      key: 'tech-summit',
+      organizerKey: 'individual',
+      title: 'Global Tech Summit 2026',
+      description: 'Flagship conference for AI, cloud, and developer tools.',
+      expectedFootfall: 15000,
+      startDate: daysFromNow(35),
+      endDate: daysFromNow(37),
+      status: EventStatus.PUBLISHED,
+      verificationStatus: VerificationStatus.VERIFIED,
+      category: EventCategory.TECHNOLOGY,
+      website: 'https://global-tech-summit.example.com',
+      contactPhone: '+1-555-210-0001',
+      contactEmail: 'contact@global-tech-summit.example.com',
+      pptDeckUrl: 'https://assets.example.com/decks/tech-summit.pdf',
+      approvedById: usersByKey.manager1.id,
+      approvedAt: daysAgo(4),
+    },
+    {
+      key: 'music-fest',
+      organizerKey: 'company',
+      title: 'Neon Nights Music Fest',
+      description: null,
+      expectedFootfall: 22000,
+      startDate: daysFromNow(50),
+      endDate: daysFromNow(52),
+      status: EventStatus.DRAFT,
+      verificationStatus: VerificationStatus.PENDING,
+      category: EventCategory.MUSIC_ENTERTAINMENT,
+      website: null,
+      contactPhone: '+1-555-210-0002',
+      contactEmail: null,
+      pptDeckUrl: null,
+    },
+    {
+      key: 'business-expo',
+      organizerKey: 'nonProfit',
+      title: 'SME Growth Business Expo',
+      description: 'Networking and sponsorship opportunities for SMB brands.',
+      expectedFootfall: 9000,
+      startDate: daysFromNow(18),
+      endDate: daysFromNow(19),
+      status: EventStatus.UNDER_MANAGER_REVIEW,
+      verificationStatus: VerificationStatus.PENDING,
+      category: EventCategory.BUSINESS,
+      website: 'https://sme-growth-expo.example.com',
+      contactPhone: '+1-555-210-0003',
+      contactEmail: 'ops@sme-growth-expo.example.com',
+      pptDeckUrl: 'https://assets.example.com/decks/sme-growth.pdf',
+    },
+    {
+      key: 'education-fair',
+      organizerKey: 'education',
+      title: 'Future of Learning Fair',
+      description: 'Workshops, bootcamps, and education financing sessions.',
+      expectedFootfall: 11000,
+      startDate: daysFromNow(42),
+      endDate: daysFromNow(44),
+      status: EventStatus.VERIFIED,
+      verificationStatus: VerificationStatus.VERIFIED,
+      category: EventCategory.EDUCATION,
+      website: 'https://future-learning-fair.example.edu',
+      contactPhone: '+1-555-210-0004',
+      contactEmail: 'hello@future-learning-fair.example.edu',
+      approvedById: usersByKey.manager1.id,
+      approvedAt: daysAgo(3),
+    },
+    {
+      key: 'sports-cup',
+      organizerKey: 'government',
+      title: 'City Sports Championship',
+      description: 'Inter-city sports and fitness campaign.',
+      expectedFootfall: 30000,
+      startDate: daysFromNow(75),
+      endDate: daysFromNow(79),
+      status: EventStatus.REJECTED,
+      verificationStatus: VerificationStatus.REJECTED,
+      category: EventCategory.SPORTS,
+      website: 'https://city-sports.example.gov',
+      approvedById: usersByKey.manager2.id,
+      approvedAt: daysAgo(2),
+      rejectionReason: 'Missing mandatory permits for stadium booking.',
+    },
+    {
+      key: 'cultural-carnival',
+      organizerKey: 'club',
+      title: 'Heritage Cultural Carnival',
+      description: 'Regional food, dance, and arts celebration.',
+      expectedFootfall: 16000,
+      startDate: daysFromNow(60),
+      endDate: daysFromNow(61),
+      status: EventStatus.CANCELLED,
+      verificationStatus: VerificationStatus.VERIFIED,
+      category: EventCategory.CULTURAL,
+      website: 'https://heritage-carnival.example.com',
+      contactPhone: '+1-555-210-0006',
+      approvedById: usersByKey.manager1.id,
+      approvedAt: daysAgo(5),
+    },
+    {
+      key: 'art-show',
+      organizerKey: 'other',
+      title: 'Urban Art & Creative Show',
+      description: 'Street art, installations, and gallery pop-ups.',
+      expectedFootfall: 7000,
+      startDate: daysAgo(24),
+      endDate: daysAgo(23),
+      status: EventStatus.COMPLETED,
+      verificationStatus: VerificationStatus.VERIFIED,
+      category: EventCategory.ART_CREATIVE,
+      website: 'https://urban-art-show.example.com',
+      approvedById: usersByKey.manager1.id,
+      approvedAt: daysAgo(40),
+      isActive: false,
+    },
+    {
+      key: 'lifestyle-con',
+      organizerKey: 'individual',
+      title: 'Lifestyle & Wellness Conclave',
+      description: 'Fitness, mindfulness, nutrition, and lifestyle brands.',
+      expectedFootfall: 12500,
+      startDate: daysFromNow(26),
+      endDate: daysFromNow(27),
+      status: EventStatus.PUBLISHED,
+      verificationStatus: VerificationStatus.PENDING,
+      category: EventCategory.LIFESTYLE,
+      website: 'https://lifestyle-conclave.example.com',
+      contactPhone: '+1-555-210-0008',
+      contactEmail: 'partner@lifestyle-conclave.example.com',
+    },
+    {
+      key: 'community-meetup',
+      organizerKey: 'company',
+      title: 'Community Impact Meetup',
+      description: 'Small-format event for local civic initiatives.',
+      expectedFootfall: 2500,
+      startDate: daysFromNow(14),
+      endDate: daysFromNow(14),
+      status: EventStatus.DRAFT,
+      verificationStatus: VerificationStatus.REJECTED,
+      category: EventCategory.OTHER,
+      website: null,
+      approvedById: usersByKey.manager2.id,
+      approvedAt: daysAgo(1),
+      rejectionReason: 'Insufficient event budget and scope details.',
+    },
+  ];
+
+  const eventsByKey: Record<string, { id: string }> = {};
+
+  for (const seed of eventSeeds) {
+    const event = await prisma.event.create({
+      data: {
+        organizerId: organizersByKey[seed.organizerKey].id,
+        title: seed.title,
+        description: seed.description ?? null,
+        expectedFootfall: seed.expectedFootfall,
+        startDate: seed.startDate,
+        endDate: seed.endDate,
+        status: seed.status,
+        website: seed.website ?? null,
+        verificationStatus: seed.verificationStatus,
+        isActive: seed.isActive ?? true,
+        category: seed.category,
+        pptDeckUrl: seed.pptDeckUrl ?? null,
+        contactPhone: seed.contactPhone ?? null,
+        contactEmail: seed.contactEmail ?? null,
+        approvedById: seed.approvedById ?? null,
+        approvedAt: seed.approvedAt ?? null,
+        rejectionReason: seed.rejectionReason ?? null,
+      },
+    });
+
+    eventsByKey[seed.key] = { id: event.id };
+  }
+
+  // ============================================
+  // ADDRESSES (event location optionality coverage)
+  // ============================================
+  console.log('Creating addresses...');
+
+  const addressSeeds: Array<{
+    eventKey: string;
+    addressLine1: string;
+    addressLine2?: string | null;
+    city: string;
+    state: string;
+    country: string;
+    postalCode: string;
+  }> = [
+    {
+      eventKey: 'tech-summit',
+      addressLine1: '1200 Innovation Drive',
+      addressLine2: 'Hall A',
+      city: 'San Francisco',
+      state: 'California',
+      country: 'USA',
+      postalCode: '94105',
+    },
+    {
+      eventKey: 'business-expo',
+      addressLine1: '88 Commerce Ave',
+      addressLine2: null,
+      city: 'Chicago',
+      state: 'Illinois',
+      country: 'USA',
+      postalCode: '60601',
+    },
+    {
+      eventKey: 'education-fair',
+      addressLine1: '1 University Plaza',
+      addressLine2: 'Convention Center',
+      city: 'Boston',
+      state: 'Massachusetts',
+      country: 'USA',
+      postalCode: '02115',
+    },
+    {
+      eventKey: 'cultural-carnival',
+      addressLine1: '560 Heritage Lane',
+      addressLine2: null,
+      city: 'Austin',
+      state: 'Texas',
+      country: 'USA',
+      postalCode: '78701',
+    },
+    {
+      eventKey: 'lifestyle-con',
+      addressLine1: '420 Wellness Street',
+      addressLine2: 'Floor 3',
+      city: 'Los Angeles',
+      state: 'California',
+      country: 'USA',
+      postalCode: '90015',
+    },
+    {
+      eventKey: 'community-meetup',
+      addressLine1: '75 Civic Center Rd',
+      addressLine2: null,
+      city: 'Seattle',
+      state: 'Washington',
+      country: 'USA',
+      postalCode: '98101',
+    },
+  ];
+
+  for (const seed of addressSeeds) {
+    await prisma.address.create({
+      data: {
+        eventId: eventsByKey[seed.eventKey].id,
+        addressLine1: seed.addressLine1,
+        addressLine2: seed.addressLine2 ?? null,
+        city: seed.city,
+        state: seed.state,
+        country: seed.country,
+        postalCode: seed.postalCode,
       },
     });
   }
-  console.log('  ✅ Created', sponsorships.length, 'proposals (covering all statuses)');
 
-  // ========================================
-  // 7. SEED REFRESH TOKENS (Edge cases for all 19 users)
-  // ========================================
-  console.log('🔐 Seeding refresh tokens with edge cases...');
+  // ============================================
+  // AUDIENCE PROFILES + DISTRIBUTIONS
+  // ============================================
+  console.log('Creating audience profiles...');
 
-  const allUsers = [admin, ...users, ...managers, ...organizers, ...sponsors];
-  let tokenIndex = 0;
+  const techProfile = await prisma.eventAudienceProfile.create({
+    data: {
+      eventId: eventsByKey['tech-summit'].id,
+      totalExpectedAudience: 12000,
+    },
+  });
 
-  for (const user of allUsers) {
-    // Token 1: Active token (valid)
-    const activeToken = `active-token-${user.id}-${tokenIndex++}`;
-    const activeTokenHash = await hashToken(activeToken);
-    await prisma.refreshToken.create({
+  await prisma.audienceGender.createMany({
+    data: [
+      { profileId: techProfile.id, gender: GenderType.MALE, percentage: 52 },
+      { profileId: techProfile.id, gender: GenderType.FEMALE, percentage: 46 },
+      { profileId: techProfile.id, gender: GenderType.OTHER, percentage: 2 },
+    ],
+  });
+
+  await prisma.audienceAgeGroup.createMany({
+    data: [
+      { profileId: techProfile.id, bracket: AgeBracket.AGE_5_12, percentage: 2 },
+      { profileId: techProfile.id, bracket: AgeBracket.AGE_12_17, percentage: 8 },
+      { profileId: techProfile.id, bracket: AgeBracket.AGE_17_28, percentage: 45 },
+      { profileId: techProfile.id, bracket: AgeBracket.AGE_28_45, percentage: 35 },
+      { profileId: techProfile.id, bracket: AgeBracket.AGE_45_PLUS, percentage: 10 },
+    ],
+  });
+
+  await prisma.audienceIncomeGroup.createMany({
+    data: [
+      { profileId: techProfile.id, bracket: IncomeBracket.BELOW_2L, percentage: 3 },
+      {
+        profileId: techProfile.id,
+        bracket: IncomeBracket.BETWEEN_2L_5L,
+        percentage: 17,
+      },
+      {
+        profileId: techProfile.id,
+        bracket: IncomeBracket.BETWEEN_5L_10L,
+        percentage: 33,
+      },
+      {
+        profileId: techProfile.id,
+        bracket: IncomeBracket.BETWEEN_10L_25L,
+        percentage: 31,
+      },
+      { profileId: techProfile.id, bracket: IncomeBracket.ABOVE_25L, percentage: 16 },
+    ],
+  });
+
+  await prisma.audienceRegionDistribution.createMany({
+    data: [
+      {
+        profileId: techProfile.id,
+        city: 'San Francisco',
+        state: 'California',
+        percentage: 40,
+      },
+      {
+        profileId: techProfile.id,
+        city: 'New York',
+        state: 'New York',
+        percentage: 35,
+      },
+      {
+        profileId: techProfile.id,
+        city: 'Austin',
+        state: 'Texas',
+        percentage: 25,
+      },
+    ],
+  });
+
+  const lifestyleProfile = await prisma.eventAudienceProfile.create({
+    data: {
+      eventId: eventsByKey['lifestyle-con'].id,
+      totalExpectedAudience: 0,
+    },
+  });
+
+  await prisma.audienceGender.create({
+    data: {
+      profileId: lifestyleProfile.id,
+      gender: GenderType.FEMALE,
+      percentage: 100,
+    },
+  });
+
+  await prisma.audienceAgeGroup.create({
+    data: {
+      profileId: lifestyleProfile.id,
+      bracket: AgeBracket.AGE_28_45,
+      percentage: 100,
+    },
+  });
+
+  await prisma.audienceIncomeGroup.create({
+    data: {
+      profileId: lifestyleProfile.id,
+      bracket: IncomeBracket.BETWEEN_10L_25L,
+      percentage: 100,
+    },
+  });
+
+  await prisma.audienceRegionDistribution.create({
+    data: {
+      profileId: lifestyleProfile.id,
+      city: 'Los Angeles',
+      state: 'California',
+      percentage: 100,
+    },
+  });
+
+  // ============================================
+  // TIERS (ALL TierType + lock/soldout/inactive combinations)
+  // ============================================
+  console.log('Creating sponsorship tiers...');
+
+  const tierSeeds: Array<{
+    key: string;
+    eventKey: string;
+    tierType: TierType;
+    customName?: string | null;
+    askingPrice: number;
+    totalSlots: number;
+    soldSlots: number;
+    isLocked: boolean;
+    isActive: boolean;
+    benefits: string[];
+  }> = [
+    {
+      key: 'title-tier',
+      eventKey: 'tech-summit',
+      tierType: TierType.TITLE,
+      customName: null,
+      askingPrice: 300000,
+      totalSlots: 1,
+      soldSlots: 1,
+      isLocked: true,
+      isActive: true,
+      benefits: ['Event naming rights', 'Prime stage branding'],
+    },
+    {
+      key: 'platinum-tier',
+      eventKey: 'tech-summit',
+      tierType: TierType.PLATINUM,
+      customName: null,
+      askingPrice: 180000,
+      totalSlots: 3,
+      soldSlots: 1,
+      isLocked: true,
+      isActive: true,
+      benefits: ['Main stage booth', 'VIP networking access'],
+    },
+    {
+      key: 'gold-tier',
+      eventKey: 'tech-summit',
+      tierType: TierType.GOLD,
+      customName: null,
+      askingPrice: 95000,
+      totalSlots: 5,
+      soldSlots: 0,
+      isLocked: false,
+      isActive: true,
+      benefits: [],
+    },
+    {
+      key: 'custom-tier',
+      eventKey: 'tech-summit',
+      tierType: TierType.CUSTOM,
+      customName: 'Startup Alley Partner',
+      askingPrice: 40000,
+      totalSlots: 2,
+      soldSlots: 2,
+      isLocked: false,
+      isActive: true,
+      benefits: ['Demo booth', 'Startup pitch mention'],
+    },
+    {
+      key: 'legacy-custom-inactive',
+      eventKey: 'tech-summit',
+      tierType: TierType.CUSTOM,
+      customName: 'Legacy Partner Pack',
+      askingPrice: 25000,
+      totalSlots: 1,
+      soldSlots: 0,
+      isLocked: false,
+      isActive: false,
+      benefits: ['Archived package'],
+    },
+    {
+      key: 'presenting-tier',
+      eventKey: 'business-expo',
+      tierType: TierType.PRESENTING,
+      customName: null,
+      askingPrice: 130000,
+      totalSlots: 1,
+      soldSlots: 0,
+      isLocked: false,
+      isActive: true,
+      benefits: ['Co-presenter mention'],
+    },
+    {
+      key: 'powered-tier',
+      eventKey: 'business-expo',
+      tierType: TierType.POWERED_BY,
+      customName: null,
+      askingPrice: 90000,
+      totalSlots: 2,
+      soldSlots: 2,
+      isLocked: true,
+      isActive: true,
+      benefits: ['Powered-by placement'],
+    },
+    {
+      key: 'silver-tier',
+      eventKey: 'business-expo',
+      tierType: TierType.SILVER,
+      customName: null,
+      askingPrice: 60000,
+      totalSlots: 4,
+      soldSlots: 1,
+      isLocked: false,
+      isActive: true,
+      benefits: ['Newsletter mention'],
+    },
+  ];
+
+  const tiersByKey: Record<string, { id: string }> = {};
+
+  for (const seed of tierSeeds) {
+    const tier = await prisma.sponsorshipTier.create({
       data: {
-        userId: user.id,
-        tokenHash: activeTokenHash,
-        deviceInfo: 'Active Session',
+        eventId: eventsByKey[seed.eventKey].id,
+        tierType: seed.tierType,
+        customName: seed.customName ?? null,
+        askingPrice: seed.askingPrice,
+        totalSlots: seed.totalSlots,
+        soldSlots: seed.soldSlots,
+        isLocked: seed.isLocked,
+        isActive: seed.isActive,
+        benefits: JSON.stringify(seed.benefits),
+      },
+    });
+    tiersByKey[seed.key] = { id: tier.id };
+  }
+
+  // ============================================
+  // SPONSORSHIPS (all SponsorshipStatus + active/inactive)
+  // ============================================
+  console.log('Creating sponsorships...');
+
+  const sponsorshipSeeds: Array<{
+    key: string;
+    companyType: CompanyType;
+    eventKey: string;
+    status: SponsorshipStatus;
+    tier?: string | null;
+    notes?: string | null;
+    isActive: boolean;
+  }> = [
+    {
+      key: 'sp-active',
+      companyType: CompanyType.TECHNOLOGY,
+      eventKey: 'tech-summit',
+      status: SponsorshipStatus.ACTIVE,
+      tier: 'TITLE',
+      notes: 'Primary title sponsor.',
+      isActive: true,
+    },
+    {
+      key: 'sp-pending',
+      companyType: CompanyType.FINANCE,
+      eventKey: 'tech-summit',
+      status: SponsorshipStatus.PENDING,
+      tier: 'PLATINUM',
+      notes: null,
+      isActive: true,
+    },
+    {
+      key: 'sp-paused',
+      companyType: CompanyType.FMCG,
+      eventKey: 'business-expo',
+      status: SponsorshipStatus.PAUSED,
+      tier: 'SILVER',
+      notes: 'Paused pending internal budget cycle.',
+      isActive: true,
+    },
+    {
+      key: 'sp-completed',
+      companyType: CompanyType.HEALTHCARE_PHARMA,
+      eventKey: 'education-fair',
+      status: SponsorshipStatus.COMPLETED,
+      tier: 'GOLD',
+      notes: 'Contract completed for previous edition.',
+      isActive: true,
+    },
+    {
+      key: 'sp-cancelled',
+      companyType: CompanyType.RETAIL_ECOMMERCE,
+      eventKey: 'cultural-carnival',
+      status: SponsorshipStatus.CANCELLED,
+      tier: null,
+      notes: 'Cancelled after event budget revisions.',
+      isActive: true,
+    },
+    {
+      key: 'sp-inactive',
+      companyType: CompanyType.MANUFACTURING_INDUSTRIAL,
+      eventKey: 'lifestyle-con',
+      status: SponsorshipStatus.ACTIVE,
+      tier: null,
+      notes: 'Inactive legacy sponsorship row.',
+      isActive: false,
+    },
+  ];
+
+  const sponsorshipsByKey: Record<string, { id: string }> = {};
+
+  for (const seed of sponsorshipSeeds) {
+    const sponsorship = await prisma.sponsorship.create({
+      data: {
+        companyId: companiesByType[seed.companyType]!.id,
+        eventId: eventsByKey[seed.eventKey].id,
+        status: seed.status,
+        tier: seed.tier ?? null,
+        notes: seed.notes ?? null,
+        isActive: seed.isActive,
+      },
+    });
+    sponsorshipsByKey[seed.key] = { id: sponsorship.id };
+  }
+
+  // ============================================
+  // PROPOSALS (all ProposalStatus + organizer approval edges)
+  // ============================================
+  console.log('Creating proposals...');
+
+  const proposalSeeds: Array<{
+    key: string;
+    sponsorshipKey: string;
+    tierKey?: string | null;
+    status: ProposalStatus;
+    proposedTier?: string | null;
+    proposedAmount?: number | null;
+    message?: string | null;
+    notes?: string | null;
+    submittedAt?: Date | null;
+    reviewedAt?: Date | null;
+    reviewedById?: string | null;
+    reviewedByRole?: Role | null;
+    managerReviewNote?: string | null;
+    organizerApprovalStatus?: OrganizerApprovalStatus;
+    organizerApprovedById?: string | null;
+    organizerApprovedAt?: Date | null;
+    organizerRejectionNote?: string | null;
+    isActive?: boolean;
+  }> = [
+    {
+      key: 'proposal-draft',
+      sponsorshipKey: 'sp-pending',
+      tierKey: 'platinum-tier',
+      status: ProposalStatus.DRAFT,
+      proposedTier: 'PLATINUM',
+      proposedAmount: null,
+      message: 'Initial draft for Q2 budget.',
+      organizerApprovalStatus: OrganizerApprovalStatus.PENDING,
+    },
+    {
+      key: 'proposal-submitted',
+      sponsorshipKey: 'sp-pending',
+      tierKey: 'platinum-tier',
+      status: ProposalStatus.SUBMITTED,
+      proposedTier: 'PLATINUM',
+      proposedAmount: 175000,
+      message: 'Submitting revised amount with added booth staffing.',
+      submittedAt: daysAgo(5),
+      organizerApprovalStatus: OrganizerApprovalStatus.PENDING,
+    },
+    {
+      key: 'proposal-under-review',
+      sponsorshipKey: 'sp-paused',
+      tierKey: 'silver-tier',
+      status: ProposalStatus.UNDER_MANAGER_REVIEW,
+      proposedTier: 'SILVER',
+      proposedAmount: 58000,
+      message: 'Need manager review before organizer routing.',
+      submittedAt: daysAgo(8),
+      reviewedById: usersByKey.manager1.id,
+      reviewedByRole: Role.MANAGER,
+      managerReviewNote: 'Financial terms look acceptable.',
+      organizerApprovalStatus: OrganizerApprovalStatus.PENDING,
+    },
+    {
+      key: 'proposal-forwarded',
+      sponsorshipKey: 'sp-paused',
+      tierKey: 'presenting-tier',
+      status: ProposalStatus.FORWARDED_TO_ORGANIZER,
+      proposedTier: 'PRESENTING',
+      proposedAmount: 120000,
+      message: 'Forwarded after manager recommendation.',
+      submittedAt: daysAgo(10),
+      reviewedAt: daysAgo(9),
+      reviewedById: usersByKey.manager2.id,
+      reviewedByRole: Role.MANAGER,
+      managerReviewNote: 'Forwarding to organizer for final decision.',
+      organizerApprovalStatus: OrganizerApprovalStatus.PENDING,
+    },
+    {
+      key: 'proposal-approved',
+      sponsorshipKey: 'sp-active',
+      tierKey: 'title-tier',
+      status: ProposalStatus.APPROVED,
+      proposedTier: 'TITLE',
+      proposedAmount: 260000,
+      message: 'Approved with keynote branding add-on.',
+      notes: 'Final commercial agreement signed.',
+      submittedAt: daysAgo(14),
+      reviewedAt: daysAgo(12),
+      reviewedById: usersByKey.manager1.id,
+      reviewedByRole: Role.MANAGER,
+      managerReviewNote: 'Meets strategic fit criteria.',
+      organizerApprovalStatus: OrganizerApprovalStatus.APPROVED,
+      organizerApprovedById: organizerUsersByKey.individual.id,
+      organizerApprovedAt: daysAgo(11),
+    },
+    {
+      key: 'proposal-rejected',
+      sponsorshipKey: 'sp-cancelled',
+      tierKey: null,
+      status: ProposalStatus.REJECTED,
+      proposedTier: 'CUSTOM',
+      proposedAmount: 50000,
+      message: 'Rejected due to mismatch with event guidelines.',
+      notes: 'Rejected in organizer review round.',
+      submittedAt: daysAgo(13),
+      reviewedAt: daysAgo(12),
+      reviewedById: usersByKey.manager2.id,
+      reviewedByRole: Role.MANAGER,
+      managerReviewNote: 'Not aligned with event category.',
+      organizerApprovalStatus: OrganizerApprovalStatus.REJECTED,
+      organizerApprovedById: organizerUsersByKey.club.id,
+      organizerApprovedAt: daysAgo(11),
+      organizerRejectionNote: 'Brand does not match community policy.',
+    },
+    {
+      key: 'proposal-request-changes',
+      sponsorshipKey: 'sp-inactive',
+      tierKey: null,
+      status: ProposalStatus.REQUEST_CHANGES,
+      proposedTier: 'GOLD',
+      proposedAmount: 81000,
+      message: 'Please revise activation timeline and deliverables.',
+      submittedAt: daysAgo(6),
+      reviewedAt: daysAgo(4),
+      reviewedById: usersByKey.admin.id,
+      reviewedByRole: Role.ADMIN,
+      managerReviewNote: 'Need clearer execution plan.',
+      organizerApprovalStatus: OrganizerApprovalStatus.PENDING,
+    },
+    {
+      key: 'proposal-withdrawn',
+      sponsorshipKey: 'sp-completed',
+      tierKey: null,
+      status: ProposalStatus.WITHDRAWN,
+      proposedTier: 'GOLD',
+      proposedAmount: 90000,
+      message: 'Withdrawn by sponsor after strategy change.',
+      submittedAt: daysAgo(7),
+      organizerApprovalStatus: OrganizerApprovalStatus.PENDING,
+    },
+    {
+      key: 'proposal-inactive-approved',
+      sponsorshipKey: 'sp-completed',
+      tierKey: null,
+      status: ProposalStatus.APPROVED,
+      proposedTier: 'POWERED_BY',
+      proposedAmount: 65000,
+      message: 'Legacy approved proposal retained as inactive.',
+      notes: 'Archived record for analytics.',
+      submittedAt: daysAgo(40),
+      reviewedAt: daysAgo(39),
+      reviewedById: usersByKey.manager3.id,
+      reviewedByRole: Role.MANAGER,
+      organizerApprovalStatus: OrganizerApprovalStatus.APPROVED,
+      organizerApprovedById: organizerUsersByKey.education.id,
+      organizerApprovedAt: daysAgo(38),
+      isActive: false,
+    },
+  ];
+
+  const proposalsByKey: Record<string, { id: string }> = {};
+
+  for (const seed of proposalSeeds) {
+    const proposal = await prisma.proposal.create({
+      data: {
+        sponsorshipId: sponsorshipsByKey[seed.sponsorshipKey].id,
+        tierId: seed.tierKey ? tiersByKey[seed.tierKey].id : null,
+        status: seed.status,
+        proposedTier: seed.proposedTier ?? null,
+        proposedAmount: seed.proposedAmount ?? null,
+        message: seed.message ?? null,
+        notes: seed.notes ?? null,
+        submittedAt: seed.submittedAt ?? null,
+        reviewedAt: seed.reviewedAt ?? null,
+        reviewedById: seed.reviewedById ?? null,
+        reviewedByRole: seed.reviewedByRole ?? null,
+        managerReviewNote: seed.managerReviewNote ?? null,
+        organizerApprovalStatus:
+          seed.organizerApprovalStatus ?? OrganizerApprovalStatus.PENDING,
+        organizerApprovedById: seed.organizerApprovedById ?? null,
+        organizerApprovedAt: seed.organizerApprovedAt ?? null,
+        organizerRejectionNote: seed.organizerRejectionNote ?? null,
+        isActive: seed.isActive ?? true,
+      },
+    });
+
+    proposalsByKey[seed.key] = { id: proposal.id };
+  }
+
+  // ============================================
+  // PROPOSAL MESSAGES
+  // ============================================
+  console.log('Creating proposal messages...');
+
+  await prisma.proposalMessage.createMany({
+    data: [
+      {
+        proposalId: proposalsByKey['proposal-submitted'].id,
+        senderId: sponsorUsersByType[CompanyType.FINANCE]!.id,
+        senderRole: Role.SPONSOR,
+        message: 'Attached revised budget and audience activation plan.',
+      },
+      {
+        proposalId: proposalsByKey['proposal-submitted'].id,
+        senderId: usersByKey.manager1.id,
+        senderRole: Role.MANAGER,
+        message: 'Received. Reviewing legal and commercial terms.',
+      },
+      {
+        proposalId: proposalsByKey['proposal-under-review'].id,
+        senderId: organizerUsersByKey.nonProfit.id,
+        senderRole: Role.ORGANIZER,
+        message: 'Need more details on on-ground stall requirements.',
+      },
+      {
+        proposalId: proposalsByKey['proposal-approved'].id,
+        senderId: usersByKey.admin.id,
+        senderRole: Role.ADMIN,
+        message: 'Approved proposal archived for compliance tracking.',
+      },
+      {
+        proposalId: proposalsByKey['proposal-rejected'].id,
+        senderId: usersByKey.manager2.id,
+        senderRole: Role.MANAGER,
+        message: 'Rejected due to policy mismatch and low relevance.',
+      },
+    ],
+  });
+
+  // ============================================
+  // REFRESH TOKENS
+  // ============================================
+  console.log('Creating refresh tokens...');
+
+  await prisma.refreshToken.createMany({
+    data: [
+      {
+        userId: usersByKey.superAdmin.id,
+        tokenHash: 'seed_rt_superadmin_active',
+        deviceInfo: 'MacBook Pro / Chrome',
         isRevoked: false,
-        expiresAt: addDays(new Date(), 7),
+        expiresAt: daysFromNow(30),
+        rotatedAt: null,
       },
-    });
-
-    // Token 2: Revoked token (for testing revocation)
-    const revokedToken = `revoked-token-${user.id}-${tokenIndex++}`;
-    const revokedTokenHash = await hashToken(revokedToken);
-    await prisma.refreshToken.create({
-      data: {
-        userId: user.id,
-        tokenHash: revokedTokenHash,
-        deviceInfo: 'Revoked Session',
+      {
+        userId: usersByKey.manager1.id,
+        tokenHash: 'seed_rt_manager_revoked',
+        deviceInfo: 'iPhone / Safari',
         isRevoked: true,
-        expiresAt: addDays(new Date(), 7),
+        expiresAt: daysFromNow(20),
+        rotatedAt: daysAgo(1),
       },
-    });
-
-    // Token 3: Expired token (for testing expiration)
-    const expiredToken = `expired-token-${user.id}-${tokenIndex++}`;
-    const expiredTokenHash = await hashToken(expiredToken);
-    await prisma.refreshToken.create({
-      data: {
-        userId: user.id,
-        tokenHash: expiredTokenHash,
-        deviceInfo: 'Expired Session',
+      {
+        userId: sponsorUsersByType[CompanyType.TECHNOLOGY]!.id,
+        tokenHash: 'seed_rt_sponsor_expired',
+        deviceInfo: null,
         isRevoked: false,
-        expiresAt: addDays(new Date(), -5), // Expired 5 days ago
+        expiresAt: daysAgo(2),
+        rotatedAt: null,
       },
-    });
+    ],
+  });
 
-    // Token 4: Rotated token (for testing rotation)
-    const rotatedToken = `rotated-token-${user.id}-${tokenIndex++}`;
-    const rotatedTokenHash = await hashToken(rotatedToken);
-    await prisma.refreshToken.create({
-      data: {
-        userId: user.id,
-        tokenHash: rotatedTokenHash,
-        deviceInfo: 'Rotated Session',
-        isRevoked: true,
-        expiresAt: addDays(new Date(), -1),
-        rotatedAt: addDays(new Date(), -2),
+  // ============================================
+  // NOTIFICATIONS (ALL severities + read/unread)
+  // ============================================
+  console.log('Creating notifications...');
+
+  await prisma.notification.createMany({
+    data: [
+      {
+        userId: usersByKey.manager1.id,
+        title: 'New Event Awaiting Review',
+        message: 'SME Growth Business Expo is pending verification.',
+        severity: NotificationSeverity.INFO,
+        read: false,
+        link: '/manager/events',
+        entityType: 'Event',
+        entityId: eventsByKey['business-expo'].id,
       },
-    });
-  }
-  console.log('  ✅ Created', allUsers.length * 4, 'refresh tokens (4 per user: active, revoked, expired, rotated)');
-
-  // ========================================
-  // 8. SEED NOTIFICATIONS (20 - covering all cases)
-  // ========================================
-  console.log('🔔 Seeding notifications...');
-
-  const notificationSeverities = [
-    NotificationSeverity.INFO,
-    NotificationSeverity.SUCCESS,
-    NotificationSeverity.WARNING,
-    NotificationSeverity.ERROR,
-  ];
-
-  const notificationTypes = [
-    { title: 'Proposal Accepted', message: 'Your proposal for {event} has been accepted!', severity: NotificationSeverity.SUCCESS, role: 'SPONSOR' },
-    { title: 'Proposal Rejected', message: 'Your proposal for {event} was not selected.', severity: NotificationSeverity.WARNING, role: 'SPONSOR' },
-    { title: 'New Proposal Received', message: 'You have received a new proposal for {event}.', severity: NotificationSeverity.INFO, role: 'ORGANIZER' },
-    { title: 'Event Confirmed', message: 'Your event {event} has been confirmed.', severity: NotificationSeverity.SUCCESS, role: 'ORGANIZER' },
-    { title: 'Event Published', message: 'Your event {event} is now live!', severity: NotificationSeverity.SUCCESS, role: 'ORGANIZER' },
-    { title: 'Sponsorship Confirmed', message: 'Sponsorship for {event} has been confirmed.', severity: NotificationSeverity.SUCCESS, role: 'ORGANIZER' },
-    { title: 'Sponsorship Cancelled', message: 'Sponsorship for {event} has been cancelled.', severity: NotificationSeverity.WARNING, role: 'ORGANIZER' },
-    { title: 'New Event Created', message: 'A new event {event} has been created.', severity: NotificationSeverity.INFO, role: 'ADMIN' },
-    { title: 'User Registered', message: 'New user {user} has registered.', severity: NotificationSeverity.INFO, role: 'ADMIN' },
-    { title: 'Company Verified', message: 'Company {company} has been verified.', severity: NotificationSeverity.SUCCESS, role: 'ADMIN' },
-    { title: 'Payment Received', message: 'Payment of {amount} received for {event}.', severity: NotificationSeverity.SUCCESS, role: 'ORGANIZER' },
-    { title: 'Payment Failed', message: 'Payment for {event} failed.', severity: NotificationSeverity.ERROR, role: 'ORGANIZER' },
-    { title: 'Review Request', message: 'Please review proposal for {event}.', severity: NotificationSeverity.INFO, role: 'MANAGER' },
-    { title: 'Approval Required', message: 'Your approval is needed for {event}.', severity: NotificationSeverity.WARNING, role: 'MANAGER' },
-    { title: 'Profile Updated', message: 'Your profile has been updated successfully.', severity: NotificationSeverity.SUCCESS, role: 'USER' },
-    { title: 'Password Changed', message: 'Your password was changed successfully.', severity: NotificationSeverity.INFO, role: 'USER' },
-    { title: 'Email Verification', message: 'Please verify your email address.', severity: NotificationSeverity.WARNING, role: 'USER' },
-    { title: 'Account Suspended', message: 'Your account has been suspended.', severity: NotificationSeverity.ERROR, role: 'USER' },
-    { title: 'Welcome to SponsiWise', message: 'Thank you for joining SponsiWise!', severity: NotificationSeverity.SUCCESS, role: 'USER' },
-    { title: 'Terms Updated', message: 'Terms of service have been updated.', severity: NotificationSeverity.INFO, role: 'USER' },
-  ];
-
-  for (let i = 0; i < 20; i++) {
-    const notificationType = notificationTypes[i];
-    const targetUser = allUsers[i % allUsers.length];
-
-    await prisma.notification.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        userId: targetUser.id,
-        title: notificationType.title,
-        message: notificationType.message.replace('{event}', `Event ${(i % 15) + 1}`),
-        severity: notificationType.severity,
-        read: i % 3 === 0, // Some read, some unread
-        link: `/notifications/${i + 1}`,
-        entityType: 'Notification',
-        entityId: `${GLOBAL_TENANT_ID}`,
+      {
+        userId: organizerUsersByKey.individual.id,
+        title: 'Proposal Approved',
+        message: 'A title sponsorship proposal has been approved.',
+        severity: NotificationSeverity.SUCCESS,
+        read: true,
+        link: '/organizer/proposals',
+        entityType: 'Proposal',
+        entityId: proposalsByKey['proposal-approved'].id,
       },
-    });
-  }
-  console.log('  ✅ Created 20 notifications (covering all types)');
-
-  // ========================================
-  // 9. SEED EMAIL LOGS (20 - all types)
-  // ========================================
-  console.log('📧 Seeding email logs...');
-
-  const emailJobNames = [
-    'welcome_email',
-    'password_reset',
-    'proposal_submitted',
-    'proposal_approved',
-    'proposal_rejected',
-    'event_confirmation',
-    'event_reminder',
-    'sponsorship_confirmation',
-    'sponsorship_cancelled',
-    'payment_receipt',
-    'payment_failed',
-    'account_verification',
-    'admin_notification',
-    'manager_alert',
-    'organizer_update',
-    'sponsor_digest',
-    'weekly_summary',
-    'monthly_report',
-    'newsletter',
-    'system_alert',
-  ];
-
-  for (let i = 0; i < 20; i++) {
-    const isFailed = i % 5 === 0; // Some emails failed
-    
-    await prisma.emailLog.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        recipient: allUsers[i % allUsers.length].email,
-        subject: `Email: ${emailJobNames[i]}`,
-        jobName: emailJobNames[i],
-        entityType: i < 10 ? 'Event' : 'User',
-        entityId: events[i % events.length]?.id || allUsers[0].id,
-        status: isFailed ? EmailStatus.FAILED : EmailStatus.SENT,
-        errorMessage: isFailed ? 'SMTP connection timeout' : null,
+      {
+        userId: sponsorUsersByType[CompanyType.FINANCE]!.id,
+        title: 'Proposal Needs Changes',
+        message: 'Please revise budget allocations before resubmission.',
+        severity: NotificationSeverity.WARNING,
+        read: false,
+        link: null,
+        entityType: 'Proposal',
+        entityId: proposalsByKey['proposal-request-changes'].id,
       },
-    });
-  }
-  console.log('  ✅ Created 20 email logs (covering all types)');
+      {
+        userId: usersByKey.admin.id,
+        title: 'Delivery Failure',
+        message: 'One of the proposal workflow emails failed to send.',
+        severity: NotificationSeverity.ERROR,
+        read: false,
+        link: '/manager/activity',
+        entityType: 'EmailLog',
+        entityId: null,
+      },
+    ],
+  });
 
-  // ========================================
-  // 10. SEED AUDIT LOGS (20 - all actions)
-  // ========================================
-  console.log('📝 Seeding audit logs...');
+  // ============================================
+  // EMAIL LOGS (all EmailStatus)
+  // ============================================
+  console.log('Creating email logs...');
 
-  const auditActions = [
-    'user.created',
-    'user.updated',
-    'user.login',
-    'user.logout',
-    'password.changed',
-    'company.created',
-    'company.verified',
-    'company.rejected',
-    'organizer.created',
-    'event.created',
-    'event.published',
-    'event.cancelled',
-    'event.completed',
-    'sponsorship.created',
-    'sponsorship.updated',
-    'proposal.created',
-    'proposal.submitted',
-    'proposal.approved',
-    'proposal.rejected',
-    'settings.updated',
-  ];
+  await prisma.emailLog.createMany({
+    data: [
+      {
+        recipient: sponsorUsersByType[CompanyType.FINANCE]!.email,
+        subject: 'Proposal Submitted Successfully',
+        jobName: 'proposal_submission_email',
+        entityType: 'Proposal',
+        entityId: proposalsByKey['proposal-submitted'].id,
+        status: EmailStatus.SENT,
+        errorMessage: null,
+      },
+      {
+        recipient: organizerUsersByKey.club.email,
+        subject: 'Proposal Rejection Notice',
+        jobName: 'proposal_status_notification',
+        entityType: 'Proposal',
+        entityId: proposalsByKey['proposal-rejected'].id,
+        status: EmailStatus.FAILED,
+        errorMessage: 'SMTP timeout from provider.',
+      },
+      {
+        recipient: usersByKey.manager1.email,
+        subject: 'Daily Manager Digest',
+        jobName: 'manager_daily_digest',
+        entityType: null,
+        entityId: null,
+        status: EmailStatus.SENT,
+        errorMessage: null,
+      },
+    ],
+  });
 
-  const entityTypes = ['User', 'User', 'User', 'User', 'User', 'Company', 'Company', 'Company', 'Organizer', 'Event', 'Event', 'Event', 'Event', 'Sponsorship', 'Sponsorship', 'Proposal', 'Proposal', 'Proposal', 'Proposal', 'Settings'];
+  // ============================================
+  // AUDIT LOGS
+  // ============================================
+  console.log('Creating audit logs...');
 
-  for (let i = 0; i < 20; i++) {
-    const actorIndex = i % allUsers.length;
-    const entityIndex = i % Math.max(events.length, sponsorships.length, allUsers.length);
-
-    await prisma.auditLog.create({
-      data: {
-        tenantId: GLOBAL_TENANT_ID,
-        actorId: allUsers[actorIndex].id,
-        actorRole: allUsers[actorIndex].role,
-        action: auditActions[i],
-        entityType: entityTypes[i],
-        entityId: events[entityIndex]?.id || sponsorships[entityIndex]?.id || allUsers[entityIndex].id,
+  await prisma.auditLog.createMany({
+    data: [
+      {
+        actorId: usersByKey.manager1.id,
+        actorRole: 'MANAGER',
+        action: 'event.verified',
+        entityType: 'Event',
+        entityId: eventsByKey['tech-summit'].id,
         metadata: {
-          description: `${auditActions[i]} action performed`,
-          ipAddress: `192.168.1.${i + 1}`,
-          userAgent: 'Mozilla/5.0 (Test Browser)',
+          previousStatus: 'PENDING',
+          newStatus: 'VERIFIED',
+          source: 'seed',
         },
       },
-    });
-  }
-  console.log('  ✅ Created 20 audit logs (covering all actions)');
+      {
+        actorId: organizerUsersByKey.individual.id,
+        actorRole: 'ORGANIZER',
+        action: 'proposal.status_changed',
+        entityType: 'Proposal',
+        entityId: proposalsByKey['proposal-approved'].id,
+        metadata: {
+          previousStatus: 'UNDER_MANAGER_REVIEW',
+          newStatus: 'APPROVED',
+          actionBy: 'organizer',
+        },
+      },
+      {
+        actorId: usersByKey.admin.id,
+        actorRole: 'ADMIN',
+        action: 'email.delivery_failure',
+        entityType: 'EmailLog',
+        entityId: proposalsByKey['proposal-rejected'].id,
+        metadata: Prisma.JsonNull,
+      },
+    ],
+  });
 
-  // ========================================
+  // ============================================
   // SUMMARY
-  // ========================================
-  console.log('\n✅ Seed completed successfully!');
-  console.log('\n📊 Summary:');
-  console.log('  - Users: 19 (1 admin, 5 users, 3 managers, 5 organizers, 5 sponsors)');
-  console.log('  - Companies: 10 (5 sponsors, 5 organizers)');
-  console.log('  - Organizers: 5');
-  console.log('  - Events: 15 (3 per organizer: 1 PUBLISHED, 1 PENDING, 1 DRAFT)');
-  console.log('  - Sponsorships:', sponsorships.length);
-  console.log('  - Proposals:', sponsorships.length, '(covering all statuses)');
-  console.log('  - RefreshTokens:', allUsers.length * 4, '(active, revoked, expired, rotated per user)');
-  console.log('  - Notifications: 20');
-  console.log('  - EmailLogs: 20');
-  console.log('  - AuditLogs: 20');
-  console.log('\n🔑 Login credentials:');
-  console.log('  Password for all users: password123');
-  console.log('\n📧 Sample emails:');
-  console.log('  - admin@spons.com');
-  console.log('  - user1@spons.com');
-  console.log('  - manager1@spons.com');
-  console.log('  - organizer1@spons.com');
-  console.log('  - sponsor1@spons.com');
+  // ============================================
+  const [
+    userCount,
+    organizerCount,
+    companyCount,
+    eventCount,
+    addressCount,
+    tierCount,
+    audienceProfileCount,
+    sponsorshipCount,
+    proposalCount,
+    proposalMessageCount,
+    tokenCount,
+    notificationCount,
+    emailLogCount,
+    auditLogCount,
+  ] = await Promise.all([
+    prisma.user.count(),
+    prisma.organizer.count(),
+    prisma.company.count(),
+    prisma.event.count(),
+    prisma.address.count(),
+    prisma.sponsorshipTier.count(),
+    prisma.eventAudienceProfile.count(),
+    prisma.sponsorship.count(),
+    prisma.proposal.count(),
+    prisma.proposalMessage.count(),
+    prisma.refreshToken.count(),
+    prisma.notification.count(),
+    prisma.emailLog.count(),
+    prisma.auditLog.count(),
+  ]);
+
+  console.log('\n📊 Seed Summary:');
+  console.log('================');
+  console.log(`Users: ${userCount}`);
+  console.log(`Organizers: ${organizerCount}`);
+  console.log(`Companies: ${companyCount}`);
+  console.log(`Events: ${eventCount}`);
+  console.log(`Addresses: ${addressCount}`);
+  console.log(`Sponsorship Tiers: ${tierCount}`);
+  console.log(`Audience Profiles: ${audienceProfileCount}`);
+  console.log(`Sponsorships: ${sponsorshipCount}`);
+  console.log(`Proposals: ${proposalCount}`);
+  console.log(`Proposal Messages: ${proposalMessageCount}`);
+  console.log(`Refresh Tokens: ${tokenCount}`);
+  console.log(`Notifications: ${notificationCount}`);
+  console.log(`Email Logs: ${emailLogCount}`);
+  console.log(`Audit Logs: ${auditLogCount}`);
+  console.log(`\n🔑 All passwords: ${PASSWORD}`);
+  console.log('\n✅ Comprehensive seed completed successfully!');
 }
 
-seed()
+main()
   .catch((e) => {
     console.error('❌ Seed failed:', e);
     process.exit(1);
@@ -677,4 +1434,3 @@ seed()
     await prisma.$disconnect();
     await pool.end();
   });
-

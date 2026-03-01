@@ -3,7 +3,6 @@ import { NotificationSeverity } from '@prisma/client';
 import { PrismaService } from '../common/providers/prisma.service';
 
 export interface CreateNotificationInput {
-  tenantId: string;
   userId: string;
   title: string;
   message: string;
@@ -16,7 +15,7 @@ export interface CreateNotificationInput {
 /**
  * NotificationsService — CRUD operations for in-app notifications.
  *
- * All read operations are scoped to the authenticated user + tenant.
+ * All read operations are scoped to the authenticated user.
  * Create is called by the NotificationProcessor (background job).
  */
 @Injectable()
@@ -32,7 +31,6 @@ export class NotificationsService {
   async create(input: CreateNotificationInput) {
     const notification = await this.prisma.notification.create({
       data: {
-        tenantId: input.tenantId,
         userId: input.userId,
         title: input.title,
         message: input.message,
@@ -53,14 +51,13 @@ export class NotificationsService {
    */
   async findAll(
     userId: string,
-    tenantId: string,
     params?: { page?: number; pageSize?: number; read?: boolean },
   ) {
     const page = params?.page ?? 1;
     const pageSize = params?.pageSize ?? 20;
     const skip = (page - 1) * pageSize;
 
-    const where: any = { userId, tenantId };
+    const where: any = { userId };
     if (params?.read !== undefined) {
       where.read = params.read;
     }
@@ -79,7 +76,6 @@ export class NotificationsService {
       data: data.map((n) => ({
         id: n.id,
         userId: n.userId,
-        tenantId: n.tenantId,
         title: n.title,
         message: n.message,
         severity: n.severity.toLowerCase(),
@@ -98,9 +94,9 @@ export class NotificationsService {
   /**
    * Get a single notification by ID. Must belong to the requesting user.
    */
-  async findById(id: string, userId: string, tenantId: string) {
+  async findById(id: string, userId: string) {
     const notification = await this.prisma.notification.findFirst({
-      where: { id, userId, tenantId },
+      where: { id, userId },
     });
 
     if (!notification) {
@@ -110,7 +106,6 @@ export class NotificationsService {
     return {
       id: notification.id,
       userId: notification.userId,
-      tenantId: notification.tenantId,
       title: notification.title,
       message: notification.message,
       severity: notification.severity.toLowerCase(),
@@ -125,9 +120,9 @@ export class NotificationsService {
   /**
    * Mark a notification as read.
    */
-  async markAsRead(id: string, userId: string, tenantId: string) {
+  async markAsRead(id: string, userId: string) {
     const notification = await this.prisma.notification.findFirst({
-      where: { id, userId, tenantId },
+      where: { id, userId },
     });
 
     if (!notification) {
@@ -149,11 +144,10 @@ export class NotificationsService {
   /**
    * Mark ALL notifications as read for a user.
    */
-  async markAllAsRead(userId: string, tenantId: string) {
+  async markAllAsRead(userId: string) {
     const result = await this.prisma.notification.updateMany({
       where: {
         userId,
-        tenantId,
         read: false,
       },
       data: {

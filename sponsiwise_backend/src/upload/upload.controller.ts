@@ -9,11 +9,10 @@ import {
 } from '@nestjs/common';
 import { IsString, IsOptional } from 'class-validator';
 import { Role, EventStatus } from '@prisma/client';
-import { AuthGuard, RoleGuard, TenantGuard } from '../common/guards';
+import { AuthGuard, RoleGuard } from '../common/guards';
 import { Roles, CurrentUser } from '../common/decorators';
 import { S3Service } from '../common/providers/s3.service';
 import type { JwtPayloadWithClaims } from '../auth/interfaces';
-import { GLOBAL_TENANT_ID } from '../common/constants/global-tenant.constants';
 
 class GeneratePresignedUrlDto {
   @IsString()
@@ -44,7 +43,7 @@ class GeneratePptPresignedUrlDto {
  * Uses presigned URL pattern for direct S3 upload
  */
 @Controller('upload')
-@UseGuards(AuthGuard, TenantGuard)
+@UseGuards(AuthGuard, RoleGuard)
 export class UploadController {
   constructor(private readonly s3Service: S3Service) { }
 
@@ -60,7 +59,7 @@ export class UploadController {
     const timestamp = Date.now();
     const safeFileName = dto.fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
     const folder = dto.folder || 'uploads';
-    const key = `${folder}/${user.tenant_id}/${timestamp}-${safeFileName}`;
+    const key = `${folder}/${user.sub}/${timestamp}-${safeFileName}`;
 
     const uploadUrl = await this.s3Service.generatePresignedUploadUrl(
       key,
@@ -92,7 +91,7 @@ export class UploadController {
     if (dto.eventId) {
       key = `events/${dto.eventId}/ppt-deck/${timestamp}-${safeFileName}`;
     } else {
-      key = `ppt-decks/${user.tenant_id}/${timestamp}-${safeFileName}`;
+      key = `ppt-decks/${user.sub}/${timestamp}-${safeFileName}`;
     }
 
     const uploadUrl = await this.s3Service.generatePresignedUploadUrl(
@@ -125,7 +124,7 @@ export class UploadController {
     if (dto.entityType && dto.entityId) {
       key = `${dto.entityType}/${dto.entityId}/logo/${timestamp}-${safeFileName}`;
     } else {
-      key = `logos/${user.tenant_id}/${timestamp}-${safeFileName}`;
+      key = `logos/${user.sub}/${timestamp}-${safeFileName}`;
     }
 
     const uploadUrl = await this.s3Service.generatePresignedUploadUrl(

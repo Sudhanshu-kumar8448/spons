@@ -3,7 +3,6 @@ import { SponsorshipStatus } from '@prisma/client';
 
 /**
  * DTO for creating a new sponsorship (Company ↔ Event link).
- * tenantId is derived from the Company/Event in the service — never from body.
  */
 export class CreateSponsorshipDto {
   @IsUUID('4', { message: 'companyId must be a valid UUID' })

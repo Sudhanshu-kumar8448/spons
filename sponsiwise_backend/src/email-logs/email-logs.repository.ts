@@ -14,8 +14,7 @@ export class EmailLogsRepository {
 
   // ─── READ ────────────────────────────────────────────────
 
-  async findByTenant(params: {
-    tenantId: string;
+  async findAll(params: {
     skip?: number;
     take?: number;
     status?: EmailStatus;
@@ -23,7 +22,6 @@ export class EmailLogsRepository {
     search?: string;
   }): Promise<{ data: EmailLog[]; total: number }> {
     const where: Prisma.EmailLogWhereInput = {
-      tenantId: params.tenantId,
       ...(params.status !== undefined && { status: params.status }),
       ...(params.jobName !== undefined && { jobName: params.jobName }),
       ...(params.search !== undefined && {

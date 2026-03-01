@@ -2,11 +2,10 @@ import { IsOptional, IsString, IsEnum, IsBoolean } from 'class-validator';
 import { Role } from '@prisma/client';
 
 /**
- * DTO for updating a user within a tenant.
+ * DTO for updating a user.
  *
  * Mutable fields only — email and password changes are
  * handled separately (future: profile / auth flows).
- * tenantId is immutable (users cannot cross tenants).
  */
 export class UpdateUserDto {
   @IsOptional()

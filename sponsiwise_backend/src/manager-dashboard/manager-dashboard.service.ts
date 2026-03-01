@@ -26,9 +26,6 @@ import type {
 
 /**
  * ManagerDashboardService — read + write layer for manager-scoped data.
- *
- * Every method requires tenantId (resolved from JWT, never from request).
- * All queries are tenant-scoped.
  */
 @Injectable()
 export class ManagerDashboardService {
@@ -50,7 +47,7 @@ export class ManagerDashboardService {
    *   companies_pending, companies_verified, events_pending, events_verified,
    *   total_users, recent_registrations
    */
-  async getDashboardStats(tenantId: string) {
+  async getDashboardStats() {
     const [
       companiesPending,
       companiesVerified,
@@ -60,24 +57,23 @@ export class ManagerDashboardService {
       recentRegistrations,
     ] = await Promise.all([
       this.prisma.company.count({
-        where: { tenantId, verificationStatus: VerificationStatus.PENDING },
+        where: { verificationStatus: VerificationStatus.PENDING },
       }),
       this.prisma.company.count({
-        where: { tenantId, verificationStatus: VerificationStatus.VERIFIED },
+        where: { verificationStatus: VerificationStatus.VERIFIED },
       }),
       this.prisma.event.count({
-        where: { tenantId, verificationStatus: VerificationStatus.PENDING },
+        where: { verificationStatus: VerificationStatus.PENDING },
       }),
       this.prisma.event.count({
-        where: { tenantId, verificationStatus: VerificationStatus.VERIFIED },
+        where: { verificationStatus: VerificationStatus.VERIFIED },
       }),
       this.prisma.user.count({
-        where: { tenantId, isActive: true },
+        where: { isActive: true },
       }),
       // Users registered in the last 7 days
       this.prisma.user.count({
         where: {
-          tenantId,
           createdAt: {
             gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
           },
@@ -100,11 +96,11 @@ export class ManagerDashboardService {
   /**
    * GET /manager/companies
    *
-   * Returns paginated companies in the manager's tenant.
+   * Returns paginated companies.
    * Default filter: verificationStatus = PENDING.
    * Matches frontend VerifiableCompaniesResponse shape.
    */
-  async getCompanies(tenantId: string, query: ManagerCompaniesQueryDto) {
+  async getCompanies(query: ManagerCompaniesQueryDto) {
     const { page, page_size, verification_status, search } = query;
     const skip = (page - 1) * page_size;
 
@@ -114,7 +110,6 @@ export class ManagerDashboardService {
       : undefined;
 
     const where: any = {
-      tenantId,
       ...(statusFilter && { verificationStatus: statusFilter }),
       ...(search && {
         OR: [
@@ -136,8 +131,7 @@ export class ManagerDashboardService {
           slug: true,
           type: true,
           website: true,
-          description: true,
-          logoUrl: true,
+          strategicIntent: true,
           verificationStatus: true,
           isActive: true,
           createdAt: true,
@@ -155,9 +149,9 @@ export class ManagerDashboardService {
         email: '', // Company model has no direct email field
         phone: null,
         website: c.website || null,
-        logo_url: c.logoUrl || null,
+        logo_url: null,
         industry: c.type || null,
-        description: c.description || null,
+        description: c.strategicIntent || '',
         verification_status: c.verificationStatus.toLowerCase(),
         verification_notes: null,
         verified_at: null,
@@ -180,19 +174,18 @@ export class ManagerDashboardService {
   /**
    * GET /manager/companies/:id
    *
-   * Returns single company detail, tenant-scoped.
+   * Returns single company detail.
    */
-  async getCompanyById(tenantId: string, companyId: string) {
+  async getCompanyById(companyId: string) {
     const company = await this.prisma.company.findFirst({
-      where: { id: companyId, tenantId },
+      where: { id: companyId },
       select: {
         id: true,
         name: true,
         slug: true,
         type: true,
         website: true,
-        description: true,
-        logoUrl: true,
+        strategicIntent: true,
         verificationStatus: true,
         isActive: true,
         createdAt: true,
@@ -217,9 +210,9 @@ export class ManagerDashboardService {
       email: owner.email,
       phone: null,
       website: company.website || null,
-      logo_url: company.logoUrl || null,
+      logo_url: null,
       industry: company.type || null,
-      description: company.description || null,
+      description: company.strategicIntent || '',
       verification_status: company.verificationStatus.toLowerCase(),
       verification_notes: null,
       verified_at: null,
@@ -241,14 +234,13 @@ export class ManagerDashboardService {
    * Updates a company's verification status and emits domain event.
    */
   async verifyCompany(
-    tenantId: string,
     companyId: string,
     dto: VerifyEntityDto,
     reviewerId: string,
     reviewerRole: string,
   ) {
     const company = await this.prisma.company.findFirst({
-      where: { id: companyId, tenantId },
+      where: { id: companyId },
     });
 
     if (!company) {
@@ -289,7 +281,6 @@ export class ManagerDashboardService {
         COMPANY_VERIFIED_EVENT,
         new CompanyVerifiedEvent({
           entityId: companyId,
-          tenantId,
           reviewerId,
           reviewerRole,
           reviewerNotes: dto.notes || null,
@@ -300,7 +291,6 @@ export class ManagerDashboardService {
         COMPANY_REJECTED_EVENT,
         new CompanyRejectedEvent({
           entityId: companyId,
-          tenantId,
           reviewerId,
           reviewerRole,
           reviewerNotes: dto.notes || null,
@@ -308,7 +298,7 @@ export class ManagerDashboardService {
       );
     }
 
-    this.logger.log(`Company ${companyId} ${dto.action}d by ${reviewerId} in tenant ${tenantId}`);
+    this.logger.log(`Company ${companyId} ${dto.action}d by ${reviewerId}`);
 
     return {
       id: updated.id,
@@ -323,11 +313,11 @@ export class ManagerDashboardService {
   /**
    * GET /manager/events
    *
-   * Returns paginated events in the manager's tenant.
+   * Returns paginated events.
    * Default filter: verificationStatus = PENDING.
    * Matches frontend VerifiableEventsResponse shape.
    */
-  async getEvents(tenantId: string, query: ManagerEventsQueryDto) {
+  async getEvents(query: ManagerEventsQueryDto) {
     const { page, page_size, verification_status, search } = query;
     const skip = (page - 1) * page_size;
 
@@ -336,7 +326,6 @@ export class ManagerDashboardService {
       : VerificationStatus.PENDING;
 
     const where: any = {
-      tenantId,
       verificationStatus: statusFilter,
       ...(search && {
         OR: [
@@ -359,7 +348,6 @@ export class ManagerDashboardService {
           startDate: true,
           endDate: true,
           status: true,
-          logoUrl: true,
           verificationStatus: true,
           expectedFootfall: true,
           category: true,
@@ -369,8 +357,7 @@ export class ManagerDashboardService {
             select: {
               id: true,
               name: true,
-              contactEmail: true,
-              logoUrl: true,
+              contactPhone: true,
             },
           },
           address: {
@@ -416,7 +403,7 @@ export class ManagerDashboardService {
           end_date: e.endDate.toISOString(),
           location: e.address ? `${e.address.addressLine1}, ${e.address.city}` : '',
           venue: '',
-          image_url: e.logoUrl || null,
+          image_url: null,
           category: e.category || '',
           status: e.status.toLowerCase(),
           verification_status: e.verificationStatus.toLowerCase(),
@@ -426,8 +413,8 @@ export class ManagerDashboardService {
           organizer: {
             id: e.organizer.id,
             name: e.organizer.name,
-            email: e.organizer.contactEmail || '',
-            logo_url: e.organizer.logoUrl || null,
+            email: e.organizer.contactPhone || '',
+            logo_url: null,
           },
           tags: [],
           // Tier summary
@@ -453,11 +440,11 @@ export class ManagerDashboardService {
   /**
    * GET /manager/events/:id
    *
-   * Returns single event detail, tenant-scoped, with sponsorship tiers.
+   * Returns single event detail with sponsorship tiers.
    */
-  async getEventById(tenantId: string, eventId: string) {
+  async getEventById(eventId: string) {
     const event = await this.prisma.event.findFirst({
-      where: { id: eventId, tenantId },
+      where: { id: eventId },
       select: {
         id: true,
         title: true,
@@ -466,7 +453,6 @@ export class ManagerDashboardService {
         endDate: true,
         status: true,
         website: true,
-        logoUrl: true,
         verificationStatus: true,
         isActive: true,
         expectedFootfall: true,
@@ -480,8 +466,7 @@ export class ManagerDashboardService {
           select: {
             id: true,
             name: true,
-            contactEmail: true,
-            logoUrl: true,
+            contactPhone: true,
           },
         },
         address: {
@@ -537,7 +522,7 @@ export class ManagerDashboardService {
       end_date: event.endDate.toISOString(),
       location: event.address ? `${event.address.addressLine1}, ${event.address.city}` : '',
       venue: '',
-      image_url: event.logoUrl || null,
+      image_url: null,
       website: event.website || null,
       category: event.category || '',
       status: event.status.toLowerCase(),
@@ -547,8 +532,8 @@ export class ManagerDashboardService {
       organizer: {
         id: event.organizer.id,
         name: event.organizer.name,
-        email: event.organizer.contactEmail || '',
-        logo_url: event.organizer.logoUrl || null,
+        email: event.organizer.contactPhone || '',
+        logo_url: null,
       },
       tags: [],
       expected_footfall: event.expectedFootfall,
@@ -578,14 +563,13 @@ export class ManagerDashboardService {
    * Managers can edit all fields, including locked tiers.
    */
   async updateEvent(
-    tenantId: string,
     eventId: string,
     dto: UpdateManagerEventDto,
     actorId: string,
     actorRole: string,
   ) {
     const event = await this.prisma.event.findFirst({
-      where: { id: eventId, tenantId },
+      where: { id: eventId },
       include: { address: true, tiers: { where: { isActive: true } } },
     });
 
@@ -611,7 +595,6 @@ export class ManagerDashboardService {
       if (dto.endDate !== undefined) coreData.endDate = new Date(dto.endDate);
       if (dto.expectedFootfall !== undefined) coreData.expectedFootfall = dto.expectedFootfall;
       if (dto.website !== undefined) coreData.website = dto.website;
-      if (dto.logoUrl !== undefined) coreData.logoUrl = dto.logoUrl;
       if (dto.category !== undefined) coreData.category = dto.category;
       if (dto.contactPhone !== undefined) coreData.contactPhone = dto.contactPhone;
       if (dto.contactEmail !== undefined) coreData.contactEmail = dto.contactEmail;
@@ -638,7 +621,6 @@ export class ManagerDashboardService {
             data: {
               ...dto.address,
               eventId,
-              tenantId,
             } as any,
           });
         }
@@ -668,7 +650,6 @@ export class ManagerDashboardService {
             // Create new tier
             await tx.sponsorshipTier.create({
               data: {
-                tenantId,
                 eventId,
                 tierType: tierDto.tierType as any,
                 askingPrice: tierDto.askingPrice,
@@ -695,7 +676,6 @@ export class ManagerDashboardService {
     });
 
     this.auditLogService.log({
-      tenantId,
       actorId,
       actorRole,
       action: 'event.updated',
@@ -705,7 +685,7 @@ export class ManagerDashboardService {
     });
 
     // Reuse getEventById to return fully hydrated object
-    return this.getEventById(tenantId, eventId);
+    return this.getEventById(eventId);
   }
 
   // ─── Event Verification Action ──────────────────────────
@@ -717,14 +697,13 @@ export class ManagerDashboardService {
    * When verified, also locks all sponsorship tiers to prevent modification.
    */
   async verifyEvent(
-    tenantId: string,
     eventId: string,
     dto: VerifyEntityDto,
     reviewerId: string,
     reviewerRole: string,
   ) {
     const event = await this.prisma.event.findFirst({
-      where: { id: eventId, tenantId },
+      where: { id: eventId },
     });
 
     if (!event) {
@@ -763,7 +742,6 @@ export class ManagerDashboardService {
 
         // Audit log for tier locking
         this.auditLogService.log({
-          tenantId,
           actorId: reviewerId,
           actorRole: reviewerRole,
           action: 'tiers.locked',
@@ -785,7 +763,6 @@ export class ManagerDashboardService {
         EVENT_VERIFIED_EVENT,
         new EventVerifiedEvent({
           entityId: eventId,
-          tenantId,
           reviewerId,
           reviewerRole,
           reviewerNotes: dto.notes || null,
@@ -796,7 +773,6 @@ export class ManagerDashboardService {
         EVENT_REJECTED_EVENT,
         new EventRejectedEvent({
           entityId: eventId,
-          tenantId,
           reviewerId,
           reviewerRole,
           reviewerNotes: dto.notes || null,
@@ -806,7 +782,6 @@ export class ManagerDashboardService {
 
     // Audit log for event verification
     this.auditLogService.log({
-      tenantId,
       actorId: reviewerId,
       actorRole: reviewerRole,
       action: dto.action === 'verify' ? 'event.verified' : 'event.rejected',
@@ -819,7 +794,7 @@ export class ManagerDashboardService {
       },
     });
 
-    this.logger.log(`Event ${eventId} ${dto.action}d by ${reviewerId} in tenant ${tenantId}`);
+    this.logger.log(`Event ${eventId} ${dto.action}d by ${reviewerId}`);
 
     return {
       id: result.id,
@@ -839,16 +814,15 @@ export class ManagerDashboardService {
    * Managers can edit tiers even when locked.
    */
   async updateTier(
-    tenantId: string,
     eventId: string,
     tierId: string,
     dto: UpdateEventTierDto,
     actorId: string,
     actorRole: string,
   ) {
-    // Verify event exists and belongs to tenant
+    // Verify event exists
     const event = await this.prisma.event.findFirst({
-      where: { id: eventId, tenantId },
+      where: { id: eventId },
     });
 
     if (!event) {
@@ -857,7 +831,7 @@ export class ManagerDashboardService {
 
     // Verify tier exists and belongs to event
     const tier = await this.prisma.sponsorshipTier.findFirst({
-      where: { id: tierId, eventId, tenantId },
+      where: { id: tierId, eventId },
     });
 
     if (!tier) {
@@ -890,7 +864,6 @@ export class ManagerDashboardService {
 
     // Audit log
     this.auditLogService.log({
-      tenantId,
       actorId,
       actorRole,
       action: 'tier.updated',
@@ -926,7 +899,6 @@ export class ManagerDashboardService {
    * Creates a new sponsorship tier for an event.
    */
   async createTier(
-    tenantId: string,
     eventId: string,
     dto: {
       tierType: TierType;
@@ -938,7 +910,7 @@ export class ManagerDashboardService {
   ) {
     // Verify event exists
     const event = await this.prisma.event.findFirst({
-      where: { id: eventId, tenantId },
+      where: { id: eventId },
     });
 
     if (!event) {
@@ -964,7 +936,6 @@ export class ManagerDashboardService {
 
     const tier = await this.prisma.sponsorshipTier.create({
       data: {
-        tenantId,
         eventId,
         tierType: dto.tierType,
         askingPrice: dto.askingPrice,
@@ -977,7 +948,6 @@ export class ManagerDashboardService {
 
     // Audit log
     this.auditLogService.log({
-      tenantId,
       actorId,
       actorRole,
       action: 'tier.created',
@@ -1011,15 +981,14 @@ export class ManagerDashboardService {
   /**
    * GET /manager/activity
    *
-   * Returns paginated audit log entries for the manager's tenant.
+   * Returns paginated audit log entries.
    * Read-only — no write capability. Matches frontend ActivityLogResponse shape.
    */
-  async getActivity(tenantId: string, query: ManagerActivityQueryDto) {
+  async getActivity(query: ManagerActivityQueryDto) {
     const { page, page_size, type } = query;
     const skip = (page - 1) * page_size;
 
     const where: any = {
-      tenantId,
       ...(type && { entityType: type }),
     };
 
@@ -1058,12 +1027,11 @@ export class ManagerDashboardService {
 
   // ─── Proposals ───────────────────────────────────────────
 
-  async getProposals(tenantId: string, query: ManagerProposalsQueryDto) {
+  async getProposals(query: ManagerProposalsQueryDto) {
     const { page, page_size, status, search } = query;
     const skip = (page - 1) * page_size;
 
     const where: any = {
-      tenantId,
       isActive: true,
       ...(status && { status }),
       ...(search && {
@@ -1095,9 +1063,9 @@ export class ManagerDashboardService {
     };
   }
 
-  async getProposalById(tenantId: string, id: string) {
+  async getProposalById(id: string) {
     const proposal = await this.prisma.proposal.findUnique({
-      where: { id, tenantId },
+      where: { id },
       include: {
         sponsorship: {
           include: {
@@ -1117,14 +1085,13 @@ export class ManagerDashboardService {
   }
 
   async updateProposal(
-    tenantId: string,
     id: string,
     dto: UpdateManagerProposalDto,
     actorId: string,
     actorRole: string,
   ) {
     const proposal = await this.prisma.proposal.findUnique({
-      where: { id, tenantId },
+      where: { id },
     });
 
     if (!proposal) {
@@ -1148,7 +1115,6 @@ export class ManagerDashboardService {
     });
 
     this.auditLogService.log({
-      tenantId,
       actorId,
       actorRole,
       action: 'proposal.updated',

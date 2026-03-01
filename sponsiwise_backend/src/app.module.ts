@@ -9,7 +9,6 @@ import { appConfig, redisConfig, jwtConfig } from './common/config';
 import bullmqConfig from './jobs/config/bullmq.config';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
-import { TenantsModule } from './tenants/tenants.module';
 import { CompaniesModule } from './companies/companies.module';
 import { OrganizersModule } from './organizers/organizers.module';
 import { EventsModule } from './events/events.module';
@@ -24,9 +23,9 @@ import { AdminModule } from './admin/admin.module';
 import { CacheModule } from './cache/cache.module';
 import { QueueModule, WorkerModule } from './jobs';
 import { EmailLogsModule } from './email-logs/email-logs.module';
-import { ManagerLifecycleModule } from './manager-lifecycle/manager-lifecycle.module';
+
 import { NotificationsModule } from './notifications/notifications.module';
-import { CompanyLifecycleModule } from './company-lifecycle/company-lifecycle.module';
+
 import { HealthModule } from './health/health.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { SponsorshipTiersModule } from './sponsorship-tiers/sponsorship-tiers.module';
@@ -55,7 +54,6 @@ import { UploadModule } from './upload/upload.module';
     HealthModule,
     AuthModule,
     UsersModule,
-    TenantsModule,
     CompaniesModule,
     OrganizersModule,
     EventsModule,
@@ -68,9 +66,8 @@ import { UploadModule } from './upload/upload.module';
     ManagerDashboardModule,
     AdminModule,
     EmailLogsModule,
-    ManagerLifecycleModule,
     NotificationsModule,
-    CompanyLifecycleModule,
+
     OnboardingModule,
     SponsorshipTiersModule,
     UploadModule,
