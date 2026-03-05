@@ -36,7 +36,7 @@ export class OrganizerDashboardController {
    *
    * Returns aggregate stats for the organizer dashboard overview.
    */
-  @Get('dashboard/stats')
+  @Get('dashboard/stats')  //working and applied
   async getDashboardStats(@CurrentUser() user: JwtPayloadWithClaims) {
     return this.organizerDashboardService.getDashboardStats(user.organizer_id);
   }
@@ -48,7 +48,7 @@ export class OrganizerDashboardController {
    * organizerId is derived from the JWT — never from the request body.
    * The event is created in DRAFT status with PENDING verification.
    */
-  @Post('events')
+  @Post('events')  // working 
   async createEvent(
     @Body() dto: CreateOrganizerEventDto,
     @CurrentUser() user: JwtPayloadWithClaims,

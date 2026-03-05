@@ -4,7 +4,7 @@ import { fetchTenantUserById } from "@/lib/admin-api";
 import {
   updateUserRoleAction,
   toggleUserStatusAction,
-} from "@/app/(authenticated)/dashboard/_admin-actions";
+} from "@/app/(authenticated)/admin/_actions";
 import RoleBadge from "@/components/shared/RoleBadge";
 import UserStatusBadge from "@/components/shared/UserStatusBadge";
 import RoleAssignmentForm from "@/components/admin/RoleAssignmentForm";
@@ -30,7 +30,7 @@ export default async function UserDetail({ id }: UserDetailProps) {
     return (
       <div className="space-y-4">
         <Link
-          href="/dashboard/users"
+          href="/admin/users"
           className="text-sm text-red-600 hover:text-red-800 transition-colors"
         >
           ← Back to users
@@ -50,7 +50,7 @@ export default async function UserDetail({ id }: UserDetailProps) {
     <div className="space-y-8">
       {/* Breadcrumb */}
       <Link
-        href="/dashboard/users"
+        href="/admin/users"
         className="text-sm text-red-600 hover:text-red-800 transition-colors"
       >
         ← Back to users

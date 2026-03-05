@@ -53,7 +53,7 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
   return (
     <div className="space-y-8">
       <Link
-        href="/dashboard/events"
+        href="/organizer/events"
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 transition-colors"
       >
         ← Back to events
@@ -82,7 +82,7 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
               </span>
             )}
             <Link
-              href={`/dashboard/events/${id}/edit`}
+              href={`/organizer/events/${id}/edit`}
               className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
             >
               ✏️ Edit Event
@@ -213,7 +213,7 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
 
           {/* CTA */}
           <Link
-            href={`/dashboard/proposals?event_id=${event.id}`}
+            href={`/organizer/events/proposals?event_id=${event.id}`}
             className="block w-full rounded-xl bg-green-600 px-4 py-3 text-center text-sm font-medium text-white hover:bg-green-700 transition-colors"
           >
             View Proposals for This Event

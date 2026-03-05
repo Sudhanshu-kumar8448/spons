@@ -103,7 +103,7 @@ export default async function ManagerProposalsList({
                     return (
                         <Link
                             key={f.value}
-                            href={`/dashboard/proposals${query ? `?${query}` : ""}`}
+                            href={`/manager/proposals${query ? `?${query}` : ""}`}
                             className={`rounded-full px-3 py-1.5 text-sm font-medium transition-all ${isActive
                                 ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
                                 : "border border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900"
@@ -194,7 +194,7 @@ export default async function ManagerProposalsList({
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <Link
-                                                href={`/dashboard/proposals/${p.id}`}
+                                                href={`/manager/proposals/${p.id}`}
                                                 className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-500"
                                             >
                                                 Review Form →
@@ -211,7 +211,7 @@ export default async function ManagerProposalsList({
                         <div className="flex justify-center gap-4 pt-4">
                             {page > 1 && (
                                 <Link
-                                    href={`/dashboard/proposals?page=${page - 1}${statusFilter ? `&status=${statusFilter}` : ""}${searchFilter ? `&search=${searchFilter}` : ""}`}
+                                    href={`/manager/proposals?page=${page - 1}${statusFilter ? `&status=${statusFilter}` : ""}${searchFilter ? `&search=${searchFilter}` : ""}`}
                                     className="inline-flex items-center gap-1 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                                 >
                                     <ChevronLeft className="h-4 w-4" /> Previous
@@ -219,7 +219,7 @@ export default async function ManagerProposalsList({
                             )}
                             {page * 10 < total && (
                                 <Link
-                                    href={`/dashboard/proposals?page=${page + 1}${statusFilter ? `&status=${statusFilter}` : ""}${searchFilter ? `&search=${searchFilter}` : ""}`}
+                                    href={`/manager/proposals?page=${page + 1}${statusFilter ? `&status=${statusFilter}` : ""}${searchFilter ? `&search=${searchFilter}` : ""}`}
                                     className="inline-flex items-center gap-1 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                                 >
                                     Next <ChevronRight className="h-4 w-4" />

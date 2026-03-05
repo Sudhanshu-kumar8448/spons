@@ -51,7 +51,7 @@ export default async function AdminDashboard() {
       icon: Users,
       gradient: "from-blue-500 to-blue-600",
       glow: "shadow-blue-500/20",
-      href: "/dashboard/users",
+      href: "/admin/users",
     },
     {
       label: "Active Users",
@@ -59,7 +59,7 @@ export default async function AdminDashboard() {
       icon: UserCheck,
       gradient: "from-emerald-500 to-emerald-600",
       glow: "shadow-emerald-500/20",
-      href: "/dashboard/users?status=active",
+      href: "/admin/users?status=active",
     },
     {
       label: "Inactive Users",
@@ -67,7 +67,7 @@ export default async function AdminDashboard() {
       icon: UserX,
       gradient: "from-slate-500 to-slate-600",
       glow: "shadow-slate-500/20",
-      href: "/dashboard/users?status=inactive",
+      href: "/admin/users?status=inactive",
     },
     {
       label: "Recent Signups",
@@ -195,7 +195,7 @@ export default async function AdminDashboard() {
           {Object.entries(stats.users_by_role).map(([role, count]) => (
             <Link
               key={role}
-              href={`/dashboard/users?role=${role}`}
+              href={`/admin/users?role=${role}`}
               className="group rounded-2xl border border-slate-800 bg-slate-900 p-4 transition-all duration-300 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/5"
             >
               <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -271,14 +271,14 @@ export default async function AdminDashboard() {
         </h3>
         <div className="flex flex-wrap gap-3">
           <Link
-            href="/dashboard/users"
+            href="/admin/users"
             className="group inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-sky-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition-all hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5"
           >
             Manage Users
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </Link>
           <Link
-            href="/dashboard/users?status=inactive"
+            href="/admin/users?status=inactive"
             className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-300 transition-all hover:border-slate-600 hover:bg-slate-800 hover:text-white"
           >
             View Inactive Users

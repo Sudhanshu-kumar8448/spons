@@ -112,8 +112,6 @@ export interface CreateProposalPayload {
 
 export interface SponsorshipTier {
     id: string;
-    tenantId: string;
-    eventId: string;
     tierType: TierType;
     askingPrice: number;
     totalSlots: number;
@@ -121,52 +119,45 @@ export interface SponsorshipTier {
     availableSlots: number;
     isLocked: boolean;
     isActive: boolean;
-    isAvailable: boolean;
 }
 
 export interface EventAddress {
-    addressLine1: string;
-    addressLine2?: string;
+    addressLine1?: string;
+    addressLine2?: string | null;
     city: string;
     state: string;
-    country: string;
-    postalCode: string;
+    country?: string;
+    postalCode?: string;
 }
+
+export type EventCategory =
+    | "TECHNOLOGY"
+    | "MUSIC_ENTERTAINMENT"
+    | "BUSINESS"
+    | "EDUCATION"
+    | "SPORTS"
+    | "CULTURAL"
+    | "ART_CREATIVE"
+    | "LIFESTYLE"
+    | "OTHER";
 
 export interface BrowsableEvent {
     id: string;
-    tenantId: string;
-    organizerId: string;
     title: string;
     description?: string | null;
     location?: string | null;
-    venue?: string | null;
-    category?: string | null;
+    category: EventCategory | string;
     expectedFootfall: number;
-    expected_footfall: number;
     startDate: string;
-    start_date: string;
     endDate: string;
-    end_date: string;
-    status: EventStatus;
     website?: string | null;
-    logoUrl?: string | null;
-    image_url?: string | null;
-    pptDeckUrl?: string | null;
     contactPhone?: string | null;
     contactEmail?: string | null;
-    verificationStatus: string;
-    isActive: boolean;
-    createdAt: string;
-    updatedAt: string;
-    tags: string[];
     tiers: SponsorshipTier[];
     address?: EventAddress | null;
     organizer?: {
         id: string;
         name: string;
-        logoUrl?: string | null;
-        logo_url?: string | null;
     };
 }
 

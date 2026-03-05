@@ -48,6 +48,12 @@ export class ManagerEventsQueryDto extends ManagerPaginationQueryDto {
   verification_status?: string;
 
   @IsOptional()
+  @IsIn(['DRAFT', 'UNDER_MANAGER_REVIEW', 'VERIFIED', 'REJECTED', 'PUBLISHED', 'CANCELLED', 'COMPLETED'], {
+    message: 'status must be a valid EventStatus',
+  })
+  status?: string;
+
+  @IsOptional()
   @IsString()
   search?: string;
 }

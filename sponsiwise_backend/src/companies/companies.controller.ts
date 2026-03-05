@@ -43,7 +43,7 @@ export class CompaniesController {
    */
   @Get()
   @UseGuards(AuthGuard, RoleGuard)
-  @Roles(Role.USER, Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.MANAGER, Role.ADMIN, Role.SUPER_ADMIN)
   async findAll(@Query() query: ListCompaniesQueryDto) {
     return this.companyService.findAll(query);
   }

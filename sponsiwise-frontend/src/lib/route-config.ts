@@ -25,15 +25,10 @@ export const protectedRoutes: RouteRule[] = [
   { path: "/sponsor/pending" },
   { path: "/organizer/register" },
 
-  // Any authenticated user
-  { path: "/dashboard" },
-  { path: "/settings" },
-  { path: "/notifications" },
-
   // Role-specific areas
+  { path: "/brand", roles: ["SPONSOR"] },
   { path: "/admin", roles: ["ADMIN", "SUPER_ADMIN"] },
   { path: "/manager", roles: ["MANAGER"] },
-  { path: "/sponsor", roles: ["SPONSOR"] },
   { path: "/organizer", roles: ["ORGANIZER"] },
 ];
 

@@ -24,9 +24,8 @@ export default function RoleLayoutRenderer({
 }: RoleLayoutRendererProps) {
   switch (user.role) {
     case UserRole.USER:
-      // USER role hasn't completed onboarding — redirect
-      redirect("/onboarding");
-      return null; // unreachable
+      // USER role hasn't completed onboarding — render without sidebar/dashboard layout
+      return <>{children}</>;
 
     case UserRole.ADMIN:
       return <AdminLayout user={user}>{children}</AdminLayout>;

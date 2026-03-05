@@ -38,6 +38,7 @@ export const EventStatus = {
 
 export type TierType =
     | "TITLE"
+    | "PLATINUM"
     | "PRESENTING"
     | "POWERED_BY"
     | "GOLD"
@@ -45,6 +46,7 @@ export type TierType =
 
 export const TierType = {
     TITLE: "TITLE" as TierType,
+    PLATINUM: "PLATINUM" as TierType,
     PRESENTING: "PRESENTING" as TierType,
     POWERED_BY: "POWERED_BY" as TierType,
     GOLD: "GOLD" as TierType,
@@ -215,6 +217,12 @@ export interface CreateEventPayload {
     contactPhone?: string;
     contactEmail?: string;
     pptDeckUrl?: string;
+    audienceProfile?: {
+        genders?: { gender: string; percentage: number }[];
+        ages?: { bracket: string; percentage: number }[];
+        incomes?: { bracket: string; percentage: number }[];
+        regions?: { city: string; state: string; percentage: number }[];
+    };
     tiers?: {
         tierType: TierType | "CUSTOM";
         customName?: string;

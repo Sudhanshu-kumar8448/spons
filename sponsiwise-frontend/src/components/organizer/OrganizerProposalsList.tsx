@@ -103,7 +103,7 @@ export default async function OrganizerProposalsList({
           return (
             <Link
               key={f.value}
-              href={`/dashboard/proposals${query ? `?${query}` : ""}`}
+              href={`/organizer/events/proposals${query ? `?${query}` : ""}`}
               className={`rounded-full px-3 py-1.5 text-sm font-medium transition-all ${isActive
                   ? "bg-gradient-to-r from-blue-600 to-sky-500 text-white shadow-lg shadow-blue-500/20"
                   : "border border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-600 hover:text-white"
@@ -120,7 +120,7 @@ export default async function OrganizerProposalsList({
         <div className="flex items-center gap-2 text-sm text-slate-400">
           <span>Filtered by event</span>
           <Link
-            href={`/dashboard/proposals${statusFilter ? `?status=${statusFilter}` : ""}`}
+            href={`/organizer/events/proposals${statusFilter ? `?status=${statusFilter}` : ""}`}
             className="text-blue-400 hover:text-sky-300 font-medium transition-colors"
           >
             Clear event filter ×
@@ -172,7 +172,7 @@ export default async function OrganizerProposalsList({
                   >
                     <td className="px-6 py-4">
                       <Link
-                        href={`/dashboard/proposals/${p.id}`}
+                        href={`/organizer/events/proposals/${p.id}`}
                         className="text-sm font-medium text-blue-400 hover:text-sky-300 transition-colors"
                       >
                         {p.title}
@@ -224,7 +224,7 @@ export default async function OrganizerProposalsList({
             <div className="flex justify-center gap-4 pt-4">
               {page > 1 && (
                 <Link
-                  href={`/dashboard/proposals?page=${page - 1}${statusFilter ? `&status=${statusFilter}` : ""}${eventIdFilter ? `&event_id=${eventIdFilter}` : ""}`}
+                  href={`/organizer/events/proposals?page=${page - 1}${statusFilter ? `&status=${statusFilter}` : ""}${eventIdFilter ? `&event_id=${eventIdFilter}` : ""}`}
                   className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white transition-all"
                 >
                   <ChevronLeft className="h-4 w-4" /> Previous
@@ -232,7 +232,7 @@ export default async function OrganizerProposalsList({
               )}
               {page * 10 < total && (
                 <Link
-                  href={`/dashboard/proposals?page=${page + 1}${statusFilter ? `&status=${statusFilter}` : ""}${eventIdFilter ? `&event_id=${eventIdFilter}` : ""}`}
+                  href={`/organizer/events/proposals?page=${page + 1}${statusFilter ? `&status=${statusFilter}` : ""}${eventIdFilter ? `&event_id=${eventIdFilter}` : ""}`}
                   className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white transition-all"
                 >
                   Next <ChevronRight className="h-4 w-4" />

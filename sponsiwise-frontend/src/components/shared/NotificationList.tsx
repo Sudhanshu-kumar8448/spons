@@ -11,6 +11,7 @@ interface NotificationListProps {
     total: number;
     page: number;
     pageSize: number;
+    basePath?: string;
 }
 
 /**
@@ -21,6 +22,7 @@ export default function NotificationList({
     total,
     page,
     pageSize,
+    basePath = "/brand/notification",
 }: NotificationListProps) {
     const [notifications, setNotifications] =
         useState<Notification[]>(initialNotifications);
@@ -84,7 +86,7 @@ export default function NotificationList({
                 <div className="flex items-center justify-center gap-2">
                     {page > 1 && (
                         <Link
-                            href={`/dashboard/notifications?page=${page - 1}`}
+                            href={`${basePath}?page=${page - 1}`}
                             className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-300 transition-all hover:border-slate-600 hover:bg-slate-800"
                         >
                             Previous
@@ -95,7 +97,7 @@ export default function NotificationList({
                     </span>
                     {page < totalPages && (
                         <Link
-                            href={`/dashboard/notifications?page=${page + 1}`}
+                            href={`${basePath}?page=${page + 1}`}
                             className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-300 transition-all hover:border-slate-600 hover:bg-slate-800"
                         >
                             Next

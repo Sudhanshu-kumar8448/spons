@@ -653,7 +653,6 @@ async function main() {
   const techProfile = await prisma.eventAudienceProfile.create({
     data: {
       eventId: eventsByKey['tech-summit'].id,
-      totalExpectedAudience: 12000,
     },
   });
 
@@ -723,7 +722,6 @@ async function main() {
   const lifestyleProfile = await prisma.eventAudienceProfile.create({
     data: {
       eventId: eventsByKey['lifestyle-con'].id,
-      totalExpectedAudience: 0,
     },
   });
 

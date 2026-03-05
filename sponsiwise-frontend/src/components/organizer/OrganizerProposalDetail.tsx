@@ -94,7 +94,7 @@ export default async function OrganizerProposalDetail({
   return (
     <div className="space-y-8">
       <Link
-        href="/dashboard/proposals"
+        href="/organizer/events/proposals"
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 transition-colors"
       >
         ← Back to proposals
@@ -112,7 +112,7 @@ export default async function OrganizerProposalDetail({
           <p className="mt-1 text-sm text-gray-500">
             For{" "}
             <Link
-              href={`/dashboard/events/${proposal.event_id}`}
+              href={`/organizer/events/${proposal.event_id}`}
               className="font-medium text-green-700 hover:text-green-900"
             >
               {proposal.event.title}
@@ -225,7 +225,7 @@ export default async function OrganizerProposalDetail({
             </h3>
             <div className="mt-4 text-sm">
               <Link
-                href={`/dashboard/events/${proposal.event_id}`}
+                href={`/organizer/events/${proposal.event_id}`}
                 className="font-medium text-green-700 hover:text-green-900"
               >
                 {proposal.event.title}

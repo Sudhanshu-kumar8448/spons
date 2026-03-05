@@ -41,7 +41,7 @@ export default async function ManagerDashboard() {
             icon: Clock,
             color: "text-amber-400",
             bgColor: "bg-amber-500/10",
-            href: "/dashboard/companies?verification_status=PENDING",
+            href: "/manager/verifyBrands?verification_status=PENDING",
         },
         {
             label: "Verified Companies",
@@ -49,7 +49,7 @@ export default async function ManagerDashboard() {
             icon: CheckCircle2,
             color: "text-emerald-400",
             bgColor: "bg-emerald-500/10",
-            href: "/dashboard/companies?verification_status=VERIFIED",
+            href: "/manager/verifyBrands?verification_status=VERIFIED",
         },
         {
             label: "Pending Events",
@@ -57,7 +57,7 @@ export default async function ManagerDashboard() {
             icon: Clock,
             color: "text-amber-400",
             bgColor: "bg-amber-500/10",
-            href: "/dashboard/events?verification_status=PENDING",
+            href: "/manager/liveEvents?verification_status=PENDING",
         },
         {
             label: "Verified Events",
@@ -65,7 +65,7 @@ export default async function ManagerDashboard() {
             icon: CheckCircle2,
             color: "text-emerald-400",
             bgColor: "bg-emerald-500/10",
-            href: "/dashboard/events?verification_status=VERIFIED",
+            href: "/manager/liveEvents?verification_status=VERIFIED",
         },
         {
             label: "Total Companies",
@@ -73,7 +73,7 @@ export default async function ManagerDashboard() {
             icon: Building2,
             color: "text-blue-400",
             bgColor: "bg-blue-500/10",
-            href: "/dashboard/companies",
+            href: "/manager/verifyBrands",
         },
         {
             label: "Total Events",
@@ -81,7 +81,7 @@ export default async function ManagerDashboard() {
             icon: Calendar,
             color: "text-purple-400",
             bgColor: "bg-purple-500/10",
-            href: "/dashboard/events",
+            href: "/manager/liveEvents",
         },
     ];
 

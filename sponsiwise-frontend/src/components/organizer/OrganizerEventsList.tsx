@@ -104,13 +104,13 @@ function OrganizerEventCard({ event }: { event: OrganizerEvent }) {
 
         <div className="mt-3 flex gap-2">
           <Link
-            href={`/dashboard/events/${event.id}`}
+            href={`/organizer/events/${event.id}`}
             className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white transition-all"
           >
             <Eye className="h-3 w-3" /> View details
           </Link>
           <Link
-            href={`/dashboard/proposals?event_id=${event.id}`}
+            href={`/organizer/events/proposals?event_id=${event.id}`}
             className="inline-flex items-center gap-1 rounded-xl bg-gradient-to-r from-blue-600 to-sky-500 px-3 py-1.5 text-xs font-medium text-white shadow-lg shadow-blue-500/20 hover:shadow-xl transition-all"
           >
             <FileText className="h-3 w-3" /> Proposals
@@ -135,7 +135,7 @@ function EmptyState() {
         event.
       </p>
       <Link
-        href="/dashboard/events/new"
+        href="/organizer/events/newEvent"
         className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-green-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all hover:shadow-xl hover:shadow-emerald-500/30 hover:-translate-y-0.5"
       >
         <Plus className="h-4 w-4" />
@@ -214,7 +214,7 @@ export default async function OrganizerEventsList({
           </p>
         </div>
         <Link
-          href="/dashboard/events/new"
+          href="/organizer/events/newEvent"
           className="group inline-flex items-center gap-2 self-start rounded-xl bg-gradient-to-r from-emerald-600 to-green-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all hover:shadow-xl hover:shadow-emerald-500/30 hover:-translate-y-0.5 sm:self-center"
         >
           <Plus className="h-4 w-4" />
@@ -296,7 +296,7 @@ export default async function OrganizerEventsList({
             <div className="flex justify-center gap-4 pt-4">
               {page > 1 && (
                 <Link
-                  href={`/dashboard/events?page=${page - 1}${statusFilter ? `&status=${statusFilter}` : ""}${search ? `&search=${search}` : ""}`}
+                  href={`/organizer/events?page=${page - 1}${statusFilter ? `&status=${statusFilter}` : ""}${search ? `&search=${search}` : ""}`}
                   className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white transition-all"
                 >
                   <ChevronLeft className="h-4 w-4" /> Previous
@@ -304,7 +304,7 @@ export default async function OrganizerEventsList({
               )}
               {page * 12 < total && (
                 <Link
-                  href={`/dashboard/events?page=${page + 1}${statusFilter ? `&status=${statusFilter}` : ""}${search ? `&search=${search}` : ""}`}
+                  href={`/organizer/events?page=${page + 1}${statusFilter ? `&status=${statusFilter}` : ""}${search ? `&search=${search}` : ""}`}
                   className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white transition-all"
                 >
                   Next <ChevronRight className="h-4 w-4" />

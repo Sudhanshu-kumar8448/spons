@@ -146,22 +146,14 @@ export class ManagerDashboardService {
         id: c.id,
         name: c.name,
         slug: c.slug || c.id,
-        email: '', // Company model has no direct email field
-        phone: null,
+        type: c.type || null,
         website: c.website || null,
-        logo_url: null,
-        industry: c.type || null,
+        logoUrl: null,
         description: c.strategicIntent || '',
-        verification_status: c.verificationStatus.toLowerCase(),
-        verification_notes: null,
-        verified_at: null,
-        owner: {
-          id: '',
-          email: '',
-          name: c.name,
-        },
-        created_at: c.createdAt.toISOString(),
-        updated_at: c.updatedAt.toISOString(),
+        verificationStatus: c.verificationStatus,
+        isActive: c.isActive,
+        createdAt: c.createdAt.toISOString(),
+        updatedAt: c.updatedAt.toISOString(),
       })),
       total,
       page,
@@ -190,6 +182,12 @@ export class ManagerDashboardService {
         isActive: true,
         createdAt: true,
         updatedAt: true,
+        approvedById: true,
+        approvedAt: true,
+        rejectionReason: true,
+        approvedBy: {
+          select: { id: true, email: true },
+        },
         users: {
           select: { id: true, email: true },
           take: 1,
@@ -207,22 +205,24 @@ export class ManagerDashboardService {
       id: company.id,
       name: company.name,
       slug: company.slug || company.id,
-      email: owner.email,
-      phone: null,
+      type: company.type || null,
       website: company.website || null,
-      logo_url: null,
-      industry: company.type || null,
+      logoUrl: null,
       description: company.strategicIntent || '',
-      verification_status: company.verificationStatus.toLowerCase(),
-      verification_notes: null,
-      verified_at: null,
+      verificationStatus: company.verificationStatus,
+      isActive: company.isActive,
+      rejectionReason: company.rejectionReason || null,
+      verifiedAt: company.approvedAt ? company.approvedAt.toISOString() : null,
+      verifiedBy: company.approvedBy
+        ? { id: company.approvedBy.id, email: company.approvedBy.email }
+        : null,
       owner: {
         id: owner.id,
         email: owner.email,
         name: company.name,
       },
-      created_at: company.createdAt.toISOString(),
-      updated_at: company.updatedAt.toISOString(),
+      createdAt: company.createdAt.toISOString(),
+      updatedAt: company.updatedAt.toISOString(),
     };
   }
 
@@ -258,7 +258,12 @@ export class ManagerDashboardService {
 
     const updated = await this.prisma.company.update({
       where: { id: companyId },
-      data: { verificationStatus: newStatus },
+      data: {
+        verificationStatus: newStatus,
+        approvedById: reviewerId,
+        approvedAt: new Date(),
+        rejectionReason: dto.action === 'reject' ? (dto.notes || null) : null,
+      },
     });
 
     // Upgrade company owner's role from USER → SPONSOR on verification
@@ -303,8 +308,8 @@ export class ManagerDashboardService {
     return {
       id: updated.id,
       name: updated.name,
-      verification_status: updated.verificationStatus.toLowerCase(),
-      updated_at: updated.updatedAt.toISOString(),
+      verificationStatus: updated.verificationStatus,
+      updatedAt: updated.updatedAt.toISOString(),
     };
   }
 
@@ -318,15 +323,14 @@ export class ManagerDashboardService {
    * Matches frontend VerifiableEventsResponse shape.
    */
   async getEvents(query: ManagerEventsQueryDto) {
-    const { page, page_size, verification_status, search } = query;
+    const { page, page_size, verification_status, status, search } = query;
     const skip = (page - 1) * page_size;
 
-    const statusFilter = verification_status
-      ? (verification_status.toUpperCase() as VerificationStatus)
-      : VerificationStatus.PENDING;
-
     const where: any = {
-      verificationStatus: statusFilter,
+      ...(verification_status
+        ? { verificationStatus: verification_status.toUpperCase() as VerificationStatus }
+        : !status && { verificationStatus: VerificationStatus.PENDING }),
+      ...(status && { status: status.toUpperCase() as EventStatus }),
       ...(search && {
         OR: [
           { title: { contains: search, mode: 'insensitive' } },
@@ -802,6 +806,126 @@ export class ManagerDashboardService {
       verification_status: result.verificationStatus.toLowerCase(),
       status: result.status.toLowerCase(),
       updated_at: result.updatedAt.toISOString(),
+    };
+  }
+
+  // ─── Publish / Cancel Events ─────────────────────────────
+
+  /**
+   * POST /manager/events/:id/publish
+   *
+   * Publishes an event that already has EventStatus.VERIFIED.
+   * Only verified events can be published.
+   */
+  async publishEvent(
+    eventId: string,
+    actorId: string,
+    actorRole: string,
+  ) {
+    const event = await this.prisma.event.findFirst({
+      where: { id: eventId },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event ${eventId} not found`);
+    }
+
+    if (event.status !== EventStatus.VERIFIED) {
+      throw new BadRequestException(
+        `Only verified events can be published. Current status: ${event.status}`,
+      );
+    }
+
+    const updated = await this.prisma.event.update({
+      where: { id: eventId },
+      data: { status: EventStatus.PUBLISHED },
+    });
+
+    this.auditLogService.log({
+      actorId,
+      actorRole,
+      action: 'event.published',
+      entityType: 'Event',
+      entityId: eventId,
+      metadata: {
+        previousStatus: event.status,
+        newStatus: EventStatus.PUBLISHED,
+      },
+    });
+
+    this.logger.log(`Event ${eventId} published by ${actorId}`);
+
+    return {
+      id: updated.id,
+      title: updated.title,
+      status: updated.status,
+      verificationStatus: updated.verificationStatus,
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  }
+
+  /**
+   * POST /manager/events/:id/cancel
+   *
+   * Cancels an event. Events in DRAFT or COMPLETED status cannot be cancelled.
+   */
+  async cancelEvent(
+    eventId: string,
+    notes: string | undefined,
+    actorId: string,
+    actorRole: string,
+  ) {
+    const event = await this.prisma.event.findFirst({
+      where: { id: eventId },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event ${eventId} not found`);
+    }
+
+    if (event.status === EventStatus.CANCELLED) {
+      throw new BadRequestException('Event is already cancelled');
+    }
+
+    if (event.status === EventStatus.COMPLETED) {
+      throw new BadRequestException('Completed events cannot be cancelled');
+    }
+
+    if (event.status === EventStatus.DRAFT) {
+      throw new BadRequestException(
+        'Draft events cannot be cancelled by manager. Ask the organizer to delete it instead.',
+      );
+    }
+
+    const updated = await this.prisma.event.update({
+      where: { id: eventId },
+      data: {
+        status: EventStatus.CANCELLED,
+        rejectionReason: notes || null,
+      },
+    });
+
+    this.auditLogService.log({
+      actorId,
+      actorRole,
+      action: 'event.cancelled',
+      entityType: 'Event',
+      entityId: eventId,
+      metadata: {
+        previousStatus: event.status,
+        newStatus: EventStatus.CANCELLED,
+        notes: notes || null,
+      },
+    });
+
+    this.logger.log(`Event ${eventId} cancelled by ${actorId}`);
+
+    return {
+      id: updated.id,
+      title: updated.title,
+      status: updated.status,
+      verificationStatus: updated.verificationStatus,
+      updatedAt: updated.updatedAt.toISOString(),
     };
   }
 

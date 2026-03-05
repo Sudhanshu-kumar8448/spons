@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Bell } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import type { Notification } from "@/lib/types/notifications";
@@ -11,6 +12,16 @@ import type { Notification } from "@/lib/types/notifications";
  * Fetches notifications on open, marks as read on click.
  */
 export default function NotificationsDropdown() {
+    const pathname = usePathname();
+    const notificationsPath = pathname.startsWith("/brand")
+        ? "/brand/notification"
+        : pathname.startsWith("/organizer")
+            ? "/organizer/notification"
+            : pathname.startsWith("/manager")
+                ? "/manager/notification"
+                : pathname.startsWith("/admin")
+                    ? "/admin/notifications"
+                    : "/brand/notification";
     const [open, setOpen] = useState(false);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
@@ -97,7 +108,7 @@ export default function NotificationsDropdown() {
                     <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
                         <h3 className="text-sm font-semibold text-white">Notifications</h3>
                         <Link
-                            href="/dashboard/notifications"
+                            href={notificationsPath}
                             onClick={() => setOpen(false)}
                             className="text-xs font-medium text-blue-400 transition-colors hover:text-sky-300"
                         >
@@ -118,7 +129,7 @@ export default function NotificationsDropdown() {
                             notifications.map((n) => (
                                 <Link
                                     key={n.id}
-                                    href={n.link || "/dashboard/notifications"}
+                                    href={n.link || notificationsPath}
                                     onClick={() => setOpen(false)}
                                     className={`block border-b border-slate-700/50 px-4 py-3 transition-colors hover:bg-slate-700/50 last:border-b-0 ${!n.read ? "bg-slate-700/20" : ""
                                         }`}

@@ -182,12 +182,12 @@ export class OnboardingService {
             const organizer = await tx.organizer.create({
                 data: {
                     name: dto.name,
-                    ...(dto.type !== undefined && { type: dto.type }),
-                    contactPhone: dto.contactPhone || null,
-                    website: dto.website || null,
-                    ...(dto.pastRecords !== undefined && { pastRecords: dto.pastRecords }),
-                    ...(dto.socialLinks !== undefined && { socialLinks: dto.socialLinks }),
-                    ...(dto.taxId !== undefined && { taxId: dto.taxId }),
+                    type: dto.type,
+                    contactPhone: dto.contactPhone,
+                    website: dto.website ?? null,
+                    pastRecords: dto.pastRecords,
+                    socialLinks: dto.socialLinks,
+                    taxId: dto.taxId ?? null,
                 },
             });
 

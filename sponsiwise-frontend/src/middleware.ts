@@ -35,12 +35,15 @@ export async function middleware(request: NextRequest) {
 
     const userRole = payload.role as string;
 
-    // USER role users trying to access /dashboard → redirect to /onboarding
-    if (
-      userRole === "USER" &&
-      (pathname === "/dashboard" || pathname.startsWith("/dashboard/"))
-    ) {
-      return NextResponse.redirect(new URL("/onboarding", request.url));
+    // USER role users trying to access role-specific areas → redirect to /onboarding
+    if (userRole === "USER") {
+      const rolePrefixes = ["/brand", "/manager", "/organizer", "/admin"];
+      const isRoleArea = rolePrefixes.some(
+        (prefix) => pathname === prefix || pathname.startsWith(prefix + "/"),
+      );
+      if (isRoleArea) {
+        return NextResponse.redirect(new URL("/onboarding", request.url));
+      }
     }
 
     // Enforce role restriction (if any)

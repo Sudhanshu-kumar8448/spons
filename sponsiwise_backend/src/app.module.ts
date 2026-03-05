@@ -15,7 +15,6 @@ import { EventsModule } from './events/events.module';
 import { SponsorshipsModule } from './sponsorships/sponsorships.module';
 import { ProposalsModule } from './proposals/proposals.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
-import { PublicModule } from './public/public.module';
 import { SponsorModule } from './sponsor/sponsor.module';
 import { OrganizerDashboardModule } from './organizer-dashboard/organizer-dashboard.module';
 import { ManagerDashboardModule } from './manager-dashboard/manager-dashboard.module';
@@ -60,14 +59,12 @@ import { UploadModule } from './upload/upload.module';
     SponsorshipsModule,
     ProposalsModule,
     AuditLogsModule,
-    PublicModule,
     SponsorModule,
     OrganizerDashboardModule,
     ManagerDashboardModule,
     AdminModule,
     EmailLogsModule,
     NotificationsModule,
-
     OnboardingModule,
     SponsorshipTiersModule,
     UploadModule,

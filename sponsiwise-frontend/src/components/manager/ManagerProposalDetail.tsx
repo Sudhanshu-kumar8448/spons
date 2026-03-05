@@ -113,8 +113,8 @@ export default async function ManagerProposalDetail({
 
         try {
             await updateManagerProposal(id, payload);
-            revalidatePath(`/dashboard/proposals/${id}`);
-            revalidatePath(`/dashboard/proposals`);
+            revalidatePath(`/manager/proposals/${id}`);
+            revalidatePath(`/manager/proposals`);
         } catch (e: any) {
             console.error("Failed to update proposal", e.message);
         }
@@ -123,7 +123,7 @@ export default async function ManagerProposalDetail({
     return (
         <div className="space-y-8">
             <Link
-                href="/dashboard/proposals"
+                href="/manager/proposals"
                 className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 transition-colors"
             >
                 ← Back to proposals
@@ -145,7 +145,7 @@ export default async function ManagerProposalDetail({
                         </span>{" "}
                         for{" "}
                         <Link
-                            href={`/dashboard/events/${proposal.sponsorship?.eventId}`}
+                            href={`/manager/liveEvents/${proposal.sponsorship?.eventId}`}
                             className="font-medium text-blue-600 hover:text-blue-800"
                         >
                             {proposal.sponsorship?.event?.title}

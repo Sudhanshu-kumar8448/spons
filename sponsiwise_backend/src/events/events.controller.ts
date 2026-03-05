@@ -1,11 +1,8 @@
 import {
   Controller,
   Get,
-  Post,
-  Patch,
   Delete,
   Param,
-  Body,
   Query,
   UseGuards,
   ParseUUIDPipe,
@@ -14,7 +11,7 @@ import { Role } from '@prisma/client';
 import { AuthGuard, RoleGuard } from '../common/guards';
 import { Roles } from '../common/decorators';
 import { EventService } from './event.service';
-import { CreateEventDto, UpdateEventDto, ListEventsQueryDto } from './dto';
+import {  ListEventsQueryDto } from './dto';
 
 /**
  * EventsController — HTTP layer for event management.
@@ -23,20 +20,7 @@ import { CreateEventDto, UpdateEventDto, ListEventsQueryDto } from './dto';
 export class EventsController {
   constructor(private readonly eventService: EventService) { }
 
-  // ─── CREATE ──────────────────────────────────────────────
-
-  /**
-   * POST /events
-   * Create a new event under an Organizer.
-   * Body must include organizerId.
-   */
-  @Post()
-  @UseGuards(AuthGuard, RoleGuard)
-  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
-  async create(@Body() dto: CreateEventDto) {
-    return this.eventService.create(dto);
-  }
-
+  
   // ─── READ ────────────────────────────────────────────────
 
   /**
@@ -45,7 +29,7 @@ export class EventsController {
    */
   @Get()
   @UseGuards(AuthGuard, RoleGuard)
-  @Roles(Role.USER, Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.MANAGER, Role.ADMIN, Role.SUPER_ADMIN)
   async findAll(@Query() query: ListEventsQueryDto) {
     return this.eventService.findAll(query);
   }
@@ -56,26 +40,12 @@ export class EventsController {
    */
   @Get(':id')
   @UseGuards(AuthGuard, RoleGuard)
-  @Roles(Role.USER, Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.MANAGER, Role.ADMIN, Role.SUPER_ADMIN)
   async findById(@Param('id', ParseUUIDPipe) id: string) {
     return this.eventService.findById(id);
   }
 
-  // ─── UPDATE ──────────────────────────────────────────────
 
-  /**
-   * PATCH /events/:id
-   * Update event details.
-   */
-  @Patch(':id')
-  @UseGuards(AuthGuard, RoleGuard)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async update(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateEventDto,
-  ) {
-    return this.eventService.update(id, dto);
-  }
 
   // ─── DELETE ──────────────────────────────────────────────
 

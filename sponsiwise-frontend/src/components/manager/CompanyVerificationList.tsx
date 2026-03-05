@@ -58,7 +58,7 @@ export default async function CompanyVerificationList({
             if (v) params.set(k, v);
         });
         const qs = params.toString();
-        return `/dashboard/companies${qs ? `?${qs}` : ""}`;
+        return `/manager/verifyBrands${qs ? `?${qs}` : ""}`;
     }
 
     const verificationBadge: Record<string, string> = {
@@ -111,7 +111,7 @@ export default async function CompanyVerificationList({
                     {companies.map((company) => (
                         <Link
                             key={company.id}
-                            href={`/dashboard/companies/${company.id}`}
+                            href={`/manager/verifyBrands/${company.id}`}
                             className="block rounded-2xl border border-slate-800 bg-slate-900 p-5 transition-all hover:border-slate-700 hover:bg-slate-800/50"
                         >
                             <div className="flex items-center justify-between gap-4">

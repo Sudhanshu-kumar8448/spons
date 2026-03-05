@@ -88,11 +88,22 @@ export default function Sidebar({
     }
   };
 
+  const homePath =
+    role === "SPONSOR"
+      ? "/brand/dashboard"
+      : role === "ORGANIZER"
+        ? "/organizer/dashboard"
+        : role === "MANAGER"
+          ? "/manager/dashboard"
+          : role === "ADMIN"
+            ? "/admin"
+            : "/";
+
   const sidebarContent = (
     <div className="flex h-full flex-col">
       {/* Brand */}
       <div className="flex h-16 items-center justify-between border-b border-slate-800 px-4">
-        <Link href="/dashboard" className="flex items-center gap-2.5">
+        <Link href={homePath} className="flex items-center gap-2.5">
           <Image
             src="/images/logo-icon.svg"
             alt="SponsiWise"

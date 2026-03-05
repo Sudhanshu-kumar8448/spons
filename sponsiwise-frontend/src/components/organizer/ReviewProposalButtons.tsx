@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import {
   reviewProposalAction,
   type ReviewProposalState,
-} from "@/app/(authenticated)/dashboard/proposals/_organizer-actions";
+} from "@/app/(authenticated)/organizer/events/_actions";
 
 interface ReviewProposalButtonsProps {
   proposalId: string;

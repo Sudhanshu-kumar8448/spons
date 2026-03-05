@@ -43,6 +43,8 @@ import {
  * Write endpoints:
  *  - POST /manager/companies/:id/verify
  *  - POST /manager/events/:id/verify
+ *  - POST /manager/events/:id/publish
+ *  - POST /manager/events/:id/cancel
  *  - PATCH /manager/proposals/:id
  *
  * All endpoints require MANAGER role.
@@ -109,6 +111,23 @@ export class ManagerDashboardController {
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
     return this.service.verifyEvent(id, dto, user.sub, user.role);
+  }
+
+  @Post('events/:id/publish')
+  async publishEvent(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayloadWithClaims,
+  ) {
+    return this.service.publishEvent(id, user.sub, user.role);
+  }
+
+  @Post('events/:id/cancel')
+  async cancelEvent(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: VerifyEntityDto,
+    @CurrentUser() user: JwtPayloadWithClaims,
+  ) {
+    return this.service.cancelEvent(id, dto.notes, user.sub, user.role);
   }
 
   // ─── Tier Management ─────────────────────────────────────

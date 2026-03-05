@@ -20,29 +20,25 @@ export class CreateOrganizerDto {
     @MaxLength(255, { message: 'Organizer name must be 255 characters or fewer' })
     name!: string;
 
-    @IsOptional()
     @IsEnum(OrganizerType, {
         message: `Type must be one of: ${Object.values(OrganizerType).join(', ')}`,
     })
-    type?: OrganizerType;
+    type!: OrganizerType;
 
-    @IsOptional()
     @IsString()
     @MaxLength(50, { message: 'Contact phone must be 50 characters or fewer' })
-    contactPhone?: string;
+    contactPhone!: string;
 
     @IsOptional()
     @IsUrl({}, { message: 'Website must be a valid URL' })
     @MaxLength(500, { message: 'Website must be 500 characters or fewer' })
     website?: string;
 
-    @IsOptional()
     @IsString()
-    pastRecords?: string;
+    pastRecords!: string;
 
-    @IsOptional()
     @IsObject({ message: 'socialLinks must be a JSON object' })
-    socialLinks?: Record<string, any>;
+    socialLinks!: Record<string, any>;
 
     @IsOptional()
     @IsString()

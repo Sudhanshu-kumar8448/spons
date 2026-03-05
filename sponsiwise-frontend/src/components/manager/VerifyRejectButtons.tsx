@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import type { VerificationActionState } from "@/app/(authenticated)/dashboard/_manager-actions";
+import type { VerificationActionState } from "@/app/(authenticated)/manager/_actions";
 
 interface VerifyRejectButtonsProps {
   entityId: string;

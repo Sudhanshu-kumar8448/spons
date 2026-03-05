@@ -73,6 +73,9 @@ export class OnboardingController {
         return result;
     }
 
+
+    
+
     // ─── PRIVATE HELPERS (duplicated from AuthController for now) ───
 
     private setAccessTokenCookie(res: Response, accessToken: string): void {

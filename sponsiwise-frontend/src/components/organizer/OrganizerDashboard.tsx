@@ -129,7 +129,7 @@ function RecentProposals({ proposals }: { proposals: IncomingProposal[] }) {
               <tr key={p.id} className="hover:bg-slate-800/50 transition-colors">
                 <td className="px-6 py-4">
                   <Link
-                    href={`/dashboard/proposals/${p.id}`}
+                    href={`/organizer/events/proposals/${p.id}`}
                     className="text-sm font-medium text-blue-400 hover:text-sky-300 transition-colors"
                   >
                     {p.title}
@@ -212,14 +212,14 @@ export default async function OrganizerDashboard() {
         </div>
         <div className="flex gap-3 self-start sm:self-center">
           <Link
-            href="/dashboard/events/new"
+            href="/organizer/events/newEvent"
             className="group inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-2.5 text-sm font-semibold text-emerald-400 shadow-lg shadow-emerald-500/10 transition-all hover:bg-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/20 hover:-translate-y-0.5"
           >
             <Plus className="h-4 w-4" />
             Create Event
           </Link>
           <Link
-            href="/dashboard/events"
+            href="/organizer/events"
             className="group inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-sky-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition-all hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5"
           >
             <Calendar className="h-4 w-4" />
@@ -241,7 +241,7 @@ export default async function OrganizerDashboard() {
                 Recent Proposals
               </h2>
               <Link
-                href="/dashboard/proposals"
+                href="/organizer/events/proposals"
                 className="group inline-flex items-center gap-1 text-sm font-medium text-blue-400 transition-colors hover:text-sky-300"
               >
                 View all

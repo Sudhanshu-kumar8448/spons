@@ -92,7 +92,7 @@ export const ProposalStatus = {
 
 export interface VerifiableCompany {
     id: string;
-    tenantId: string;
+    tenantId?: string;
     name: string;
     slug?: string | null;
     type: string;
@@ -103,7 +103,10 @@ export interface VerifiableCompany {
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
-    owner?: { id: string; email: string };
+    rejectionReason?: string | null;
+    verifiedAt?: string | null;
+    verifiedBy?: { id: string; email: string } | null;
+    owner?: { id: string; email: string; name?: string };
     users?: Array<{
         id: string;
         email: string;

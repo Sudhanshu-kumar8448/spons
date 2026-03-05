@@ -38,10 +38,9 @@ export { default as ErrorState } from "./ErrorState";
 export { default as EmptyState } from "./EmptyState";
 export { default as ConfirmDialog } from "./ConfirmDialog";
 
-// ─── Notifications & Activity ──────────────────────────────────────────
+// ─── Notifications ─────────────────────────────────────────────────────
 export { default as NotificationsDropdown } from "./NotificationsDropdown";
 export { default as NotificationList } from "./NotificationList";
-export { default as ActivityTimeline } from "./ActivityTimeline";
 
 // ─── Loading skeletons ─────────────────────────────────────────────────
 export {

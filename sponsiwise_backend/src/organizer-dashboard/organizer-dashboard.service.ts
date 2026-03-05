@@ -5,7 +5,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { EventStatus, ProposalStatus, SponsorshipStatus, TierType as PrismaTierType } from '@prisma/client';
+import { EventStatus, ProposalStatus, SponsorshipStatus, TierType as PrismaTierType, GenderType, AgeBracket, IncomeBracket } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../common/providers/prisma.service';
 import { AuditLogService } from '../audit-logs/audit-log.service';
@@ -212,6 +212,66 @@ export class OrganizerDashboardService {
               isLocked: false,
               isActive: true,
               benefits: benefitsJson,
+            },
+          });
+        }
+      }
+
+      // Create audience profile if provided
+      const audienceProfile = await tx.eventAudienceProfile.create({
+        data: {
+          eventId: event.id,
+        },
+      });
+
+      // Create gender distributions
+      if (dto.audienceProfile?.genders && dto.audienceProfile.genders.length > 0) {
+        for (const gender of dto.audienceProfile.genders) {
+          await tx.audienceGender.create({
+            data: {
+              profileId: audienceProfile.id,
+              gender: gender.gender as GenderType,
+              percentage: gender.percentage,
+            },
+          });
+        }
+      }
+
+      // Create age group distributions
+      if (dto.audienceProfile?.ages && dto.audienceProfile.ages.length > 0) {
+        for (const age of dto.audienceProfile.ages) {
+          await tx.audienceAgeGroup.create({
+            data: {
+              profileId: audienceProfile.id,
+              bracket: age.bracket as AgeBracket,
+              percentage: age.percentage,
+            },
+          });
+        }
+      }
+
+      // Create income group distributions
+      if (dto.audienceProfile?.incomes && dto.audienceProfile.incomes.length > 0) {
+        for (const income of dto.audienceProfile.incomes) {
+          await tx.audienceIncomeGroup.create({
+            data: {
+              profileId: audienceProfile.id,
+              bracket: income.bracket as IncomeBracket,
+              percentage: income.percentage,
+            },
+          });
+        }
+      }
+
+      // Create region distributions
+      if (dto.audienceProfile?.regions && dto.audienceProfile.regions.length > 0) {
+        for (const region of dto.audienceProfile.regions) {
+          await tx.audienceRegionDistribution.create({
+            data: {
+              profileId: audienceProfile.id,
+              city: region.city,
+              state: region.state,
+              percentage: region.percentage,
             },
           });
         }

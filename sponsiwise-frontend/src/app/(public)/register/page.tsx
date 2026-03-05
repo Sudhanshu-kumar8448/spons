@@ -4,19 +4,36 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiClient, ApiError } from "@/lib/api-client";
-import { Mail, Lock, UserPlus } from "lucide-react";
-import Image from "next/image";
+import { ArrowLeft, ArrowRight, Lock, Mail, UserPlus } from "lucide-react";
+import { motion } from "framer-motion";
+import Logo from "@/components/logo/logo";
+
+const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*[^A-Za-z0-9]).{8,}$/;
 
 export default function RegisterPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const isPasswordStrong = PASSWORD_REGEX.test(password);
+  const isConfirmPasswordValid = confirmPassword.length > 0 && password === confirmPassword;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!PASSWORD_REGEX.test(password)) {
+      setError("Password should be at least 8 characters long with one alphabet and one special character.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Password and confirm password do not match.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -36,68 +53,52 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4 py-12">
-      <div className="w-full max-w-[960px] overflow-hidden rounded-2xl border border-border-light shadow-2xl shadow-brand-500/5 sm:grid sm:grid-cols-2">
-        {/* Left — Brand panel */}
-        <div className="hidden sm:flex relative flex-col items-center justify-center bg-gradient-to-br from-brand-600 via-brand-500 to-brand-400 p-10 text-white">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10" />
-          <div className="pointer-events-none absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-white/5" />
+    <div className="relative min-h-screen overflow-hidden bg-slate-50 px-4 py-10 sm:px-6 sm:py-14">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-indigo-100/80 to-transparent" />
+      <div className="pointer-events-none absolute -right-20 top-24 h-56 w-56 rounded-full bg-indigo-200/40 blur-3xl" />
+      <div className="pointer-events-none absolute -left-24 bottom-12 h-56 w-56 rounded-full bg-violet-200/40 blur-3xl" />
 
-          <div className="relative text-center">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
-              <Image src="/images/logo-icon.svg" alt="SponsiWise" width={40} height={40} />
+      <div className="relative mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-md items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          className="w-full rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl shadow-slate-200/40 sm:rounded-[2.5rem] sm:p-8"
+        >
+          <div className="mb-5">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-500 transition-colors hover:text-indigo-600"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Link>
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.12, duration: 0.28 }}
+            className="mb-8 text-center"
+          >
+            <div className="mb-4 inline-flex justify-center">
+              <Logo />
             </div>
-            <h2 className="text-3xl font-bold">Join Sponsiwise</h2>
-            <p className="mt-3 text-base text-blue-100/80 leading-relaxed">
-              Create your account to start managing sponsorships, discovering
-              events, and growing your partnerships.
-            </p>
-
-            <div className="mt-8 flex flex-col gap-3 text-left">
-              {[
-                "Free to get started",
-                "Instant access to events",
-                "Secure & verified platform",
-              ].map((item) => (
-                <div key={item} className="flex items-center gap-2 text-sm text-blue-100/90">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20">
-                    <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right — Form */}
-        <div className="bg-white p-8 sm:p-10">
-          <div className="sm:hidden mb-6 text-center">
-            <h1 className="text-2xl font-bold gradient-text">Join Sponsiwise</h1>
-            <p className="mt-1 text-sm text-text-secondary">
-              Create your free account
-            </p>
-          </div>
-
-          <div className="hidden sm:block mb-8">
-            <h1 className="text-2xl font-bold text-text-primary">Create Account</h1>
-            <p className="mt-1 text-sm text-text-secondary">
-              Get started with your free account
-            </p>
-          </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900">Create Your Account</h1>
+            <p className="mt-2 text-sm font-medium text-slate-500">Start exploring verified sponsorship opportunities.</p>
+          </motion.div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label
-                htmlFor="email"
-                className="mb-1.5 block text-sm font-medium text-text-secondary"
-              >
-                Email
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.16, duration: 0.25 }}
+            >
+              <label htmlFor="email" className="mb-2 block text-sm font-bold text-slate-700">
+                Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   id="email"
                   type="email"
@@ -105,42 +106,89 @@ export default function RegisterPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-[var(--radius-input)] border-2 border-border bg-white pl-10 pr-4 py-2.5 text-sm text-text-primary outline-none transition-all placeholder:text-text-muted hover:border-brand-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                  className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white"
                 />
               </div>
-            </div>
+            </motion.div>
 
-            <div>
-              <label
-                htmlFor="password"
-                className="mb-1.5 block text-sm font-medium text-text-secondary"
-              >
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.22, duration: 0.25 }}
+            >
+              <label htmlFor="password" className="mb-2 block text-sm font-bold text-slate-700">
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   id="password"
                   type="password"
                   placeholder="••••••••"
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-[var(--radius-input)] border-2 border-border bg-white pl-10 pr-4 py-2.5 text-sm text-text-primary outline-none transition-all placeholder:text-text-muted hover:border-brand-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white"
                 />
               </div>
-            </div>
+              {password.length > 0 && (
+                <p className={`mt-2 text-xs font-semibold ${isPasswordStrong ? "text-emerald-600" : "text-amber-600"}`}>
+                  {isPasswordStrong
+                    ? "Password format looks good."
+                    : "Password should be 8 characters long, one special character, one alphabet."}
+                </p>
+              )}
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25, duration: 0.25 }}
+            >
+              <label htmlFor="confirmPassword" className="mb-2 block text-sm font-bold text-slate-700">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white"
+                />
+              </div>
+              {confirmPassword.length > 0 && !isConfirmPasswordValid && (
+                <p className="mt-2 text-xs font-semibold text-red-600">Passwords do not match.</p>
+              )}
+            </motion.div>
 
             {error && (
-              <div className="animate-fade-in rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+              >
                 {error}
-              </div>
+              </motion.div>
             )}
 
-            <button
+            <motion.button
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.31, duration: 0.25 }}
+              whileTap={{ scale: 0.99 }}
               type="submit"
               disabled={loading}
-              className="w-full rounded-[var(--radius-button)] bg-gradient-to-r from-brand-500 to-brand-400 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:from-brand-600 hover:to-brand-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3.5 text-sm font-bold text-white transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <span className="inline-flex items-center gap-2">
@@ -148,27 +196,33 @@ export default function RegisterPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Creating account…
+                  Creating account...
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-2">
+                <>
                   <UserPlus className="h-4 w-4" />
-                  Create Account
-                </span>
+                  Create Account <ArrowRight className="h-4 w-4" />
+                </>
               )}
-            </button>
+            </motion.button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-text-secondary">
+          <div className="relative my-7">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-white px-4 text-xs font-semibold uppercase tracking-wide text-slate-400">or</span>
+            </div>
+          </div>
+
+          <p className="text-center text-sm text-slate-500">
             Already have an account?{" "}
-            <Link
-              href="/login"
-              className="font-semibold text-brand-500 transition-colors hover:text-brand-600"
-            >
+            <Link href="/login" className="font-bold text-indigo-600 transition-colors hover:text-indigo-700">
               Sign in
             </Link>
           </p>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import PublicLayout from "@/components/layouts/PublicLayout";
+
 
 /**
  * Layout for all public (unauthenticated) routes.
@@ -11,5 +11,5 @@ export default function PublicGroupLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <PublicLayout>{children}</PublicLayout>;
+  return <>{children}</>;
 }

@@ -57,7 +57,7 @@ export default async function EventVerificationList({
             if (v) params.set(k, v);
         });
         const qs = params.toString();
-        return `/dashboard/events${qs ? `?${qs}` : ""}`;
+        return `/manager/verifyEvents${qs ? `?${qs}` : ""}`;
     }
 
     const verificationBadge: Record<string, string> = {
@@ -110,7 +110,7 @@ export default async function EventVerificationList({
                         return (
                             <Link
                                 key={event.id}
-                                href={`/dashboard/events/${event.id}`}
+                                href={`/manager/verifyEvents/${event.id}`}
                                 className="block rounded-2xl border border-slate-800 bg-slate-900 p-5 transition-all hover:border-slate-700 hover:bg-slate-800/50"
                             >
                                 <div className="flex items-center justify-between gap-4">

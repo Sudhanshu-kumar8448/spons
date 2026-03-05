@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import type { AdminActionState } from "@/app/(authenticated)/dashboard/_admin-actions";
+import type { AdminActionState } from "@/app/(authenticated)/admin/_actions";
 
 interface ToggleStatusButtonProps {
   userId: string;

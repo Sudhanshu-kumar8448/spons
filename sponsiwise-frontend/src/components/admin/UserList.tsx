@@ -72,7 +72,7 @@ export default async function UserList({ searchParams }: UserListProps) {
       if (v) params.set(k, v);
     });
     const qs = params.toString();
-    return `/dashboard/users${qs ? `?${qs}` : ""}`;
+    return `/admin/users${qs ? `?${qs}` : ""}`;
   }
 
   // Column definitions
@@ -84,7 +84,7 @@ export default async function UserList({ searchParams }: UserListProps) {
       header: "User",
       render: (u) => (
         <Link
-          href={`/dashboard/users/${u.id}`}
+          href={`/admin/users/${u.id}`}
           className="flex items-center gap-3"
         >
           {u.avatar_url ? (

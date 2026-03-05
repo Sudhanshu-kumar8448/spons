@@ -4,8 +4,9 @@ import { Suspense, useState, FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient, ApiError } from "@/lib/api-client";
-import { Mail, Lock } from "lucide-react";
-import Image from "next/image";
+import { ArrowLeft, ArrowRight, Lock, Mail } from "lucide-react";
+import { motion } from "framer-motion";
+import Logo from "@/components/logo/logo";
 
 function LoginForm() {
   const router = useRouter();
@@ -37,17 +38,25 @@ function LoginForm() {
       }
 
       // Default role-based redirect
+      const { organizerId } = result.user;
       if (role === "USER") {
-        if (companyId) {
-          // User has a pending sponsor application
-          router.push("/sponsor/pending");
+        if (companyId || organizerId) {
+          // User has a pending application (sponsor or organizer)
+          router.push("/onboarding/pending");
         } else {
           // New user, needs onboarding
           router.push("/onboarding");
         }
       } else {
-        // SPONSOR, ORGANIZER, MANAGER, ADMIN → dashboard
-        router.push("/dashboard");
+        // Role-based redirect
+        const roleRedirects: Record<string, string> = {
+          SPONSOR: "/brand/dashboard",
+          ORGANIZER: "/organizer/dashboard",
+          MANAGER: "/manager/dashboard",
+          ADMIN: "/admin",
+          SUPER_ADMIN: "/admin",
+        };
+        router.push(roleRedirects[role] || "/brand/dashboard");
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -61,52 +70,52 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4 py-12">
-      <div className="w-full max-w-[960px] overflow-hidden rounded-2xl border border-border-light shadow-2xl shadow-brand-500/5 sm:grid sm:grid-cols-2">
-        {/* Left — Brand panel */}
-        <div className="hidden sm:flex relative flex-col items-center justify-center bg-gradient-to-br from-brand-600 via-brand-500 to-brand-400 p-10 text-white">
-          {/* Decorative */}
-          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10" />
-          <div className="pointer-events-none absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-white/5" />
+    <div className="relative min-h-screen overflow-hidden bg-slate-50 px-4 py-10 sm:px-6 sm:py-14">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-indigo-100/80 to-transparent" />
+      <div className="pointer-events-none absolute -right-20 top-24 h-56 w-56 rounded-full bg-indigo-200/40 blur-3xl" />
+      <div className="pointer-events-none absolute -left-24 bottom-12 h-56 w-56 rounded-full bg-violet-200/40 blur-3xl" />
 
-          <div className="relative text-center">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
-              <Image src="/images/logo-icon.svg" alt="SponsiWise" width={40} height={40} />
+      <div className="relative mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-md items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          className="w-full rounded-[2rem] border border-slate-100 bg-white p-6 shadow-xl shadow-slate-200/40 sm:rounded-[2.5rem] sm:p-8"
+        >
+          <div className="mb-5">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-500 transition-colors hover:text-indigo-600"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Link>
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.12, duration: 0.28 }}
+            className="mb-8 text-center"
+          >
+            <div className="mb-4 inline-flex justify-center">
+              <Logo />
             </div>
-            <h2 className="text-3xl font-bold">Welcome Back</h2>
-            <p className="mt-3 text-base text-blue-100/80 leading-relaxed">
-              Sign in to manage your sponsorships, track proposals, and connect
-              with the community.
-            </p>
-          </div>
-        </div>
-
-        {/* Right — Form */}
-        <div className="bg-white p-8 sm:p-10">
-          <div className="sm:hidden mb-6 text-center">
-            <h1 className="text-2xl font-bold gradient-text">Welcome Back</h1>
-            <p className="mt-1 text-sm text-text-secondary">
-              Sign in to your account
-            </p>
-          </div>
-
-          <div className="hidden sm:block mb-8">
-            <h1 className="text-2xl font-bold text-text-primary">Sign In</h1>
-            <p className="mt-1 text-sm text-text-secondary">
-              Enter your credentials to continue
-            </p>
-          </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900">Welcome Back</h1>
+            <p className="mt-2 text-sm font-medium text-slate-500">Sign in to continue to your workspace.</p>
+          </motion.div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label
-                htmlFor="email"
-                className="mb-1.5 block text-sm font-medium text-text-secondary"
-              >
-                Email
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.16, duration: 0.25 }}
+            >
+              <label htmlFor="email" className="mb-2 block text-sm font-bold text-slate-700">
+                Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   id="email"
                   type="email"
@@ -114,20 +123,21 @@ function LoginForm() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-[var(--radius-input)] border-2 border-border bg-white pl-10 pr-4 py-2.5 text-sm text-text-primary outline-none transition-all placeholder:text-text-muted hover:border-brand-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                  className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white"
                 />
               </div>
-            </div>
+            </motion.div>
 
-            <div>
-              <label
-                htmlFor="password"
-                className="mb-1.5 block text-sm font-medium text-text-secondary"
-              >
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.22, duration: 0.25 }}
+            >
+              <label htmlFor="password" className="mb-2 block text-sm font-bold text-slate-700">
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   id="password"
                   type="password"
@@ -135,21 +145,29 @@ function LoginForm() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-[var(--radius-input)] border-2 border-border bg-white pl-10 pr-4 py-2.5 text-sm text-text-primary outline-none transition-all placeholder:text-text-muted hover:border-brand-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                  className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white"
                 />
               </div>
-            </div>
+            </motion.div>
 
             {error && (
-              <div className="animate-fade-in rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+              >
                 {error}
-              </div>
+              </motion.div>
             )}
 
-            <button
+            <motion.button
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.28, duration: 0.25 }}
+              whileTap={{ scale: 0.99 }}
               type="submit"
               disabled={loading}
-              className="w-full rounded-[var(--radius-button)] bg-gradient-to-r from-brand-500 to-brand-400 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:from-brand-600 hover:to-brand-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3.5 text-sm font-bold text-white transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <span className="inline-flex items-center gap-2">
@@ -157,24 +175,32 @@ function LoginForm() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Signing in…
+                  Signing in...
                 </span>
               ) : (
-                "Sign In"
+                <>
+                  Sign In <ArrowRight className="h-4 w-4" />
+                </>
               )}
-            </button>
+            </motion.button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-text-secondary">
+          <div className="relative my-7">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-white px-4 text-xs font-semibold uppercase tracking-wide text-slate-400">or</span>
+            </div>
+          </div>
+
+          <p className="text-center text-sm text-slate-500">
             Don&apos;t have an account?{" "}
-            <Link
-              href="/register"
-              className="font-semibold text-brand-500 transition-colors hover:text-brand-600"
-            >
+            <Link href="/register" className="font-bold text-indigo-600 transition-colors hover:text-indigo-700">
               Create one
             </Link>
           </p>
-        </div>
+        </motion.div>
       </div>
     </div>
   );
@@ -182,24 +208,18 @@ function LoginForm() {
 
 function LoginFormFallback() {
   return (
-    <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4 py-12">
-      <div className="w-full max-w-[960px] overflow-hidden rounded-2xl border border-border-light shadow-2xl shadow-brand-500/5 sm:grid sm:grid-cols-2">
-        <div className="hidden sm:flex relative flex-col items-center justify-center bg-gradient-to-br from-brand-600 via-brand-500 to-brand-400 p-10 text-white">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10" />
-          <div className="pointer-events-none absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-white/5" />
-          <div className="relative text-center">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
-              <Image src="/images/logo-icon.svg" alt="SponsiWise" width={40} height={40} />
+    <div className="relative min-h-screen bg-slate-50 px-4 py-10 sm:px-6 sm:py-14">
+      <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-md items-center justify-center">
+        <div className="w-full rounded-[2rem] border border-slate-100 bg-white p-8 shadow-xl shadow-slate-200/40">
+          <div className="animate-pulse space-y-5">
+            <div className="mx-auto h-8 w-36 rounded-lg bg-slate-200" />
+            <div className="mx-auto h-4 w-48 rounded bg-slate-100" />
+            <div className="space-y-3">
+              <div className="h-11 rounded-xl bg-slate-100" />
+              <div className="h-11 rounded-xl bg-slate-100" />
             </div>
-            <h2 className="text-3xl font-bold">Welcome Back</h2>
-            <p className="mt-3 text-base text-blue-100/80 leading-relaxed">
-              Sign in to manage your sponsorships, track proposals, and connect
-              with the community.
-            </p>
+            <div className="h-11 rounded-xl bg-slate-200" />
           </div>
-        </div>
-        <div className="bg-white p-8 sm:p-10 flex items-center justify-center">
-          <div className="animate-pulse">Loading...</div>
         </div>
       </div>
     </div>
@@ -213,4 +233,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-
