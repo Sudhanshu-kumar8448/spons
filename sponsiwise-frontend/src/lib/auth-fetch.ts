@@ -80,9 +80,8 @@ async function writeCookiesToStore(setCookieHeaders: string[]): Promise<void> {
                 maxAge: options.maxAge,
             });
             
-            console.log(`[authFetch] Cookie written to store: ${name}`);
-        } catch (err) {
-            console.error(`[authFetch] Failed to write cookie:`, err);
+        } catch {
+            // Failed to write cookie — ignore
         }
     }
 }
@@ -117,10 +116,6 @@ export async function authFetch<T>(
         .map((c) => `${c.name}=${c.value}`)
         .join("; ");
 
-    // Debug logging
-    console.log(`[authFetch] Endpoint: ${normalizedEndpoint}`);
-    console.log(`[authFetch] Cookies found:`, cookieStore.getAll().map(c => c.name));
-
     const { revalidate, headers: initHeaders, ...rest } = init ?? {};
 
     const res = await fetch(`${baseUrl}${normalizedEndpoint}`, {
@@ -142,8 +137,6 @@ export async function authFetch<T>(
 
     // ── 401 → attempt token refresh once ────────────────────
     if (res.status === 401) {
-        console.log(`[authFetch] Got 401, attempting refresh...`);
-        
         const refreshRes = await fetch(`${baseUrl}/auth/refresh`, {
             method: "POST",
             headers: {
@@ -154,12 +147,8 @@ export async function authFetch<T>(
         });
 
         if (!refreshRes.ok) {
-            // Refresh failed — session expired, throw AuthError
-            console.log(`[authFetch] Refresh failed with status ${refreshRes.status}, throwing AuthError`);
             throw new AuthError("Session expired. Please log in again.");
         }
-
-        console.log(`[authFetch] Refresh successful, writing cookies to store`);
 
         // Extract Set-Cookie headers from refresh response
         const setCookieHeaders = refreshRes.headers.getSetCookie?.() ?? [];
@@ -176,7 +165,7 @@ export async function authFetch<T>(
             .map((c) => `${c.name}=${c.value}`)
             .join("; ");
 
-        console.log(`[authFetch] Retrying with updated cookies:`, updatedCookieStore.getAll().map(c => c.name));
+
 
         // Retry the original request with fresh cookies
         const retryRes = await fetch(`${baseUrl}${normalizedEndpoint}`, {

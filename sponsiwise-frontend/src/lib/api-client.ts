@@ -1,11 +1,18 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 /**
- * Get the API base URL - uses proxy path for browser requests
+ * Get the API base URL.
+ * - Development (browser): uses /api proxy to avoid CORS issues
+ * - Production (browser): uses NEXT_PUBLIC_API_BASE_URL directly (e.g. https://api.sponsiwise.app)
+ * - Server-side: always uses NEXT_PUBLIC_API_BASE_URL
  */
 function getBaseUrl(): string {
-    // For browser requests, use the proxy path to avoid CORS issues
     if (typeof window !== 'undefined') {
+        // In production, call the API backend directly
+        if (process.env.NODE_ENV === 'production' && API_BASE_URL) {
+            return API_BASE_URL;
+        }
+        // In development, use the Next.js rewrite proxy
         return '/api';
     }
     
