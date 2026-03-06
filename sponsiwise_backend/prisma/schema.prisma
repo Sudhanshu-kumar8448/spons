@@ -598,8 +598,9 @@ model SponsorshipTier {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  event     Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  proposals Proposal[]
+  event             Event                @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  proposals         Proposal[]
+  deliverableForm   TierDeliverableForm?
 
   // NOTE: Unique constraint removed. Predefined tiers uniqueness is enforced in service layer.
   // CUSTOM tierType allows multiple tiers per event.
@@ -852,6 +853,104 @@ model EmailLog {
   @@index([status])
   @@index([createdAt])
   @@map("email_logs")
+}
+
+// ============================================
+// DELIVERABLE ENUMS
+// ============================================
+
+enum DeliverableCategory {
+  PHYSICAL
+  DIGITAL
+}
+
+enum BrandingType {
+  EXCLUSIVE
+  MULTI
+}
+
+enum DeliverableUnit {
+  POSTS
+  PIECES
+  BOARDS
+  DAYS
+  HOURS
+  MINUTES
+  SESSIONS
+  BANNERS
+  PAGES
+  SCREENS
+  SPOTS
+  OTHER
+}
+
+enum DeliverableFormStatus {
+  DRAFT
+  SENT_TO_ORGANIZER
+  FILLED
+  SUBMITTED
+}
+
+// ============================================
+// TIER DELIVERABLE FORM (1-to-1 with SponsorshipTier)
+// ============================================
+
+model TierDeliverableForm {
+  id        String                @id @default(uuid()) @db.Uuid
+  tierId    String                @unique @map("tier_id") @db.Uuid
+  status    DeliverableFormStatus @default(DRAFT)
+  createdAt DateTime              @default(now()) @map("created_at")
+  updatedAt DateTime              @updatedAt @map("updated_at")
+
+  // Relations
+  tier SponsorshipTier    @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  rows TierDeliverableRow[]
+
+  @@index([tierId])
+  @@index([status])
+  @@map("tier_deliverable_forms")
+}
+
+// ============================================
+// TIER DELIVERABLE ROW (each row in the form)
+// ============================================
+
+model TierDeliverableRow {
+  id              String              @id @default(uuid()) @db.Uuid
+  formId          String              @map("form_id") @db.Uuid
+  category        DeliverableCategory
+  deliverableName String              @map("deliverable_name") @db.VarChar(500)
+  brandingType    BrandingType        @map("branding_type")
+  quantity        Int                 @default(0)
+  unit            DeliverableUnit     @default(PIECES)
+  otherUnit       String?             @map("other_unit") @db.VarChar(100)
+  remarks         String?             @db.Text
+  sortOrder       Int                 @default(0) @map("sort_order")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  form TierDeliverableForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([formId])
+  @@index([formId, sortOrder])
+  @@map("tier_deliverable_rows")
+}
+
+// ============================================
+// DELIVERABLE TEMPLATE (global, reusable by any manager)
+// ============================================
+
+model DeliverableTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  rows        Json     @default("[]") @db.JsonB // Array of { category, deliverableName, brandingType, quantity, unit, otherUnit, remarks }
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@map("deliverable_templates")
 }
 
 // ============================================

@@ -5,10 +5,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Sponsorship } from '@prisma/client';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { SponsorshipRepository } from './sponsorship.repository';
 import { CompanyRepository } from '../companies/company.repository';
 import { EventRepository } from '../events/event.repository';
 import { CreateSponsorshipDto, UpdateSponsorshipDto, ListSponsorshipsQueryDto } from './dto';
+import { InterestExpressedEvent, INTEREST_EXPRESSED_EVENT } from '../common/events';
 
 /**
  * SponsorshipService — business logic for sponsorship management.
@@ -21,6 +23,7 @@ export class SponsorshipService {
     private readonly sponsorshipRepository: SponsorshipRepository,
     private readonly companyRepository: CompanyRepository,
     private readonly eventRepository: EventRepository,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // ─── CREATE ──────────────────────────────────────────────
@@ -52,6 +55,18 @@ export class SponsorshipService {
     this.logger.log(
       `Sponsorship ${sponsorship.id} created: company ${dto.companyId} → event ${dto.eventId}`,
     );
+
+    // Emit domain event — triggers interest notification emails via BullMQ
+    this.eventEmitter.emit(
+      INTEREST_EXPRESSED_EVENT,
+      new InterestExpressedEvent({
+        sponsorshipId: sponsorship.id,
+        companyId: dto.companyId,
+        eventId: dto.eventId,
+        actorId: dto.companyId, // using companyId as actor; override with real userId if available
+      }),
+    );
+
     return sponsorship;
   }
 

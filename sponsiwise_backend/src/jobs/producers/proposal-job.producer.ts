@@ -10,11 +10,12 @@ import {
   JOB_EMAIL_PROPOSAL_SUBMITTED,
   JOB_EMAIL_PROPOSAL_APPROVED,
   JOB_EMAIL_PROPOSAL_REJECTED,
+  JOB_EMAIL_DEAL_FINALIZED,
   JOB_NOTIFY_PROPOSAL_SUBMITTED,
   JOB_NOTIFY_PROPOSAL_APPROVED,
   JOB_NOTIFY_PROPOSAL_REJECTED,
 } from '../constants';
-import type { ProposalEmailPayload, ProposalNotificationPayload } from '../constants';
+import type { ProposalEmailPayload, ProposalNotificationPayload, DealFinalizedEmailPayload } from '../constants';
 
 /**
  * Default job options shared by all proposal jobs.
@@ -130,6 +131,23 @@ export class ProposalJobProducer {
         jobId: notifyJobId,
       }),
     ]);
+
+    // When a proposal is APPROVED, additionally enqueue the deal.finalized job
+    if (event.newStatus === 'APPROVED') {
+      const dealPayload: DealFinalizedEmailPayload = {
+        proposalId: event.proposalId,
+        sponsorshipId: '',   // resolved from DB in email processor
+        actorId: event.actorId,
+        actorRole: event.actorRole,
+        timestamp: event.timestamp,
+      };
+      const dealJobId = `${JOB_EMAIL_DEAL_FINALIZED}:${event.proposalId}:${event.timestamp}`;
+      await this.emailQueue.add(JOB_EMAIL_DEAL_FINALIZED, dealPayload, {
+        ...DEFAULT_JOB_OPTS,
+        jobId: dealJobId,
+      });
+      this.logger.log(`Enqueued deal-finalized job for proposal=${event.proposalId}`);
+    }
 
     this.logger.log(`Enqueued status-change jobs [${jobName}] for proposal=${event.proposalId}`);
   }

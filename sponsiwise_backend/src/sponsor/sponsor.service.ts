@@ -475,6 +475,18 @@ export class SponsorService {
             soldSlots: true,
             isLocked: true,
             isActive: true,
+            deliverableForm: {
+              select: { status: true },
+            },
+          },
+        },
+        audienceProfile: {
+          select: {
+            id: true,
+            genders: { select: { id: true, gender: true, percentage: true } },
+            ages: { select: { id: true, bracket: true, percentage: true } },
+            incomes: { select: { id: true, bracket: true, percentage: true } },
+            regions: { select: { id: true, city: true, state: true, percentage: true } },
           },
         },
       },
@@ -496,6 +508,7 @@ export class SponsorService {
         availableSlots: t.totalSlots - t.soldSlots,
         isLocked: t.isLocked,
         isActive: t.isActive,
+        deliverableFormStatus: t.deliverableForm?.status === 'SUBMITTED' ? 'SUBMITTED' : null,
       }));
 
     return {
@@ -523,6 +536,28 @@ export class SponsorService {
         postalCode: event.address.postalCode,
       } : null,
       tiers: availableTiers,
+      audienceProfile: event.audienceProfile
+        ? {
+            id: event.audienceProfile.id,
+            genders: event.audienceProfile.genders.map((g: any) => ({
+              gender: g.gender,
+              percentage: g.percentage,
+            })),
+            ages: event.audienceProfile.ages.map((a: any) => ({
+              bracket: a.bracket,
+              percentage: a.percentage,
+            })),
+            incomes: event.audienceProfile.incomes.map((i: any) => ({
+              bracket: i.bracket,
+              percentage: i.percentage,
+            })),
+            regions: event.audienceProfile.regions.map((r: any) => ({
+              city: r.city,
+              state: r.state,
+              percentage: r.percentage,
+            })),
+          }
+        : null,
     };
   }
 

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { fetchOrganizerEventById } from "@/lib/organizer-api";
 import type { OrganizerEvent } from "@/lib/types/organizer";
+import { FillDeliverablesButton } from "@/components/organizer/DeliverableFill";
 
 // ─── Event status badge ────────────────────────────────────────────────
 
@@ -147,6 +148,11 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
                       {(tier.slots_available ?? 0)} / {(tier.slots_total ?? tier.totalSlots ?? 0)} slot
                       {((tier.slots_total ?? tier.totalSlots ?? 0) !== 1 ? "s" : "")} available
                     </p>
+                    <FillDeliverablesButton
+                      eventId={event.id}
+                      tierName={tier.name ?? tier.tierType}
+                      formStatus={tier.deliverable_form_status}
+                    />
                   </div>
                 ))}
               </div>

@@ -20,28 +20,3 @@ export async function generatePptPresignedUrl(
         eventId,
     });
 }
-
-// ─── Presigned Download URL ────────────────────────────────────────────
-
-export interface PresignedDownloadResponse {
-    downloadUrl: string;
-    expiresIn: number;
-}
-
-export async function generatePresignedDownloadUrl(
-    key: string,
-): Promise<PresignedDownloadResponse> {
-    return apiClient.post<PresignedDownloadResponse>("/upload/presigned-url/download", {
-        key,
-    });
-}
-
-// ─── Delete File from S3/MinIO ─────────────────────────────────────────
-
-export async function deleteUploadedFile(
-    key: string,
-): Promise<{ success: boolean }> {
-    return apiClient.post<{ success: boolean }>("/upload/delete", {
-        key,
-    });
-}

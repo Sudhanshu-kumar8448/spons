@@ -5,7 +5,7 @@ import ProposalForm from "./ProposalForm";
 import type { SponsorshipTier } from "@/lib/types/sponsor";
 
 interface NewProposalPageProps {
-  searchParams: Promise<{ event_id?: string }>;
+  searchParams: Promise<{ event_id?: string; tier_id?: string }>;
 }
 
 export default async function NewProposalPage({
@@ -13,6 +13,7 @@ export default async function NewProposalPage({
 }: NewProposalPageProps) {
   const params = await searchParams;
   const eventId = params.event_id;
+  const tierId = params.tier_id;
 
   if (!eventId) {
     redirect("/brand/browseEvents");
@@ -49,6 +50,7 @@ export default async function NewProposalPage({
           eventId={eventId}
           eventTitle={eventTitle}
           availableTiers={availableTiers}
+          defaultTierId={tierId}
         />
       </div>
     </div>

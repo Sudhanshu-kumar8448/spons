@@ -3,7 +3,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import type { BullMQConfig } from './config/bullmq.config';
 import { ALL_QUEUES } from './constants';
-import { ProposalJobProducer, VerificationJobProducer } from './producers';
+import { ProposalJobProducer, VerificationJobProducer, UserEventJobProducer, DeliverableJobProducer } from './producers';
 
 /**
  * QueueModule — registers all BullMQ queues and job producers.
@@ -40,7 +40,7 @@ import { ProposalJobProducer, VerificationJobProducer } from './producers';
     // Register each queue
     ...ALL_QUEUES.map((name) => BullModule.registerQueue({ name })),
   ],
-  providers: [ProposalJobProducer, VerificationJobProducer],
+  providers: [ProposalJobProducer, VerificationJobProducer, UserEventJobProducer, DeliverableJobProducer],
   exports: [BullModule],
 })
 export class QueueModule { }

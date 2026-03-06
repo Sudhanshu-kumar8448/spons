@@ -5,4 +5,8 @@ export type {
   VerificationEmailPayload,
   ProposalNotificationPayload,
   VerificationNotificationPayload,
+  UserRegisteredEmailPayload,
+  InterestExpressedEmailPayload,
+  DealFinalizedEmailPayload,
+  DeliverablesFormSentEmailPayload,
 } from './job-payloads';

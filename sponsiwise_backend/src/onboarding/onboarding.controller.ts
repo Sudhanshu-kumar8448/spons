@@ -15,7 +15,7 @@ import { CurrentUser } from '../common/decorators';
 import type { JwtPayloadWithClaims } from '../auth/interfaces';
 import { OnboardingService } from './onboarding.service';
 import { CreateSponsorDto, CreateOrganizerDto } from './dto';
-import type { AppConfig, JwtConfig } from '../common/config';
+import type { JwtConfig } from '../common/config';
 
 /**
  * OnboardingController — handles new user onboarding.
@@ -39,7 +39,8 @@ export class OnboardingController {
     /**
      * POST /onboarding/sponsor
      * Register the current user as a sponsor.
-     * Creates a Company with PENDING verification status.
+     * - Corporate email → auto-verified (VERIFIED) + tokens returned + cookies set
+     * - Free email → PENDING verification, awaits manager approval
      */
     @Post('sponsor')
     @Throttle({ default: { limit: 3, ttl: 60000 } })
@@ -47,8 +48,19 @@ export class OnboardingController {
     async registerSponsor(
         @Body() dto: CreateSponsorDto,
         @CurrentUser() user: JwtPayloadWithClaims,
+        @Res({ passthrough: true }) res: Response,
     ) {
-        return this.onboardingService.registerSponsor(dto, user);
+        const result = await this.onboardingService.registerSponsor(dto, user);
+
+        // If auto-verified (corporate email), set new cookies with SPONSOR role
+        if (result.tokens) {
+            this.setAccessTokenCookie(res, result.tokens.accessToken);
+            this.setRefreshTokenCookie(res, result.tokens.refreshToken);
+            const { tokens, ...rest } = result;
+            return rest;
+        }
+
+        return result;
     }
 
     /**
@@ -74,14 +86,12 @@ export class OnboardingController {
     }
 
 
-    
+
 
     // ─── PRIVATE HELPERS (duplicated from AuthController for now) ───
 
     private setAccessTokenCookie(res: Response, accessToken: string): void {
-        // Always use 'none' in production when frontend and backend are on different domains
-        // This is needed because the frontend (www.sponsiwise.app) and backend (api.sponsiwise.app) are on different subdomains
-        const isProduction = this.isProduction() || !this.isLocalhost();
+        const isProduction = process.env.NODE_ENV === 'production';
         const sameSite = isProduction ? 'none' : 'lax';
 
         const cookieOptions: any = {
@@ -92,60 +102,36 @@ export class OnboardingController {
             path: '/',
         };
 
-        // For production (cross-subdomain), set domain to share cookies across subdomains
         if (isProduction) {
             cookieOptions.domain = '.sponsiwise.app';
-        } else {
-            cookieOptions.domain = 'localhost';
         }
-
-        console.log('[ONBOARDING] Setting access_token cookie:', { isProduction, sameSite, secure: isProduction, domain: cookieOptions.domain });
 
         res.cookie('access_token', accessToken, cookieOptions);
     }
 
     private setRefreshTokenCookie(res: Response, refreshToken: string): void {
-        // Always use 'none' in production when frontend and backend are on different domains
-        const isProduction = this.isProduction() || !this.isLocalhost();
+        const isProduction = process.env.NODE_ENV === 'production';
         const sameSite = isProduction ? 'none' : 'lax';
         const jwtConfig = this.configService.get<JwtConfig>('jwt');
         const refreshExpiresIn = jwtConfig?.refreshExpiresIn || '7d';
+
+        // In local dev, use path '/' so the cookie is sent through the /api proxy rewrite
+        // In production, restrict to '/auth' to minimize cookie exposure
+        const cookiePath = isProduction ? '/auth' : '/';
 
         const cookieOptions: any = {
             httpOnly: true,
             secure: isProduction,
             sameSite,
             maxAge: this.parseDurationMs(refreshExpiresIn),
-            path: '/auth',
+            path: cookiePath,
         };
 
-        // For production (cross-subdomain), set domain to share cookies across subdomains
         if (isProduction) {
             cookieOptions.domain = '.sponsiwise.app';
-        } else {
-            cookieOptions.domain = 'localhost';
         }
 
-        console.log('[ONBOARDING] Setting refresh_token cookie:', { isProduction, sameSite, secure: isProduction, domain: cookieOptions.domain });
-
         res.cookie('refresh_token', refreshToken, cookieOptions);
-    }
-
-    private isProduction(): boolean {
-        // Check multiple ways to determine if we're in production
-        const appConfig = this.configService.get<AppConfig>('app');
-        const nodeEnv = appConfig?.nodeEnv || process.env.NODE_ENV;
-        
-        // Also check if we're deployed on known production domains
-        const isOnRender = process.env.RENDER === 'true' || process.env.RENDER_EXTERNAL_URL !== undefined;
-        const isOnVercel = process.env.VERCEL === '1';
-        
-        return nodeEnv === 'production' || isOnRender || isOnVercel;
-    }
-
-    private isLocalhost(): boolean {
-        const host = process.env.HOST || process.env.HOSTNAME || '';
-        return host.includes('localhost') || host.includes('127.0.0.1') || process.env.NODE_ENV === 'development';
     }
 
     private parseDurationMs(duration: string): number {

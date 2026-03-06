@@ -1,7 +1,11 @@
 import 'dotenv/config';
 import {
   AgeBracket,
+  BrandingType,
   CompanyType,
+  DeliverableCategory,
+  DeliverableFormStatus,
+  DeliverableUnit,
   EmailStatus,
   EventCategory,
   EventStatus,
@@ -61,6 +65,9 @@ async function clearDatabase() {
 
   await prisma.$transaction([
     prisma.proposalMessage.deleteMany(),
+    prisma.tierDeliverableRow.deleteMany(),
+    prisma.tierDeliverableForm.deleteMany(),
+    prisma.deliverableTemplate.deleteMany(),
     prisma.notification.deleteMany(),
     prisma.refreshToken.deleteMany(),
     prisma.audienceGender.deleteMany(),
@@ -135,11 +142,6 @@ async function main() {
     email: 'user1@spons.com',
     role: Role.USER,
   });
-  const inactiveUser = await createUser({
-    email: 'inactive.user@spons.com',
-    role: Role.USER,
-    isActive: false,
-  });
 
   const usersByKey: Record<string, { id: string; email: string }> = {
     superAdmin: { id: superAdmin.id, email: superAdmin.email },
@@ -148,7 +150,6 @@ async function main() {
     manager2: { id: manager2.id, email: manager2.email },
     manager3: { id: manager3.id, email: manager3.email },
     standaloneUser: { id: standaloneUser.id, email: standaloneUser.email },
-    inactiveUser: { id: inactiveUser.id, email: inactiveUser.email },
   };
 
   // ============================================
@@ -226,7 +227,7 @@ async function main() {
       key: 'club',
       userEmail: 'organizer.club@spons.com',
       name: 'Organizer Club Society',
-      type: OrganizerType.CLUB_SOCIETY,
+      type: OrganizerType.CLUB,
       pastRecords: 'Local city clubs and social chapters.',
       website: null,
       contactPhone: '+1-555-100-0006',
@@ -235,14 +236,13 @@ async function main() {
     {
       key: 'other',
       userEmail: 'organizer.other@spons.com',
-      userIsActive: false,
       name: 'Organizer Other',
       type: OrganizerType.OTHER,
       pastRecords: null,
       website: 'https://organizer-other.example.com',
       contactPhone: null,
       socialLinks: null,
-      isActive: false,
+      isActive: true,
     },
   ];
 
@@ -353,7 +353,7 @@ async function main() {
           ? Role.SPONSOR
           : Role.USER,
       companyId: company.id,
-      isActive: index !== 8,
+      isActive: true,
     });
 
     companiesByType[type] = { id: company.id };
@@ -893,6 +893,199 @@ async function main() {
   }
 
   // ============================================
+  // TIER DELIVERABLE FORMS + ROWS (all DeliverableFormStatus)
+  // ============================================
+  console.log('Creating tier deliverable forms...');
+
+  const deliverableFormSeeds: Array<{
+    key: string;
+    tierKey: string;
+    status: DeliverableFormStatus;
+    rows: Array<{
+      category: DeliverableCategory;
+      deliverableName: string;
+      brandingType: BrandingType;
+      quantity: number;
+      unit: DeliverableUnit;
+      otherUnit?: string | null;
+      remarks?: string | null;
+      sortOrder?: number;
+    }>;
+  }> = [
+    {
+      key: 'form-title-submitted',
+      tierKey: 'title-tier',
+      status: DeliverableFormStatus.SUBMITTED,
+      rows: [
+        {
+          category: DeliverableCategory.PHYSICAL,
+          deliverableName: 'Main Stage Backdrop Branding',
+          brandingType: BrandingType.EXCLUSIVE,
+          quantity: 1,
+          unit: DeliverableUnit.BOARDS,
+          remarks: 'Center stage full-width branding',
+        },
+        {
+          category: DeliverableCategory.DIGITAL,
+          deliverableName: 'Event Mobile App Featured Banner',
+          brandingType: BrandingType.MULTI,
+          quantity: 7,
+          unit: DeliverableUnit.DAYS,
+          remarks: 'Runs throughout event week',
+        },
+      ],
+    },
+    {
+      key: 'form-platinum-sent',
+      tierKey: 'platinum-tier',
+      status: DeliverableFormStatus.SENT_TO_ORGANIZER,
+      rows: [
+        {
+          category: DeliverableCategory.PHYSICAL,
+          deliverableName: 'Exhibition Booth Panels',
+          brandingType: BrandingType.MULTI,
+          quantity: 4,
+          unit: DeliverableUnit.PIECES,
+          remarks: 'Booth wall side panels',
+        },
+      ],
+    },
+    {
+      key: 'form-gold-draft',
+      tierKey: 'gold-tier',
+      status: DeliverableFormStatus.DRAFT,
+      rows: [
+        {
+          category: DeliverableCategory.DIGITAL,
+          deliverableName: 'Social Media Mention Slots',
+          brandingType: BrandingType.MULTI,
+          quantity: 6,
+          unit: DeliverableUnit.POSTS,
+          remarks: 'Across Instagram and LinkedIn',
+        },
+      ],
+    },
+    {
+      key: 'form-presenting-filled',
+      tierKey: 'presenting-tier',
+      status: DeliverableFormStatus.FILLED,
+      rows: [
+        {
+          category: DeliverableCategory.PHYSICAL,
+          deliverableName: 'Presenting Sponsor Zone Signage',
+          brandingType: BrandingType.EXCLUSIVE,
+          quantity: 3,
+          unit: DeliverableUnit.BANNERS,
+        },
+        {
+          category: DeliverableCategory.DIGITAL,
+          deliverableName: 'Custom Deliverable Unit Example',
+          brandingType: BrandingType.MULTI,
+          quantity: 12,
+          unit: DeliverableUnit.OTHER,
+          otherUnit: 'Story frames',
+        },
+      ],
+    },
+  ];
+
+  const deliverableFormsByKey: Record<string, { id: string }> = {};
+
+  for (const seed of deliverableFormSeeds) {
+    const form = await prisma.tierDeliverableForm.create({
+      data: {
+        tierId: tiersByKey[seed.tierKey].id,
+        status: seed.status,
+        rows: {
+          create: seed.rows.map((row, index) => ({
+            category: row.category,
+            deliverableName: row.deliverableName,
+            brandingType: row.brandingType,
+            quantity: row.quantity,
+            unit: row.unit,
+            otherUnit: row.otherUnit ?? null,
+            remarks: row.remarks ?? null,
+            sortOrder: row.sortOrder ?? index,
+          })),
+        },
+      },
+    });
+    deliverableFormsByKey[seed.key] = { id: form.id };
+  }
+
+  // ============================================
+  // DELIVERABLE TEMPLATES
+  // ============================================
+  console.log('Creating deliverable templates...');
+
+  const deliverableTemplateSeeds: Array<{
+    name: string;
+    description: string;
+    rows: Array<{
+      category: DeliverableCategory;
+      deliverableName: string;
+      brandingType: BrandingType;
+      quantity: number;
+      unit: DeliverableUnit;
+      otherUnit?: string | null;
+      remarks?: string | null;
+    }>;
+  }> = [
+    {
+      name: 'Tech Conference Core Pack',
+      description: 'Default pack for B2B technology conferences.',
+      rows: [
+        {
+          category: DeliverableCategory.PHYSICAL,
+          deliverableName: 'Entrance Arch Branding',
+          brandingType: BrandingType.MULTI,
+          quantity: 2,
+          unit: DeliverableUnit.PIECES,
+        },
+        {
+          category: DeliverableCategory.DIGITAL,
+          deliverableName: 'Website Hero Banner',
+          brandingType: BrandingType.EXCLUSIVE,
+          quantity: 14,
+          unit: DeliverableUnit.DAYS,
+          remarks: 'Displayed on homepage before event',
+        },
+      ],
+    },
+    {
+      name: 'Community Event Light Pack',
+      description: 'Lean template for local community and impact events.',
+      rows: [
+        {
+          category: DeliverableCategory.PHYSICAL,
+          deliverableName: 'On-ground Flyers',
+          brandingType: BrandingType.MULTI,
+          quantity: 500,
+          unit: DeliverableUnit.PIECES,
+        },
+        {
+          category: DeliverableCategory.DIGITAL,
+          deliverableName: 'Community Group Mentions',
+          brandingType: BrandingType.MULTI,
+          quantity: 5,
+          unit: DeliverableUnit.OTHER,
+          otherUnit: 'Announcements',
+        },
+      ],
+    },
+  ];
+
+  for (const seed of deliverableTemplateSeeds) {
+    await prisma.deliverableTemplate.create({
+      data: {
+        name: seed.name,
+        description: seed.description,
+        rows: seed.rows as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  // ============================================
   // SPONSORSHIPS (all SponsorshipStatus + active/inactive)
   // ============================================
   console.log('Creating sponsorships...');
@@ -1365,6 +1558,18 @@ async function main() {
         entityId: proposalsByKey['proposal-rejected'].id,
         metadata: Prisma.JsonNull,
       },
+      {
+        actorId: usersByKey.manager2.id,
+        actorRole: 'MANAGER',
+        action: 'deliverable_form.sent',
+        entityType: 'TierDeliverableForm',
+        entityId: deliverableFormsByKey['form-platinum-sent'].id,
+        metadata: {
+          tierKey: 'platinum-tier',
+          newStatus: DeliverableFormStatus.SENT_TO_ORGANIZER,
+          source: 'seed',
+        },
+      },
     ],
   });
 
@@ -1378,6 +1583,9 @@ async function main() {
     eventCount,
     addressCount,
     tierCount,
+    deliverableFormCount,
+    deliverableRowCount,
+    deliverableTemplateCount,
     audienceProfileCount,
     sponsorshipCount,
     proposalCount,
@@ -1393,6 +1601,9 @@ async function main() {
     prisma.event.count(),
     prisma.address.count(),
     prisma.sponsorshipTier.count(),
+    prisma.tierDeliverableForm.count(),
+    prisma.tierDeliverableRow.count(),
+    prisma.deliverableTemplate.count(),
     prisma.eventAudienceProfile.count(),
     prisma.sponsorship.count(),
     prisma.proposal.count(),
@@ -1411,6 +1622,9 @@ async function main() {
   console.log(`Events: ${eventCount}`);
   console.log(`Addresses: ${addressCount}`);
   console.log(`Sponsorship Tiers: ${tierCount}`);
+  console.log(`Tier Deliverable Forms: ${deliverableFormCount}`);
+  console.log(`Tier Deliverable Rows: ${deliverableRowCount}`);
+  console.log(`Deliverable Templates: ${deliverableTemplateCount}`);
   console.log(`Audience Profiles: ${audienceProfileCount}`);
   console.log(`Sponsorships: ${sponsorshipCount}`);
   console.log(`Proposals: ${proposalCount}`);

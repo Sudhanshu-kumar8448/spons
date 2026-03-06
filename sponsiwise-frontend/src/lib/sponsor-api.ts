@@ -6,7 +6,6 @@ import type {
   Proposal,
   ProposalsResponse,
   SponsorDashboardStats,
-  SponsorshipsResponse,
 } from "@/lib/types/sponsor";
 
 
@@ -79,18 +78,21 @@ export async function fetchBrowsableEventById(
   return authFetch<BrowsableEvent>(`/sponsor/events/${id}`);
 }
 
-// ─── Sponsorships ──────────────────────────────────────────────────────
+// ─── Deliverable Types ─────────────────────────────────────────────────
 
-export async function fetchSponsorSponsorships(params?: {
-  page?: number;
-  page_size?: number;
-}): Promise<SponsorshipsResponse> {
-  const qs = new URLSearchParams();
-  if (params?.page) qs.set("page", String(params.page));
-  if (params?.page_size) qs.set("page_size", String(params.page_size));
-
-  const query = qs.toString();
-  return authFetch<SponsorshipsResponse>(
-    `/sponsor/sponsorships${query ? `?${query}` : ""}`,
-  );
+export interface SponsorTierDeliverables {
+  id: string;
+  tierId: string;
+  status: string;
+  rows: Array<{
+    id: string;
+    category: string;
+    deliverableName: string;
+    brandingType: string;
+    quantity: number;
+    unit: string;
+    otherUnit?: string | null;
+    remarks?: string | null;
+    sortOrder: number;
+  }>;
 }

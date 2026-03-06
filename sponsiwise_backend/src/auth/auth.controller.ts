@@ -149,8 +149,6 @@ export class AuthController {
       cookieOptions.domain = undefined;
     }
 
-    console.log('[AUTH] Setting access_token cookie:', { isProduction, sameSite, secure, domain: cookieOptions.domain });
-
     res.cookie('access_token', accessToken, cookieOptions);
   }
 
@@ -194,43 +192,15 @@ export class AuthController {
       cookieOptions.domain = undefined;
     }
 
-    console.log('[AUTH] Setting refresh_token cookie:', { isProduction, sameSite, secure, domain: cookieOptions.domain });
-
     res.cookie('refresh_token', refreshToken, cookieOptions);
   }
 
   private isProduction(): boolean {
-    // Only treat as production if explicitly set to production AND deployed on a platform
-    // This prevents local development from being treated as production
-    const nodeEnv = process.env.NODE_ENV;
-
-    // Check if we're deployed on known production platforms
-    const isOnRender = process.env.RENDER === 'true';
-    const isOnVercel = process.env.VERCEL === '1';
-    const isDeployed = isOnRender || isOnVercel;
-
-    // For local development: always return false
-    // For production: must have NODE_ENV=production AND be on a deployment platform
-    return nodeEnv === 'production' && isDeployed;
+    return process.env.NODE_ENV === 'production';
   }
 
   private isLocalhost(): boolean {
-    // Check multiple indicators of local development
-    const host = process.env.HOST || process.env.HOSTNAME || '';
-    const nodeEnv = process.env.NODE_ENV;
-
-    // Also check if we're running on typical local development ports
-    const port = process.env.PORT || '3000';
-    const isLocalPort = ['3000', '3001', '3002', '8080', '5000', '8000'].includes(port);
-
-    return (
-      host.includes('localhost') ||
-      host.includes('127.0.0.1') ||
-      nodeEnv === 'development' ||
-      nodeEnv === undefined ||
-      nodeEnv === '' ||
-      isLocalPort
-    );
+    return process.env.NODE_ENV !== 'production';
   }
 
   /**

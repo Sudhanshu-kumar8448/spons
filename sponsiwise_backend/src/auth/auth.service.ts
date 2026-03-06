@@ -1,6 +1,7 @@
 import { Injectable, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../common/providers/prisma.service';
 import { RegisterDto, LoginDto } from './dto';
 import type { JwtPayload } from './interfaces';
@@ -8,6 +9,7 @@ import type { JwtConfig } from '../common/config';
 import type { StringValue } from 'ms';
 import * as bcrypt from 'bcrypt';
 import { createHash } from 'crypto';
+import { UserRegisteredEvent, USER_REGISTERED_EVENT } from '../common/events';
 
 /**
  * AuthService handles all authentication-related business logic.
@@ -25,6 +27,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly eventEmitter: EventEmitter2,
   ) { }
 
   /**
@@ -88,6 +91,12 @@ export class AuthService {
     });
 
     this.logger.log(`User ${user.id} registered`);
+
+    // Emit domain event — triggers welcome email via BullMQ queue
+    this.eventEmitter.emit(
+      USER_REGISTERED_EVENT,
+      new UserRegisteredEvent({ userId: user.id, email: user.email }),
+    );
 
     // Generate tokens for auto-login (mirrors login flow)
     const { accessToken, refreshToken } = await this.generateTokens(user);

@@ -121,17 +121,17 @@ export async function authFetch<T>(
     console.log(`[authFetch] Endpoint: ${normalizedEndpoint}`);
     console.log(`[authFetch] Cookies found:`, cookieStore.getAll().map(c => c.name));
 
-    const { revalidate, ...rest } = init ?? {};
+    const { revalidate, headers: initHeaders, ...rest } = init ?? {};
 
     const res = await fetch(`${baseUrl}${normalizedEndpoint}`, {
+        ...rest,
         headers: {
             "Content-Type": "application/json",
             Cookie: cookieHeader,
-            ...(init?.headers as Record<string, string>),
+            ...(initHeaders as Record<string, string> | undefined),
         },
         cache: init?.cache ?? (revalidate ? undefined : "no-store"),
         next: revalidate ? { revalidate } : undefined,
-        ...rest,
     });
 
     // ── Happy path ──────────────────────────────────────────
@@ -180,13 +180,13 @@ export async function authFetch<T>(
 
         // Retry the original request with fresh cookies
         const retryRes = await fetch(`${baseUrl}${normalizedEndpoint}`, {
+            ...rest,
             headers: {
                 "Content-Type": "application/json",
                 Cookie: updatedCookieHeader,
-                ...(init?.headers as Record<string, string>),
+                ...(initHeaders as Record<string, string> | undefined),
             },
             cache: "no-store",
-            ...rest,
         });
 
         if (retryRes.ok) {

@@ -12,14 +12,63 @@ import type { JwtPayloadWithClaims } from '../auth/interfaces';
 import { AuthService } from '../auth/auth.service';
 
 /**
+ * Free / personal email provider domains.
+ * Users with these email domains must go through manager verification.
+ * Users with corporate / company domains (anything NOT in this list)
+ * are auto-verified on registration.
+ */
+const FREE_EMAIL_DOMAINS = new Set([
+    'gmail.com',
+    'yahoo.com',
+    'yahoo.co.in',
+    'yahoo.in',
+    'hotmail.com',
+    'outlook.com',
+    'live.com',
+    'aol.com',
+    'icloud.com',
+    'me.com',
+    'mac.com',
+    'mail.com',
+    'protonmail.com',
+    'proton.me',
+    'zoho.com',
+    'zohomail.in',
+    'yandex.com',
+    'gmx.com',
+    'gmx.net',
+    'rediffmail.com',
+    'fastmail.com',
+    'tutanota.com',
+    'skype.com',
+    'msn.com',
+    'inbox.com',
+    'mail.ru',
+    'cock.li',
+    'guerrillamail.com',
+    'tempmail.com',
+    'throwaway.email',
+]);
+
+/**
+ * Returns true if the email belongs to a free / personal provider.
+ * Corporate emails (e.g. @nike.com) return false.
+ */
+function isFreeEmail(email: string): boolean {
+    const domain = email.split('@')[1]?.toLowerCase();
+    return !domain || FREE_EMAIL_DOMAINS.has(domain);
+}
+
+/**
  * OnboardingService — handles new user onboarding flows.
  *
  * Sponsor flow:
  *   1. Validate user has USER role, no existing company
- *   2. Create Company (type SPONSOR, status PENDING)
+ *   2. Create Company
  *   3. Link user → company
- *   4. Create AuditLog + Notification for managers
- *   5. Keep role as USER until manager approves
+ *   4. If corporate email → auto-verify (VERIFIED) + upgrade to SPONSOR + return tokens
+ *      If free email → keep PENDING + notify managers → wait for manager approval
+ *   5. Create AuditLog + (optionally) Notification for managers
  *
  * Organizer flow:
  *   1. Validate user has USER role, no existing organizer
@@ -42,7 +91,7 @@ export class OnboardingService {
     async registerSponsor(dto: CreateSponsorDto, user: JwtPayloadWithClaims) {
         const dbUser = await this.prisma.user.findUnique({
             where: { id: user.sub },
-            select: { role: true, companyId: true, organizerId: true },
+            select: { id: true, email: true, role: true, companyId: true, organizerId: true },
         });
 
         if (!dbUser) {
@@ -74,6 +123,12 @@ export class OnboardingService {
             slug = `${baseSlug}-${counter}`;
         }
 
+        // Determine if the user has a corporate email → auto-verify
+        const corporateEmail = !isFreeEmail(dbUser.email);
+        const initialStatus = corporateEmail
+            ? VerificationStatus.VERIFIED
+            : VerificationStatus.PENDING;
+
         // Create company + link user in a transaction
         const result = await this.prisma.$transaction(async (tx) => {
             const company = await tx.company.create({
@@ -83,13 +138,21 @@ export class OnboardingService {
                     type: dto.type,
                     website: dto.website || null,
                     strategicIntent: dto.strategicIntent || null,
-                    verificationStatus: VerificationStatus.PENDING,
+                    verificationStatus: initialStatus,
+                    // If auto-verified, stamp approval metadata
+                    ...(corporateEmail && {
+                        approvedAt: new Date(),
+                    }),
                 },
             });
 
-            await tx.user.update({
+            // If corporate email → upgrade role to SPONSOR immediately
+            const updatedUser = await tx.user.update({
                 where: { id: user.sub },
-                data: { companyId: company.id },
+                data: {
+                    companyId: company.id,
+                    ...(corporateEmail && { role: Role.SPONSOR }),
+                },
             });
 
             await tx.auditLog.create({
@@ -103,44 +166,66 @@ export class OnboardingService {
                         companyName: dto.name,
                         slug,
                         source: 'onboarding',
+                        autoVerified: corporateEmail,
+                        emailDomain: dbUser.email.split('@')[1],
                     },
                 },
             });
 
-            // Notify all managers
-            const managers = await tx.user.findMany({
-                where: { role: Role.MANAGER },
-                select: { id: true },
-            });
-
-            if (managers.length > 0) {
-                await tx.notification.createMany({
-                    data: managers.map((m) => ({
-                        userId: m.id,
-                        title: 'New Sponsor Registration',
-                        message: `A new sponsor company "${dto.name}" has been registered and is awaiting verification.`,
-                        severity: 'INFO' as const,
-                        link: `/dashboard/companies`,
-                        entityType: 'Company',
-                        entityId: company.id,
-                    })),
+            // Notify managers only for free-email registrations (needs review)
+            if (!corporateEmail) {
+                const managers = await tx.user.findMany({
+                    where: { role: Role.MANAGER },
+                    select: { id: true },
                 });
+
+                if (managers.length > 0) {
+                    await tx.notification.createMany({
+                        data: managers.map((m) => ({
+                            userId: m.id,
+                            title: 'New Sponsor Registration',
+                            message: `A new sponsor company "${dto.name}" has been registered and is awaiting verification.`,
+                            severity: 'INFO' as const,
+                            link: `/dashboard/companies`,
+                            entityType: 'Company',
+                            entityId: company.id,
+                        })),
+                    });
+                }
             }
 
-            return company;
+            return { company, updatedUser };
         });
 
         this.logger.log(
-            `Sponsor company "${result.name}" (${result.id}) created by user ${user.sub}`,
+            `Sponsor company "${result.company.name}" (${result.company.id}) created by user ${user.sub}` +
+            (corporateEmail ? ' — auto-verified (corporate email)' : ' — pending manager review'),
         );
+
+        // If auto-verified, generate new tokens with SPONSOR role so frontend picks it up
+        if (corporateEmail) {
+            const tokens = await this.authService.generateTokens(result.updatedUser);
+            return {
+                message: 'Your corporate email has been verified automatically. Welcome aboard!',
+                autoVerified: true,
+                company: {
+                    id: result.company.id,
+                    name: result.company.name,
+                    slug: result.company.slug,
+                    verificationStatus: result.company.verificationStatus,
+                },
+                tokens,
+            };
+        }
 
         return {
             message: 'Sponsor registration submitted successfully. Awaiting manager approval.',
+            autoVerified: false,
             company: {
-                id: result.id,
-                name: result.name,
-                slug: result.slug,
-                verificationStatus: result.verificationStatus,
+                id: result.company.id,
+                name: result.company.name,
+                slug: result.company.slug,
+                verificationStatus: result.company.verificationStatus,
             },
         };
     }

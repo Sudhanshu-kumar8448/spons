@@ -29,6 +29,7 @@ import { HealthModule } from './health/health.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { SponsorshipTiersModule } from './sponsorship-tiers/sponsorship-tiers.module';
 import { UploadModule } from './upload/upload.module';
+import { DeliverablesModule } from './deliverables/deliverables.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { UploadModule } from './upload/upload.module';
     OnboardingModule,
     SponsorshipTiersModule,
     UploadModule,
+    DeliverablesModule,
   ],
   controllers: [AppController],
   providers: [

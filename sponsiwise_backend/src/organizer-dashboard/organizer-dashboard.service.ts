@@ -511,6 +511,9 @@ export class OrganizerDashboardService {
             soldSlots: true,
             benefits: true,
             isLocked: true,
+            deliverableForm: {
+              select: { status: true },
+            },
           },
         },
         sponsorships: {
@@ -567,6 +570,7 @@ export class OrganizerDashboardService {
         slots_available: t.totalSlots - t.soldSlots,
         benefits: benefits,
         is_locked: t.isLocked,
+        deliverable_form_status: (t as any).deliverableForm?.status ?? null,
       };
     });
 

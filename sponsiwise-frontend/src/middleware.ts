@@ -4,6 +4,18 @@ import { jwtVerify } from "jose";
 
 const JWT_SECRET = process.env.JWT_ACCESS_SECRET;
 
+function getDefaultPathForRole(role: string): string {
+  const roleRedirects: Record<string, string> = {
+    SPONSOR: "/brand/dashboard",
+    ORGANIZER: "/organizer/dashboard",
+    MANAGER: "/manager/dashboard",
+    ADMIN: "/admin",
+    SUPER_ADMIN: "/admin",
+    USER: "/onboarding",
+  };
+  return roleRedirects[role] || "/login";
+}
+
 /**
  * Next.js Middleware – runs server-side on every matched request.
  * Performs stateless JWT verification using `jose` to avoid database hits.
@@ -34,6 +46,14 @@ export async function middleware(request: NextRequest) {
     const { payload } = await jwtVerify(token, secret);
 
     const userRole = payload.role as string;
+
+    // Non-USER roles should never see onboarding selection/forms.
+    if (
+      userRole !== "USER" &&
+      (pathname === "/onboarding" || pathname.startsWith("/onboarding/"))
+    ) {
+      return NextResponse.redirect(new URL(getDefaultPathForRole(userRole), request.url));
+    }
 
     // USER role users trying to access role-specific areas → redirect to /onboarding
     if (userRole === "USER") {

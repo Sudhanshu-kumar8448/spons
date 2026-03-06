@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { 
   Building2, 
   Globe, 
@@ -18,21 +19,165 @@ import { apiClient } from "@/lib/api-client";
 /**
  * Industry options for the dropdown
  */
-const INDUSTRY_OPTIONS = [
-  { value: "TECHNOLOGY", label: "Technology" },
-  { value: "FINANCE", label: "Finance" },
-  { value: "FMCG", label: "FMCG" },
-  { value: "HEALTHCARE_PHARMA", label: "Healthcare & Pharma" },
-  { value: "RETAIL_ECOMMERCE", label: "Retail & E-Commerce" },
-  { value: "MANUFACTURING_INDUSTRIAL", label: "Manufacturing & Industrial" },
-  { value: "MEDIA_ENTERTAINMENT", label: "Media & Entertainment" },
-  { value: "EDUCATION", label: "Education" },
-  { value: "ENERGY_UTILITIES", label: "Energy & Utilities" },
-  { value: "REAL_ESTATE_CONSTRUCTION", label: "Real Estate & Construction" },
-  { value: "LOGISTICS_TRANSPORTATION", label: "Logistics & Transportation" },
-  { value: "TELECOM", label: "Telecom" },
-  { value: "OTHER", label: "Other" },
-] as const;
+const INDUSTRY_OPTIONS: { group: string; options: { value: string; label: string }[] }[] = [
+  {
+    group: "Technology",
+    options: [
+      { value: "TECHNOLOGY", label: "Technology (General)" },
+      { value: "SOFTWARE_SAAS", label: "Software / SaaS" },
+      { value: "HARDWARE_IOT", label: "Hardware / IoT" },
+      { value: "ARTIFICIAL_INTELLIGENCE", label: "Artificial Intelligence" },
+      { value: "CYBERSECURITY", label: "Cybersecurity" },
+      { value: "CLOUD_COMPUTING", label: "Cloud Computing" },
+      { value: "BLOCKCHAIN_WEB3", label: "Blockchain / Web3" },
+      { value: "GAMING_ESPORTS", label: "Gaming / Esports" },
+      { value: "AR_VR", label: "AR / VR" },
+      { value: "ROBOTICS_AUTOMATION", label: "Robotics & Automation" },
+      { value: "SEMICONDUCTOR", label: "Semiconductor" },
+    ],
+  },
+  {
+    group: "Finance",
+    options: [
+      { value: "FINANCE", label: "Finance (General)" },
+      { value: "BANKING", label: "Banking" },
+      { value: "FINTECH", label: "FinTech" },
+      { value: "INSURANCE", label: "Insurance" },
+      { value: "INVESTMENT_VC_PE", label: "Investment / VC / PE" },
+      { value: "CRYPTO_EXCHANGE", label: "Crypto Exchange" },
+      { value: "WEALTH_MANAGEMENT", label: "Wealth Management" },
+    ],
+  },
+  {
+    group: "Consumer & Retail",
+    options: [
+      { value: "FMCG", label: "FMCG" },
+      { value: "D2C_BRAND", label: "D2C Brand" },
+      { value: "RETAIL_ECOMMERCE", label: "Retail / E-Commerce" },
+      { value: "MARKETPLACE_PLATFORM", label: "Marketplace / Platform" },
+      { value: "CONSUMER_ELECTRONICS", label: "Consumer Electronics" },
+      { value: "FASHION_APPAREL", label: "Fashion & Apparel" },
+      { value: "BEAUTY_COSMETICS", label: "Beauty & Cosmetics" },
+      { value: "FOOD_BEVERAGE", label: "Food & Beverage" },
+      { value: "QUICK_COMMERCE", label: "Quick Commerce" },
+      { value: "AUTOMOBILE_AUTOMOTIVE", label: "Automobile / Automotive" },
+      { value: "EV_MOBILITY", label: "EV & Mobility" },
+    ],
+  },
+  {
+    group: "Healthcare",
+    options: [
+      { value: "HEALTHCARE_PHARMA", label: "Healthcare & Pharma" },
+      { value: "MEDTECH", label: "MedTech" },
+      { value: "BIOTECHNOLOGY", label: "Biotechnology" },
+      { value: "HEALTH_INSURANCE", label: "Health Insurance" },
+      { value: "WELLNESS_FITNESS", label: "Wellness & Fitness" },
+      { value: "MEDICAL_DEVICES", label: "Medical Devices" },
+      { value: "TELEMEDICINE", label: "Telemedicine" },
+    ],
+  },
+  {
+    group: "Industrial & Infrastructure",
+    options: [
+      { value: "MANUFACTURING_INDUSTRIAL", label: "Manufacturing & Industrial" },
+      { value: "MATERIALS_MINING", label: "Materials & Mining" },
+      { value: "CHEMICALS", label: "Chemicals" },
+      { value: "HEAVY_EQUIPMENT", label: "Heavy Equipment" },
+      { value: "AEROSPACE_DEFENSE", label: "Aerospace & Defense" },
+      { value: "ENERGY_UTILITIES", label: "Energy & Utilities" },
+      { value: "RENEWABLE_ENERGY", label: "Renewable Energy" },
+      { value: "OIL_GAS", label: "Oil & Gas" },
+      { value: "WATER_UTILITIES", label: "Water Utilities" },
+      { value: "WASTE_ENVIRONMENTAL", label: "Waste & Environmental" },
+      { value: "REAL_ESTATE_CONSTRUCTION", label: "Real Estate & Construction" },
+      { value: "SMART_INFRASTRUCTURE", label: "Smart Infrastructure" },
+    ],
+  },
+  {
+    group: "Media & Communication",
+    options: [
+      { value: "MEDIA_ENTERTAINMENT", label: "Media & Entertainment" },
+      { value: "DIGITAL_MEDIA", label: "Digital Media" },
+      { value: "ADVERTISING_MARKETING", label: "Advertising & Marketing" },
+      { value: "PUBLIC_RELATIONS", label: "Public Relations" },
+      { value: "TELECOM", label: "Telecom" },
+      { value: "CONTENT_CREATION", label: "Content Creation" },
+      { value: "OTT_STREAMING", label: "OTT / Streaming" },
+    ],
+  },
+  {
+    group: "Education & HR",
+    options: [
+      { value: "EDUCATION", label: "Education" },
+      { value: "EDTECH", label: "EdTech" },
+      { value: "SKILL_DEVELOPMENT", label: "Skill Development" },
+      { value: "HR_TECH", label: "HR Tech" },
+      { value: "RECRUITMENT_STAFFING", label: "Recruitment & Staffing" },
+    ],
+  },
+  {
+    group: "Logistics & Travel",
+    options: [
+      { value: "LOGISTICS_TRANSPORTATION", label: "Logistics & Transportation" },
+      { value: "SUPPLY_CHAIN", label: "Supply Chain" },
+      { value: "HOSPITALITY_TOURISM", label: "Hospitality & Tourism" },
+      { value: "TRAVEL_TECH", label: "Travel Tech" },
+      { value: "AVIATION", label: "Aviation" },
+      { value: "MARITIME", label: "Maritime" },
+      { value: "RAIL_FREIGHT", label: "Rail & Freight" },
+    ],
+  },
+  {
+    group: "Professional Services",
+    options: [
+      { value: "BUSINESS_SERVICES", label: "Business Services" },
+      { value: "CONSULTING", label: "Consulting" },
+      { value: "LEGAL_SERVICES", label: "Legal Services" },
+      { value: "ACCOUNTING_AUDIT", label: "Accounting & Audit" },
+      { value: "OUTSOURCING_BPO", label: "Outsourcing / BPO" },
+      { value: "FACILITIES_MANAGEMENT", label: "Facilities Management" },
+      { value: "SECURITY_SERVICES", label: "Security Services" },
+    ],
+  },
+  {
+    group: "Agriculture & Rural",
+    options: [
+      { value: "AGRICULTURE", label: "Agriculture" },
+      { value: "AGRITECH", label: "AgriTech" },
+      { value: "FOOD_PROCESSING", label: "Food Processing" },
+      { value: "DAIRY_LIVESTOCK", label: "Dairy & Livestock" },
+    ],
+  },
+  {
+    group: "Government & Social",
+    options: [
+      { value: "GOVERNMENT_NONPROFIT", label: "Government / Non-Profit" },
+      { value: "PUBLIC_SECTOR", label: "Public Sector" },
+      { value: "DEFENSE_SERVICES", label: "Defense Services" },
+      { value: "NGO_SOCIAL_ENTERPRISE", label: "NGO / Social Enterprise" },
+    ],
+  },
+  {
+    group: "Sports & Events",
+    options: [
+      { value: "SPORTS", label: "Sports" },
+      { value: "SPORTS_TECH", label: "Sports Tech" },
+      { value: "EVENT_MANAGEMENT", label: "Event Management" },
+      { value: "ENTERTAINMENT_PRODUCTION", label: "Entertainment Production" },
+    ],
+  },
+  {
+    group: "Emerging & Misc",
+    options: [
+      { value: "SPACE_TECH", label: "Space Tech" },
+      { value: "NANOTECHNOLOGY", label: "Nanotechnology" },
+      { value: "METAVERSE", label: "Metaverse" },
+      { value: "CREATOR_ECONOMY", label: "Creator Economy" },
+      { value: "QUANTUM_COMPUTING", label: "Quantum Computing" },
+      { value: "OTHER", label: "Other" },
+    ],
+  },
+];
 
 /**
  * Strategic intent options for multi-select
@@ -239,10 +384,14 @@ function Step1BrandIdentity({
               className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all appearance-none cursor-pointer"
             >
               <option value="">Select your industry</option>
-              {INDUSTRY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+              {INDUSTRY_OPTIONS.map((group) => (
+                <optgroup key={group.group} label={group.group}>
+                  {group.options.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -426,28 +575,37 @@ function Step2StrategicIntent({
 interface Step3VerificationProps {
   step1Data: Step1Data;
   step2Data: Step2Data;
+  autoVerified?: boolean;
 }
 
 /**
  * Step 3: Verification Pending Component
  */
-function Step3Verification({ step1Data, step2Data }: Step3VerificationProps) {
+function Step3Verification({ step1Data, step2Data, autoVerified }: Step3VerificationProps) {
+  const router = useRouter();
+
   return (
     <div className="bg-slate-900 p-8 sm:p-12 rounded-[2rem] sm:rounded-[3rem] border border-slate-800 shadow-2xl overflow-hidden relative">
       {/* Background Glow */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/20 blur-[100px] pointer-events-none"></div>
       
       <div className="relative z-10 text-center">
-        <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-indigo-900/50">
-          <Shield className="text-white w-10 h-10" />
+        <div className={`w-20 h-20 ${autoVerified ? 'bg-emerald-600' : 'bg-indigo-600'} rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl ${autoVerified ? 'shadow-emerald-900/50' : 'shadow-indigo-900/50'}`}>
+          {autoVerified ? (
+            <Check className="text-white w-10 h-10" />
+          ) : (
+            <Shield className="text-white w-10 h-10" />
+          )}
         </div>
         
         <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white mb-4">
-          Verification Pending
+          {autoVerified ? 'Welcome Aboard!' : 'Verification Pending'}
         </h2>
         
         <p className="text-slate-400 font-medium max-w-md mx-auto mb-8 leading-relaxed">
-          Your brand profile is under review. Our Concierge team will verify your details and activate your account within 24-48 hours.
+          {autoVerified
+            ? 'Your corporate email has been verified . Your brand profile is active and ready to go!'
+            : 'Your brand profile is under review. Our Concierge team will verify your details and activate your account within 24 hours.'}
         </p>
 
         {/* Summary Card */}
@@ -460,7 +618,7 @@ function Step3Verification({ step1Data, step2Data }: Step3VerificationProps) {
             <div className="flex justify-between items-center">
               <span className="text-slate-400 text-sm font-bold">Industry</span>
               <span className="text-white font-bold">
-                {INDUSTRY_OPTIONS.find((i) => i.value === step1Data.industry)?.label}
+                {INDUSTRY_OPTIONS.flatMap((g) => g.options).find((i) => i.value === step1Data.industry)?.label}
               </span>
             </div>
             {step1Data.website && (
@@ -475,6 +633,16 @@ function Step3Verification({ step1Data, step2Data }: Step3VerificationProps) {
             </div>
           </div>
         </div>
+
+        {autoVerified ? (
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all duration-200 mb-6 flex items-center justify-center gap-2"
+          >
+            Go to Dashboard
+            <ArrowRight className="w-5 h-5" />
+          </button>
+        ) : null}
 
         <div className="flex items-center justify-center gap-2 text-indigo-400 text-sm font-bold">
           <Sparkles className="w-4 h-4" />
@@ -502,6 +670,7 @@ export default function BrandOnboardingPage() {
   const [websiteError, setWebsiteError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [autoVerified, setAutoVerified] = useState(false);
 
   /**
    * Submit sponsor onboarding data to backend
@@ -510,12 +679,16 @@ export default function BrandOnboardingPage() {
     setIsSubmitting(true);
     setSubmitError("");
     try {
-      await apiClient.post("/onboarding/sponsor", {
+      const res = await apiClient.post<{ autoVerified?: boolean }>("/onboarding/sponsor", {
         name: step1Data.companyName,
         type: step1Data.industry,
         website: step1Data.website || undefined,
         strategicIntent: step2Data.selectedIntents.join(", ") || undefined,
       });
+      // Check if auto-verified (corporate email)
+      if (res?.autoVerified) {
+        setAutoVerified(true);
+      }
       return true;
     } catch (err: any) {
       const message = err?.detail || err?.message || "Something went wrong. Please try again.";
@@ -607,7 +780,7 @@ export default function BrandOnboardingPage() {
             />
           )}
           {currentStep === 3 && (
-            <Step3Verification step1Data={step1Data} step2Data={step2Data} />
+            <Step3Verification step1Data={step1Data} step2Data={step2Data} autoVerified={autoVerified} />
           )}
         </div>
 

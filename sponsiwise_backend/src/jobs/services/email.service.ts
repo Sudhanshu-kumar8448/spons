@@ -1,44 +1,39 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createTransport, type Transporter } from 'nodemailer';
+import { Resend } from 'resend';
 import { EmailLogsService } from '../../email-logs/email-logs.service';
 
 /**
- * Real email service using Nodemailer with SMTP transport.
+ * EmailService — sends transactional emails via Resend.
  *
  * Configured via environment variables:
- *   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM
+ *   RESEND_API_KEY   — Resend API key (required)
+ *   EMAIL_FROM       — Sender address, e.g. "SponsiWise <noreply@sponsiwise.com>"
  *
  * Logs every send attempt (success or failure) to the email_logs table.
- * Stateless transporter — safe for concurrent invocation from multiple workers.
+ * Instanced once per application — safe for concurrent queue workers.
  */
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private readonly transporter: Transporter;
+  private readonly resend: Resend | null;
   private readonly from: string;
 
   constructor(private readonly emailLogsService: EmailLogsService) {
-    this.transporter = createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    this.from = process.env.SMTP_FROM || 'noreply@sponsiwise.com';
-
-    this.logger.log(
-      `EmailService initialised — SMTP host: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT}`,
-    );
+    const apiKey = process.env.RESEND_API_KEY;
+    if (apiKey) {
+      this.resend = new Resend(apiKey);
+      this.logger.log('EmailService initialised — provider: Resend');
+    } else {
+      this.resend = null;
+      this.logger.warn('EmailService: RESEND_API_KEY not set — emails will be skipped');
+    }
+    this.from = process.env.EMAIL_FROM || 'SponsiWise <noreply@sponsiwise.com>';
   }
 
   /**
-   * Send an email via SMTP and persist the result to email_logs.
+   * Send an email via Resend and persist the result to email_logs.
    *
-   * @throws Error when sending fails after logging the error.
+   * @throws Error when sending fails (after logging the error to email_logs).
    */
   async send(options: {
     to: string;
@@ -49,8 +44,14 @@ export class EmailService {
     entityType?: string;
     entityId?: string;
   }): Promise<void> {
+    if (!this.resend) {
+      this.logger.warn(
+        `Email skipped (no API key) — to: ${options.to} | subject: "${options.subject}"`,
+      );
+      return;
+    }
     try {
-      const info = await this.transporter.sendMail({
+      const { data, error } = await this.resend.emails.send({
         from: this.from,
         to: options.to,
         subject: options.subject,
@@ -58,8 +59,12 @@ export class EmailService {
         text: options.text,
       });
 
+      if (error) {
+        throw new Error(error.message);
+      }
+
       this.logger.log(
-        `Email sent to ${options.to} | Subject: "${options.subject}" | messageId: ${info.messageId}`,
+        `Email sent to ${options.to} | Subject: "${options.subject}" | id: ${data?.id}`,
       );
 
       // Fire-and-forget — never block on log persistence
@@ -71,12 +76,12 @@ export class EmailService {
         entityId: options.entityId,
         status: 'SENT',
       });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
 
       this.logger.error(
         `Failed to send email to ${options.to}: ${errorMessage}`,
-        error instanceof Error ? error.stack : undefined,
+        err instanceof Error ? err.stack : undefined,
       );
 
       // Log failure — fire-and-forget

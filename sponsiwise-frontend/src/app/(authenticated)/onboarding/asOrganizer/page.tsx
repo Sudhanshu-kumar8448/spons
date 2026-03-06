@@ -27,7 +27,10 @@ const ORGANIZER_TYPE_OPTIONS = [
   { value: "NON_PROFIT", label: "Non-Profit" },
   { value: "GOVERNMENT", label: "Government" },
   { value: "EDUCATIONAL_INSTITUTION", label: "Educational Institution" },
-  { value: "CLUB_SOCIETY", label: "Club / Society" },
+  { value: "CLUB", label: "Club" },
+  { value: "FRANCHISE", label: "Franchise" },
+  { value: "SOCIETY", label: "Society" },
+  { value: "LEAGUE", label: "League" },
   { value: "OTHER", label: "Other" },
 ] as const;
 

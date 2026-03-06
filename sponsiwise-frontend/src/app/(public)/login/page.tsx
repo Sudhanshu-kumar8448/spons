@@ -31,10 +31,37 @@ function LoginForm() {
       // Role-aware redirect - use callbackUrl if provided
       const { role, companyId } = result.user;
 
-      // If callbackUrl is provided, use it for redirect (after validation)
-      if (callbackUrl && typeof callbackUrl === 'string') {
-        router.push(callbackUrl);
-        return;
+      const roleRedirects: Record<string, string> = {
+        SPONSOR: "/brand/dashboard",
+        ORGANIZER: "/organizer/dashboard",
+        MANAGER: "/manager/dashboard",
+        ADMIN: "/admin",
+        SUPER_ADMIN: "/admin",
+      };
+
+      const callbackAllowedPrefixesByRole: Record<string, string[]> = {
+        SPONSOR: ["/brand"],
+        ORGANIZER: ["/organizer"],
+        MANAGER: ["/manager"],
+        ADMIN: ["/admin"],
+        SUPER_ADMIN: ["/admin"],
+        USER: ["/onboarding", "/sponsor/register", "/sponsor/pending", "/organizer/register"],
+      };
+
+      const safeCallback =
+        typeof callbackUrl === "string" && callbackUrl.startsWith("/")
+          ? callbackUrl
+          : null;
+      // Apply callback only if it belongs to the logged-in role's route space.
+      if (safeCallback) {
+        const allowedPrefixes = callbackAllowedPrefixesByRole[role] ?? [];
+        const isAllowedCallback = allowedPrefixes.some(
+          (prefix) => safeCallback === prefix || safeCallback.startsWith(prefix + "/"),
+        );
+        if (isAllowedCallback) {
+          router.push(safeCallback);
+          return;
+        }
       }
 
       // Default role-based redirect
@@ -48,14 +75,6 @@ function LoginForm() {
           router.push("/onboarding");
         }
       } else {
-        // Role-based redirect
-        const roleRedirects: Record<string, string> = {
-          SPONSOR: "/brand/dashboard",
-          ORGANIZER: "/organizer/dashboard",
-          MANAGER: "/manager/dashboard",
-          ADMIN: "/admin",
-          SUPER_ADMIN: "/admin",
-        };
         router.push(roleRedirects[role] || "/brand/dashboard");
       }
     } catch (err) {

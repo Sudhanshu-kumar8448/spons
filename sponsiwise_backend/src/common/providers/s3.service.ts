@@ -22,16 +22,20 @@ export class S3Service implements OnModuleInit {
   private readonly isLocal: boolean;
 
   constructor() {
-    this.region = process.env.AWS_REGION || 'us-east-1';
-    this.bucketName = process.env.AWS_S3_BUCKET || 'sponsiwise';
+    this.region = process.env.S3_REGION || process.env.AWS_REGION || 'us-east-1';
+    this.bucketName = process.env.S3_BUCKET || process.env.AWS_S3_BUCKET || 'sponsiwise';
     this.publicUrl = process.env.S3_PUBLIC_URL || `http://localhost:9000/${this.bucketName}`;
 
     // Check if using MinIO/local S3
     this.isLocal = process.env.S3_ENDPOINT ? process.env.S3_ENDPOINT.includes('localhost') || process.env.S3_ENDPOINT.includes('127.0.0.1') : true;
 
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID || 'admin';
-    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || 'Sudha@7250';
+    const accessKeyId = process.env.S3_ACCESS_KEY || process.env.AWS_ACCESS_KEY_ID || '';
+    const secretAccessKey = process.env.S3_SECRET_KEY || process.env.AWS_SECRET_ACCESS_KEY || '';
     const endpoint = process.env.S3_ENDPOINT || 'http://localhost:9000';
+
+    if (!accessKeyId || !secretAccessKey) {
+      this.logger.error('❌ S3 credentials not configured! Set S3_ACCESS_KEY and S3_SECRET_KEY in .env');
+    }
 
     this.logger.log(`S3Service initializing...`);
     this.logger.log(`  Bucket: ${this.bucketName}`);
@@ -103,12 +107,14 @@ export class S3Service implements OnModuleInit {
   }
 
   /**
-   * Generate a presigned URL for direct upload to S3
+   * Generate a presigned URL for direct upload to S3.
+   * @param maxSizeBytes - Maximum allowed file size (default: 50MB)
    */
   async generatePresignedUploadUrl(
     key: string,
     contentType: string,
     expiresIn: number = 3600, // 1 hour default
+    maxSizeBytes: number = 50 * 1024 * 1024, // 50MB default
   ): Promise<string> {
     // Ensure bucket exists before generating presigned URL
     if (this.isLocal) {
@@ -120,16 +126,14 @@ export class S3Service implements OnModuleInit {
         Bucket: this.bucketName,
         Key: key,
         ContentType: contentType,
+        ContentLength: maxSizeBytes, // S3 will reject uploads exceeding this size
       });
 
       const signedUrl = await getSignedUrl(this.s3Client, command, { expiresIn });
-      this.logger.log(`Generated presigned URL for key: ${key}`);
+      this.logger.log(`Generated presigned URL for key: ${key} (max ${Math.round(maxSizeBytes / 1024 / 1024)}MB)`);
       return signedUrl;
     } catch (error: any) {
-      this.logger.error(`❌ Failed to generate presigned URL:`, error.message);
-      if (error.$metadata?.httpStatusCode === 403) {
-        this.logger.error(`   This is likely a credentials issue. Check your MinIO/S3 credentials.`);
-      }
+      this.logger.error(`Failed to generate presigned URL: ${error.message}`);
       throw error;
     }
   }

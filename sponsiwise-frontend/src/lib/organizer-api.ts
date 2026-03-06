@@ -6,7 +6,6 @@ import type {
   OrganizerEvent,
   OrganizerEventsResponse,
   ReviewProposalPayload,
-  CreateEventPayload,
 } from "@/lib/types/organizer";
 
 // ─── Dashboard stats ───────────────────────────────────────────────────
@@ -39,30 +38,6 @@ export async function fetchOrganizerEventById(
   id: string,
 ): Promise<OrganizerEvent> {
   return authFetch<OrganizerEvent>(`/organizer/events/${id}`);
-}
-
-export async function updateOrganizerEvent(
-  id: string,
-  payload: any,
-): Promise<OrganizerEvent> {
-  return authFetch<OrganizerEvent>(`/organizer/events/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-}
-
-// ─── Create event ──────────────────────────────────────────────────────
-
-export async function createOrganizerEvent(
-  payload: CreateEventPayload,
-): Promise<OrganizerEvent> {
-  return authFetch<OrganizerEvent>("/organizer/events", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
 }
 
 // ─── Incoming proposals ────────────────────────────────────────────────
@@ -101,4 +76,33 @@ export async function reviewProposal(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+// ─── Deliverable Types ─────────────────────────────────────────────────
+
+export interface OrganizerDeliverableForm {
+  id: string;
+  tierId: string;
+  status: string;
+  rows: Array<{
+    id: string;
+    category: string;
+    deliverableName: string;
+    brandingType: string;
+    quantity: number;
+    unit: string;
+    otherUnit?: string | null;
+    remarks?: string | null;
+    sortOrder: number;
+  }>;
+  tier?: {
+    id: string;
+    tierType: string;
+    askingPrice: number;
+    customName?: string | null;
+    event: {
+      id: string;
+      title: string;
+    };
+  };
 }

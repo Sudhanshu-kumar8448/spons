@@ -8,6 +8,15 @@
  * Naming convention: <domain>.<action> (dot-separated, lowercase)
  */
 
+// ── User lifecycle email jobs ────────────────────────────────────────
+export const JOB_EMAIL_USER_REGISTERED = 'email.user.registered';
+
+// ── Sponsorship interest email jobs ──────────────────────────────────
+export const JOB_EMAIL_INTEREST_EXPRESSED = 'email.interest.expressed';
+
+// ── Deal finalized email jobs ─────────────────────────────────────────
+export const JOB_EMAIL_DEAL_FINALIZED = 'email.deal.finalized';
+
 // ── Proposal email jobs ──────────────────────────────────────────────
 export const JOB_EMAIL_PROPOSAL_SUBMITTED = 'email.proposal.submitted';
 export const JOB_EMAIL_PROPOSAL_APPROVED = 'email.proposal.approved';
@@ -18,6 +27,9 @@ export const JOB_EMAIL_COMPANY_VERIFIED = 'email.company.verified';
 export const JOB_EMAIL_COMPANY_REJECTED = 'email.company.rejected';
 export const JOB_EMAIL_EVENT_VERIFIED = 'email.event.verified';
 export const JOB_EMAIL_EVENT_REJECTED = 'email.event.rejected';
+
+// ── Deliverables email jobs ──────────────────────────────────────────
+export const JOB_EMAIL_DELIVERABLES_FORM_SENT = 'email.deliverables.form.sent';
 
 // ── Notification jobs (in-app) ───────────────────────────────────────
 export const JOB_NOTIFY_PROPOSAL_SUBMITTED = 'notify.proposal.submitted';

@@ -45,6 +45,7 @@ export type TierType =
 export interface SponsorshipTier {
     id: string;
     tier_type: TierType;
+    custom_name?: string | null;
     asking_price: number;
     total_slots: number;
     sold_slots: number;
@@ -52,6 +53,114 @@ export interface SponsorshipTier {
     is_locked: boolean;
     is_active: boolean;
     is_available: boolean;
+    deliverable_form_status?: DeliverableFormStatus | null;
+}
+
+// ─── Deliverables ────────────────────────────────────────────────────
+
+export type DeliverableCategory = 'PHYSICAL' | 'DIGITAL';
+export type BrandingType = 'EXCLUSIVE' | 'MULTI';
+export type DeliverableUnit =
+    | 'POSTS' | 'PIECES' | 'BOARDS' | 'DAYS' | 'HOURS'
+    | 'MINUTES' | 'SESSIONS' | 'BANNERS' | 'PAGES'
+    | 'SCREENS' | 'SPOTS' | 'OTHER';
+export type DeliverableFormStatus = 'DRAFT' | 'SENT_TO_ORGANIZER' | 'FILLED' | 'SUBMITTED';
+
+export interface DeliverableRow {
+    id: string;
+    category: DeliverableCategory;
+    deliverableName: string;
+    brandingType: BrandingType;
+    quantity: number;
+    unit: DeliverableUnit;
+    otherUnit?: string | null;
+    remarks?: string | null;
+    sortOrder: number;
+}
+
+export interface DeliverableForm {
+    id: string;
+    tierId: string;
+    status: DeliverableFormStatus;
+    rows: DeliverableRow[];
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface DeliverableFormWithTier extends DeliverableForm {
+    tier: {
+        id: string;
+        tierType: TierType;
+        askingPrice: number;
+        customName?: string | null;
+    };
+}
+
+export interface DeliverableTemplate {
+    id: string;
+    name: string;
+    description?: string | null;
+    rows: Omit<DeliverableRow, 'id'>[];
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface TierCompareResult {
+    tier1: { tierId: string; status: DeliverableFormStatus; rows: DeliverableRow[] } | null;
+    tier2: { tierId: string; status: DeliverableFormStatus; rows: DeliverableRow[] } | null;
+}
+
+// ─── Audience Profile ────────────────────────────────────────────────
+
+export type GenderType = 'MALE' | 'FEMALE' | 'OTHER';
+
+export type AgeBracket =
+    | 'AGE_5_12'
+    | 'AGE_12_17'
+    | 'AGE_17_28'
+    | 'AGE_28_45'
+    | 'AGE_45_PLUS';
+
+export type IncomeBracket =
+    | 'BELOW_2L'
+    | 'BETWEEN_2L_5L'
+    | 'BETWEEN_5L_10L'
+    | 'BETWEEN_10L_25L'
+    | 'ABOVE_25L';
+
+export interface AudienceGender {
+    id: string;
+    gender: GenderType;
+    percentage: number;
+}
+
+export interface AudienceAgeGroup {
+    id: string;
+    bracket: AgeBracket;
+    percentage: number;
+}
+
+export interface AudienceIncomeGroup {
+    id: string;
+    bracket: IncomeBracket;
+    percentage: number;
+}
+
+export interface AudienceRegion {
+    id: string;
+    city: string;
+    state: string;
+    percentage: number;
+}
+
+export interface AudienceProfile {
+    id: string;
+    genders: AudienceGender[];
+    ages: AudienceAgeGroup[];
+    incomes: AudienceIncomeGroup[];
+    regions: AudienceRegion[];
+    created_at: string;
+    updated_at: string;
 }
 
 // ─── Event Address ────────────────────────────────────────────────────
@@ -173,6 +282,7 @@ export interface ManagerEventDetail extends VerifiableEvent {
     ppt_deck_url?: string | null;
     address?: EventAddress | null;
     sponsorship_tiers: SponsorshipTier[];
+    audience_profile?: AudienceProfile | null;
 }
 
 // ─── Verification ──────────────────────────────────────────────────────
@@ -202,70 +312,4 @@ export interface ActivityLogEntry {
     entityId: string;
     metadata?: Record<string, unknown>;
     createdAt: string;
-}
-
-export interface ActivityLogResponse {
-    data: ActivityLogEntry[];
-    total: number;
-    page: number;
-    page_size: number;
-}
-
-// ─── Lifecycle shared types ────────────────────────────────────────────
-
-export interface LifecycleProgress {
-    percentage: number;
-    label: string;
-    steps: Array<{
-        label: string;
-        completed: boolean;
-    }>;
-}
-
-export interface TimelineEntry {
-    id: string;
-    type: string;
-    title: string;
-    description?: string | null;
-    timestamp: string;
-    metadata?: Record<string, unknown>;
-}
-
-export type CompanyTimelineEntry = TimelineEntry;
-
-export interface CompanyLifecycleStats {
-    totalProposals: number;
-    approvedProposals: number;
-    rejectedProposals: number;
-    totalSponsorships: number;
-    totalEmails: number;
-    failedEmails: number;
-}
-
-// ─── Lifecycle responses ───────────────────────────────────────────────
-
-export interface EventLifecycleResponse {
-    event: VerifiableEvent;
-    proposals: Array<{
-        id: string;
-        status: string;
-        proposedTier?: string | null;
-        proposedAmount?: number | null;
-        createdAt: string;
-        sponsorship: {
-            company: {
-                id: string;
-                name: string;
-            };
-        };
-    }>;
-    progress: LifecycleProgress;
-    timeline: TimelineEntry[];
-}
-
-export interface CompanyLifecycleResponse {
-    company: VerifiableCompany;
-    stats: CompanyLifecycleStats;
-    progress: LifecycleProgress;
-    timeline: CompanyTimelineEntry[];
 }

@@ -11,6 +11,7 @@ interface ProposalFormProps {
   eventId: string;
   eventTitle: string;
   availableTiers: SponsorshipTier[];
+  defaultTierId?: string;
 }
 
 const initialState: CreateProposalState = {
@@ -35,6 +36,7 @@ export default function ProposalForm({
   eventId,
   eventTitle,
   availableTiers,
+  defaultTierId,
 }: ProposalFormProps) {
   const [state, formAction, isPending] = useActionState(
     createProposalAction,
@@ -71,7 +73,7 @@ export default function ProposalForm({
               id="tier_id"
               name="tier_id"
               required
-              defaultValue=""
+              defaultValue={defaultTierId || ""}
               className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="" disabled>Select a tier…</option>

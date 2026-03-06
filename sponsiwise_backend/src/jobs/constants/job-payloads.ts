@@ -9,6 +9,36 @@
  * intentional so the producer is a trivial mapping, not a transformation.
  */
 
+// ── User lifecycle payloads ──────────────────────────────────────────
+
+export interface UserRegisteredEmailPayload {
+  userId: string;
+  email: string;
+  timestamp: string;
+}
+
+// ── Interest expressed payloads ──────────────────────────────────────
+
+export interface InterestExpressedEmailPayload {
+  sponsorshipId: string;
+  companyId: string;
+  eventId: string;
+  actorId: string;
+  timestamp: string;
+}
+
+// ── Deal finalized payloads ──────────────────────────────────────────
+
+export interface DealFinalizedEmailPayload {
+  proposalId: string;
+  sponsorshipId: string;
+  actorId: string;
+  actorRole: string;
+  proposedAmount?: number;
+  tierType?: string;
+  timestamp: string;
+}
+
 // ── Proposal email payloads ──────────────────────────────────────────
 
 export interface ProposalEmailPayload {
@@ -50,5 +80,18 @@ export interface VerificationNotificationPayload {
   entityType: 'Company' | 'Event';
   entityId: string;
   decision: 'VERIFIED' | 'REJECTED';
+  timestamp: string;
+}
+
+// ── Deliverables payloads ────────────────────────────────────────────
+
+export interface DeliverablesFormSentEmailPayload {
+  formId: string;
+  tierId: string;
+  eventId: string;
+  eventName: string;
+  tierType: string;
+  organizerEmail: string;
+  organizerUserId: string;
   timestamp: string;
 }

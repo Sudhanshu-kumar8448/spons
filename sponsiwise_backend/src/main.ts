@@ -2,6 +2,7 @@ import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AppConfig } from './common/config';
@@ -16,6 +17,9 @@ async function bootstrap() {
 
   // Security Headers
   app.use(helmet());
+
+  // Compress responses (gzip/deflate)
+  app.use(compression());
 
   // Parse cookies so @Req().cookies works
   app.use(cookieParser());
@@ -47,7 +51,7 @@ app.use((req: any, res: any, next: any) => {
       allowedOrigins.length > 0 &&
       !allowedOrigins.includes(origin)
     ) {
-      console.log(`[CORS] Origin "${origin}" not allowed. Allowed: ${allowedOrigins.join(', ')}`);
+      logger.warn(`CSRF blocked origin "${origin}". Allowed: ${allowedOrigins.join(', ')}`);
       return res.status(403).json({
         statusCode: 403,
         message:
@@ -73,7 +77,7 @@ app.enableCors({
       return callback(null, true);
     }
 
-    console.log(`[CORS] Rejecting origin: ${origin}`);
+    logger.warn(`CORS rejected origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,

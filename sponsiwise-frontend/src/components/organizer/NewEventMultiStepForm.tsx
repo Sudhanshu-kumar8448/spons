@@ -27,17 +27,209 @@ import { generatePptPresignedUrl } from "@/lib/organizer-client-api";
 
 /* ─── Constants ──────────────────────────────────────────────────────── */
 
-const EVENT_CATEGORIES = [
-  { value: "TECHNOLOGY", label: "Technology" },
-  { value: "MUSIC_ENTERTAINMENT", label: "Music & Entertainment" },
-  { value: "BUSINESS", label: "Business" },
-  { value: "EDUCATION", label: "Education" },
-  { value: "SPORTS", label: "Sports" },
-  { value: "CULTURAL", label: "Cultural" },
-  { value: "ART_CREATIVE", label: "Art & Creative" },
-  { value: "LIFESTYLE", label: "Lifestyle" },
-  { value: "OTHER", label: "Other" },
-] as const;
+const EVENT_CATEGORIES: { group: string; options: { value: string; label: string }[] }[] = [
+  {
+    group: "Technology & Innovation",
+    options: [
+      { value: "TECHNOLOGY", label: "Technology (General)" },
+      { value: "TECH_CONFERENCE", label: "Tech Conference" },
+      { value: "DEVELOPER_CONFERENCE", label: "Developer Conference" },
+      { value: "HACKATHON", label: "Hackathon" },
+      { value: "STARTUP_BOOTCAMP", label: "Startup Bootcamp" },
+      { value: "STARTUP_DEMO_DAY", label: "Startup Demo Day" },
+      { value: "STARTUP_SUMMIT", label: "Startup Summit" },
+      { value: "PRODUCT_LAUNCH", label: "Product Launch" },
+      { value: "PRODUCT_DEMO_ROADSHOW", label: "Product Demo / Roadshow" },
+      { value: "AI_ML_SEMINAR", label: "AI / ML Seminar" },
+      { value: "CYBERSECURITY", label: "Cybersecurity" },
+      { value: "BLOCKCHAIN_WEB3", label: "Blockchain / Web3" },
+      { value: "GAMING_ESPORTS", label: "Gaming / Esports" },
+      { value: "ESPORTS_TOURNAMENT", label: "Esports Tournament" },
+      { value: "TECH_MEETUP", label: "Tech Meetup" },
+      { value: "INNOVATION_CHALLENGE", label: "Innovation Challenge" },
+      { value: "ROBOTICS_COMPETITION", label: "Robotics Competition" },
+      { value: "SCIENCE_FAIR", label: "Science Fair" },
+      { value: "SPACE_TECH_EVENT", label: "Space Tech Event" },
+    ],
+  },
+  {
+    group: "Entertainment & Media",
+    options: [
+      { value: "MUSIC_ENTERTAINMENT", label: "Music & Entertainment (General)" },
+      { value: "LIVE_CONCERT", label: "Live Concert" },
+      { value: "MUSIC_FESTIVAL", label: "Music Festival" },
+      { value: "DJ_NIGHT", label: "DJ Night" },
+      { value: "THEATER_PLAY", label: "Theater / Play" },
+      { value: "COMEDY_SHOW", label: "Comedy Show" },
+      { value: "MOVIE_PREMIERE", label: "Movie Premiere" },
+      { value: "FILM_SCREENING", label: "Film Screening" },
+      { value: "DIGITAL_MEDIA", label: "Digital Media" },
+      { value: "OTT_STREAMING_EVENT", label: "OTT / Streaming Event" },
+      { value: "AWARD_CEREMONY", label: "Award Ceremony" },
+      { value: "FAN_MEETUP", label: "Fan Meetup" },
+      { value: "INFLUENCER_MEETUP", label: "Influencer Meetup" },
+      { value: "CREATOR_FEST", label: "Creator Fest" },
+    ],
+  },
+  {
+    group: "Business & Professional",
+    options: [
+      { value: "BUSINESS", label: "Business (General)" },
+      { value: "CORPORATE_CONFERENCE", label: "Corporate Conference" },
+      { value: "CORPORATE_OFFSITE", label: "Corporate Offsite" },
+      { value: "TRADE_FAIR_EXPO", label: "Trade Fair / Expo" },
+      { value: "INDUSTRY_EXPO", label: "Industry Expo" },
+      { value: "NETWORKING_MIXER", label: "Networking Mixer" },
+      { value: "INVESTOR_PITCH", label: "Investor Pitch" },
+      { value: "VC_PE_SUMMIT", label: "VC / PE Summit" },
+      { value: "SALES_MARKETING", label: "Sales & Marketing" },
+      { value: "ADVERTISING_AWARDS", label: "Advertising Awards" },
+      { value: "BRAND_ACTIVATION", label: "Brand Activation" },
+      { value: "CSR_EVENT", label: "CSR Event" },
+      { value: "FRANCHISE_EXPO", label: "Franchise Expo" },
+      { value: "BUSINESS_AWARD_FUNCTION", label: "Business Award Function" },
+    ],
+  },
+  {
+    group: "Education & Learning",
+    options: [
+      { value: "EDUCATION", label: "Education (General)" },
+      { value: "WORKSHOP_SEMINAR", label: "Workshop / Seminar" },
+      { value: "ONLINE_WEBINAR", label: "Online Webinar" },
+      { value: "HYBRID_EVENT", label: "Hybrid Event" },
+      { value: "UNIVERSITY_LECTURE", label: "University Lecture" },
+      { value: "COLLEGE_FEST", label: "College Fest" },
+      { value: "SCHOOL_ANNUAL_DAY", label: "School Annual Day" },
+      { value: "EDTECH_EXPO", label: "EdTech Expo" },
+      { value: "SKILL_CERTIFICATION", label: "Skill Certification" },
+      { value: "CAREER_FAIR", label: "Career Fair" },
+      { value: "EDUCATION_FAIR", label: "Education Fair" },
+      { value: "COMPETITIVE_EXAM_SEMINAR", label: "Competitive Exam Seminar" },
+      { value: "BOOK_LAUNCH", label: "Book Launch" },
+      { value: "LITERARY_DISCUSSION", label: "Literary Discussion" },
+    ],
+  },
+  {
+    group: "Sports & Fitness",
+    options: [
+      { value: "SPORTS", label: "Sports (General)" },
+      { value: "TEAM_SPORTS_MATCH", label: "Team Sports Match" },
+      { value: "LEAGUE_TOURNAMENT", label: "League / Tournament" },
+      { value: "MARATHON_RACE", label: "Marathon / Race" },
+      { value: "CYCLING_EVENT", label: "Cycling Event" },
+      { value: "TRIATHLON", label: "Triathlon" },
+      { value: "COMBAT_SPORTS", label: "Combat Sports" },
+      { value: "MOTORSPORT", label: "Motorsport" },
+      { value: "AUTO_EXPO", label: "Auto Expo" },
+      { value: "OLYMPIC_QUALIFIER", label: "Olympic Qualifier" },
+      { value: "FITNESS_EXPO", label: "Fitness Expo" },
+      { value: "SPORTS_TECH", label: "Sports Tech" },
+      { value: "YOGA_CAMP", label: "Yoga Camp" },
+      { value: "HEALTH_CAMP", label: "Health Camp" },
+    ],
+  },
+  {
+    group: "Cultural & Community",
+    options: [
+      { value: "CULTURAL", label: "Cultural (General)" },
+      { value: "CULTURAL_FESTIVAL", label: "Cultural Festival" },
+      { value: "RELIGIOUS_CEREMONY", label: "Religious Ceremony" },
+      { value: "RELIGIOUS_YATRA", label: "Religious Yatra" },
+      { value: "NATIONAL_HOLIDAY", label: "National Holiday" },
+      { value: "COMMUNITY_GALA", label: "Community Gala" },
+      { value: "CHARITY_FUNDRAISER", label: "Charity Fundraiser" },
+      { value: "NGO_EVENT", label: "NGO Event" },
+      { value: "SOCIAL_ACTIVISM", label: "Social Activism" },
+      { value: "POLITICAL_RALLY", label: "Political Rally" },
+      { value: "PUBLIC_CAMPAIGN", label: "Public Campaign" },
+    ],
+  },
+  {
+    group: "Arts & Creative",
+    options: [
+      { value: "ART_CREATIVE", label: "Arts & Creative (General)" },
+      { value: "ART_EXHIBITION", label: "Art Exhibition" },
+      { value: "PHOTOGRAPHY_SHOW", label: "Photography Show" },
+      { value: "FASHION_SHOW", label: "Fashion Show" },
+      { value: "DESIGN_EXPO", label: "Design Expo" },
+      { value: "CRAFT_WORKSHOP", label: "Craft Workshop" },
+      { value: "LITERARY_FESTIVAL", label: "Literary Festival" },
+      { value: "FILM_FESTIVAL", label: "Film Festival" },
+      { value: "DANCE_COMPETITION", label: "Dance Competition" },
+      { value: "TALENT_SHOW", label: "Talent Show" },
+    ],
+  },
+  {
+    group: "Lifestyle & Consumer",
+    options: [
+      { value: "LIFESTYLE", label: "Lifestyle (General)" },
+      { value: "FOOD_FESTIVAL", label: "Food Festival" },
+      { value: "WINE_BEER_TASTING", label: "Wine / Beer Tasting" },
+      { value: "TRAVEL_EXPO", label: "Travel Expo" },
+      { value: "HEALTH_WELLNESS", label: "Health & Wellness" },
+      { value: "BEAUTY_COSMETICS", label: "Beauty & Cosmetics" },
+      { value: "HOME_DECOR", label: "Home Décor" },
+      { value: "PET_SHOW", label: "Pet Show" },
+      { value: "MALL_ACTIVATION", label: "Mall Activation" },
+      { value: "POPUP_MARKET", label: "Pop-up Market" },
+    ],
+  },
+  {
+    group: "Government & Civic",
+    options: [
+      { value: "GOVERNMENT_CIVIC", label: "Government / Civic (General)" },
+      { value: "POLICY_SUMMIT", label: "Policy Summit" },
+      { value: "PUBLIC_HEARING", label: "Public Hearing" },
+      { value: "ELECTION_EVENT", label: "Election Event" },
+      { value: "MILITARY_PARADE", label: "Military Parade" },
+      { value: "GOVERNMENT_SCHEME_LAUNCH", label: "Government Scheme Launch" },
+    ],
+  },
+  {
+    group: "Logistics & Travel",
+    options: [
+      { value: "TRAVEL_TOURISM", label: "Travel & Tourism" },
+      { value: "AVIATION_EXPO", label: "Aviation Expo" },
+      { value: "MARITIME_SHOW", label: "Maritime Show" },
+      { value: "LOGISTICS_FORUM", label: "Logistics Forum" },
+      { value: "TRANSPORT_SUMMIT", label: "Transport Summit" },
+    ],
+  },
+  {
+    group: "Agriculture & Rural",
+    options: [
+      { value: "AGRICULTURE_FARM", label: "Agriculture / Farm" },
+      { value: "AGRI_EXPO", label: "Agri Expo" },
+      { value: "FARMERS_MEET", label: "Farmers Meet" },
+      { value: "RURAL_DEVELOPMENT_EVENT", label: "Rural Development Event" },
+    ],
+  },
+  {
+    group: "Real Estate & Infrastructure",
+    options: [
+      { value: "REAL_ESTATE", label: "Real Estate" },
+      { value: "PROPERTY_EXPO", label: "Property Expo" },
+      { value: "INFRASTRUCTURE_SUMMIT", label: "Infrastructure Summit" },
+    ],
+  },
+  {
+    group: "Sustainability & Environment",
+    options: [
+      { value: "ENVIRONMENTAL_SUSTAINABILITY", label: "Environmental / Sustainability" },
+      { value: "CLIMATE_SUMMIT", label: "Climate Summit" },
+      { value: "CLEAN_ENERGY_EXPO", label: "Clean Energy Expo" },
+      { value: "TREE_PLANTATION_DRIVE", label: "Tree Plantation Drive" },
+    ],
+  },
+  {
+    group: "Misc",
+    options: [
+      { value: "PRIVATE_EVENT", label: "Private Event" },
+      { value: "INVITE_ONLY_EVENT", label: "Invite-Only Event" },
+      { value: "OTHER", label: "Other" },
+    ],
+  },
+];
 
 const AGE_BRACKETS = [
   { value: "AGE_5_12", label: "5–12 yrs" },
@@ -65,7 +257,7 @@ const PREDEFINED_TIERS = [
   {
     value: "TITLE",
     label: "Title Sponsor",
-    price: 1000000,
+    price: 0,
     slots: 1,
     description: "Top-level branding and visibility",
     benefits: "Main stage branding, VIP access, Keynote mention, Logo on all materials",
@@ -73,7 +265,7 @@ const PREDEFINED_TIERS = [
   {
     value: "PLATINUM",
     label: "Platinum Sponsor",
-    price: 750000,
+    price: 0,
     slots: 1,
     description: "Premium platinum partnership",
     benefits: "Premium booth, Speaking slot, VIP access, Logo on banners",
@@ -81,7 +273,7 @@ const PREDEFINED_TIERS = [
   {
     value: "PRESENTING",
     label: "Presenting Sponsor",
-    price: 500000,
+    price: 0,
     slots: 1,
     description: "Primary event presentation rights",
     benefits: "Presentation opportunity, Booth prime location, Brand mentions",
@@ -89,7 +281,7 @@ const PREDEFINED_TIERS = [
   {
     value: "POWERED_BY",
     label: "Powered By",
-    price: 250000,
+    price: 0,
     slots: 1,
     description: "Secondary prominent placement",
     benefits: "Booth space, Social media shoutouts, Materials distribution",
@@ -97,7 +289,7 @@ const PREDEFINED_TIERS = [
   {
     value: "GOLD",
     label: "Gold Tier",
-    price: 100000,
+    price: 0,
     slots: 2,
     description: "Premium sponsorship package",
     benefits: "Standard booth, Networking access, Logo on website",
@@ -105,7 +297,7 @@ const PREDEFINED_TIERS = [
   {
     value: "SILVER",
     label: "Silver Tier",
-    price: 50000,
+    price: 0,
     slots: 3,
     description: "Standard sponsorship package",
     benefits: "Small booth, Event access, Name in sponsor list",
@@ -285,10 +477,14 @@ function Step1BasicInfo({
               className={selectClass}
             >
               <option value="">Select a category</option>
-              {EVENT_CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
+              {EVENT_CATEGORIES.map((group) => (
+                <optgroup key={group.group} label={group.group}>
+                  {group.options.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>

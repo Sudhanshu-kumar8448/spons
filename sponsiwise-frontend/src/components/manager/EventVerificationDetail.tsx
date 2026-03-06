@@ -2,9 +2,17 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { fetchVerifiableEventById } from "@/lib/manager-api";
 import { verifyEventAction } from "@/app/(authenticated)/manager/_actions";
-import { VerificationStatus, type ManagerEventDetail } from "@/lib/types/manager";
+import {
+  VerificationStatus,
+  type ManagerEventDetail,
+  type AudienceProfile,
+  type GenderType,
+  type AgeBracket,
+  type IncomeBracket,
+} from "@/lib/types/manager";
 import VerificationStatusBadge from "@/components/shared/VerificationStatusBadge";
 import VerifyRejectButtons from "@/components/manager/VerifyRejectButtons";
+import { ManageDeliverablesButton, TierCompareButton } from "@/components/manager/DeliverableManager";
 
 // Helper to format currency
 function formatCurrency(amount: number): string {
@@ -14,6 +22,132 @@ function formatCurrency(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+// Label helpers for audience profile
+function getGenderLabel(gender: GenderType): string {
+  const map: Record<GenderType, string> = { MALE: 'Male', FEMALE: 'Female', OTHER: 'Other' };
+  return map[gender] ?? gender;
+}
+
+function getAgeBracketLabel(bracket: AgeBracket): string {
+  const map: Record<AgeBracket, string> = {
+    AGE_5_12: '5 – 12',
+    AGE_12_17: '12 – 17',
+    AGE_17_28: '17 – 28',
+    AGE_28_45: '28 – 45',
+    AGE_45_PLUS: '45+',
+  };
+  return map[bracket] ?? bracket;
+}
+
+function getIncomeBracketLabel(bracket: IncomeBracket): string {
+  const map: Record<IncomeBracket, string> = {
+    BELOW_2L: 'Below ₹2L',
+    BETWEEN_2L_5L: '₹2L – ₹5L',
+    BETWEEN_5L_10L: '₹5L – ₹10L',
+    BETWEEN_10L_25L: '₹10L – ₹25L',
+    ABOVE_25L: 'Above ₹25L',
+  };
+  return map[bracket] ?? bracket;
+}
+
+// Reusable horizontal bar row for distributions
+function DistributionRow({ label, percentage, color = 'bg-indigo-500' }: { label: string; percentage: number; color?: string }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-slate-300">{label}</span>
+        <span className="font-semibold text-slate-100">{percentage.toFixed(1)}%</span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-700">
+        <div className={`h-full ${color} transition-all`} style={{ width: `${percentage}%` }} />
+      </div>
+    </div>
+  );
+}
+
+// Audience Profile section component
+function AudienceProfileSection({ profile }: { profile: AudienceProfile }) {
+  const genderColors: Record<GenderType, string> = {
+    MALE: 'bg-blue-500',
+    FEMALE: 'bg-pink-500',
+    OTHER: 'bg-purple-500',
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 space-y-6">
+      <h2 className="text-lg font-semibold text-white">Audience Profile</h2>
+
+      {/* Gender */}
+      {profile.genders.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-slate-400">Gender Distribution</h3>
+          <div className="space-y-3">
+            {profile.genders.map((g) => (
+              <DistributionRow
+                key={g.id}
+                label={getGenderLabel(g.gender)}
+                percentage={g.percentage}
+                color={genderColors[g.gender] ?? 'bg-slate-500'}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Age */}
+      {profile.ages.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-slate-400">Age Distribution</h3>
+          <div className="space-y-3">
+            {profile.ages.map((a) => (
+              <DistributionRow
+                key={a.id}
+                label={getAgeBracketLabel(a.bracket)}
+                percentage={a.percentage}
+                color="bg-emerald-500"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Income */}
+      {profile.incomes.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-slate-400">Income Distribution</h3>
+          <div className="space-y-3">
+            {profile.incomes.map((i) => (
+              <DistributionRow
+                key={i.id}
+                label={getIncomeBracketLabel(i.bracket)}
+                percentage={i.percentage}
+                color="bg-amber-500"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Region */}
+      {profile.regions.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-slate-400">Region Distribution</h3>
+          <div className="space-y-3">
+            {profile.regions.map((r) => (
+              <DistributionRow
+                key={r.id}
+                label={`${r.city}, ${r.state}`}
+                percentage={r.percentage}
+                color="bg-cyan-500"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Helper to get tier display name
@@ -126,9 +260,15 @@ export default async function EventVerificationDetail({
           {/* Sponsorship Tiers Section */}
           {event.sponsorship_tiers && event.sponsorship_tiers.length > 0 && (
             <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-              <h2 className="mb-4 text-lg font-semibold text-white">
-                Sponsorship Tiers
-              </h2>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-white">
+                  Sponsorship Tiers
+                </h2>
+                <TierCompareButton
+                  eventId={event.id}
+                  tiers={event.sponsorship_tiers.map((t) => ({ id: t.id, tier_type: getTierDisplayName(t.tier_type) }))}
+                />
+              </div>
               <div className="space-y-4">
                 {event.sponsorship_tiers.map((tier) => (
                   <div
@@ -189,10 +329,21 @@ export default async function EventVerificationDetail({
                         />
                       </div>
                     </div>
+                    {/* Manage Deliverables */}
+                    <ManageDeliverablesButton
+                      tierId={tier.id}
+                      tierType={getTierDisplayName(tier.tier_type)}
+                      formStatus={tier.deliverable_form_status}
+                    />
                   </div>
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Audience Profile Section */}
+          {event.audience_profile && (
+            <AudienceProfileSection profile={event.audience_profile} />
           )}
 
           {/* ── APPROVE / REJECT PANEL ── */}

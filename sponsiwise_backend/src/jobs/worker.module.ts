@@ -9,10 +9,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
  * WorkerModule — bootstraps BullMQ workers alongside the NestJS app.
  *
  * Hosts:
- *  - EmailProcessor   — processes the `email` queue
- *  - NotificationProcessor — processes the `notifications` queue
- *  - EmailService      — SMTP email sender via Nodemailer (injected into EmailProcessor)
- *  - PrismaService     — DB access for resolving recipient emails
+ *  - EmailProcessor         — processes the `email` queue
+ *  - NotificationProcessor  — processes the `notifications` queue
+ *  - EmailService           — Resend email sender (injected into EmailProcessor)
+ *  - PrismaService          — DB access for resolving recipient emails
  *
  * Imports EmailLogsModule so EmailService can inject EmailLogsService.
  *

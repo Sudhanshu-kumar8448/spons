@@ -21,6 +21,11 @@ const CATEGORIES: { value: EventCategory; label: string }[] = [
   { value: "CULTURAL", label: "Cultural" },
   { value: "ART_CREATIVE", label: "Art & Creative" },
   { value: "LIFESTYLE", label: "Lifestyle" },
+  { value: "GOVERNMENT_CIVIC", label: "Government & Civic" },
+  { value: "TRAVEL_TOURISM", label: "Travel & Tourism" },
+  { value: "AGRICULTURE_FARM", label: "Agriculture & Rural" },
+  { value: "REAL_ESTATE", label: "Real Estate" },
+  { value: "ENVIRONMENTAL_SUSTAINABILITY", label: "Sustainability" },
   { value: "OTHER", label: "Other" },
 ];
 

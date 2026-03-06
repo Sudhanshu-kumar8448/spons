@@ -17,11 +17,18 @@ export class HealthController {
 
     @Get()
     @HealthCheck()
-    check() {
-        return this.health.check([
+    async check() {
+        const result = await this.health.check([
             () => this.db.pingCheck('database', this.prisma),
             () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024), // 150MB
             () => this.redis.isHealthy('redis'),
         ]);
+
+        // In production, return only status without leaking infrastructure details
+        if (process.env.NODE_ENV === 'production') {
+            return { status: result.status };
+        }
+
+        return result;
     }
 }

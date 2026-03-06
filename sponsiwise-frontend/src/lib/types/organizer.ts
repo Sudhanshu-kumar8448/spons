@@ -95,6 +95,7 @@ export interface SponsorshipTier {
     amount?: number;
     slots_total?: number;
     slots_available?: number;
+    deliverable_form_status?: 'DRAFT' | 'SENT_TO_ORGANIZER' | 'FILLED' | 'SUBMITTED' | null;
 }
 
 export interface OrganizerEvent {
@@ -191,44 +192,4 @@ export interface ReviewProposalPayload {
     action?: "approve" | "reject";
     notes?: string;
     reviewer_notes?: string;
-}
-
-// ─── Create Event ──────────────────────────────────────────────────────
-
-export interface CreateEventPayload {
-    title: string;
-    description?: string;
-    location?: string;
-    venue?: string;
-    startDate: string;
-    endDate: string;
-    expectedFootfall: number;
-    website?: string;
-    logoUrl?: string;
-    category?: string;
-    address?: {
-        addressLine1: string;
-        addressLine2?: string;
-        city: string;
-        state: string;
-        country: string;
-        postalCode: string;
-    };
-    contactPhone?: string;
-    contactEmail?: string;
-    pptDeckUrl?: string;
-    audienceProfile?: {
-        genders?: { gender: string; percentage: number }[];
-        ages?: { bracket: string; percentage: number }[];
-        incomes?: { bracket: string; percentage: number }[];
-        regions?: { city: string; state: string; percentage: number }[];
-    };
-    tiers?: {
-        tierType: TierType | "CUSTOM";
-        customName?: string;
-        askingPrice: number;
-        totalSlots?: number;
-        benefits?: string[];
-        id?: string;
-    }[];
 }

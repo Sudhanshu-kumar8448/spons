@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength } from 'class-validator';
 
 export class LoginDto {
   @IsEmail({}, { message: 'Invalid email format' })
@@ -6,5 +6,6 @@ export class LoginDto {
 
   @IsString()
   @MinLength(1, { message: 'Password is required' })
+  @MaxLength(128, { message: 'Password must not exceed 128 characters' })
   password!: string;
 }

@@ -494,8 +494,47 @@ export class ManagerDashboardService {
             soldSlots: true,
             isLocked: true,
             isActive: true,
+            deliverableForm: {
+              select: { status: true },
+            },
           },
           orderBy: { tierType: 'asc' },
+        },
+        audienceProfile: {
+          select: {
+            id: true,
+            createdAt: true,
+            updatedAt: true,
+            genders: {
+              select: {
+                id: true,
+                gender: true,
+                percentage: true,
+              },
+            },
+            ages: {
+              select: {
+                id: true,
+                bracket: true,
+                percentage: true,
+              },
+            },
+            incomes: {
+              select: {
+                id: true,
+                bracket: true,
+                percentage: true,
+              },
+            },
+            regions: {
+              select: {
+                id: true,
+                city: true,
+                state: true,
+                percentage: true,
+              },
+            },
+          },
         },
       },
     });
@@ -508,6 +547,7 @@ export class ManagerDashboardService {
     const sponsorshipTiers = event.tiers.map((tier: any) => ({
       id: tier.id,
       tier_type: tier.tierType,
+      custom_name: tier.customName || null,
       asking_price: Number(tier.askingPrice),
       total_slots: tier.totalSlots,
       sold_slots: tier.soldSlots,
@@ -515,7 +555,38 @@ export class ManagerDashboardService {
       is_locked: tier.isLocked,
       is_active: tier.isActive,
       is_available: tier.soldSlots < tier.totalSlots,
+      deliverable_form_status: tier.deliverableForm?.status ?? null,
     }));
+
+    // Transform audience profile
+    const audienceProfile = event.audienceProfile
+      ? {
+          id: event.audienceProfile.id,
+          genders: event.audienceProfile.genders.map((g: any) => ({
+            id: g.id,
+            gender: g.gender,
+            percentage: g.percentage,
+          })),
+          ages: event.audienceProfile.ages.map((a: any) => ({
+            id: a.id,
+            bracket: a.bracket,
+            percentage: a.percentage,
+          })),
+          incomes: event.audienceProfile.incomes.map((i: any) => ({
+            id: i.id,
+            bracket: i.bracket,
+            percentage: i.percentage,
+          })),
+          regions: event.audienceProfile.regions.map((r: any) => ({
+            id: r.id,
+            city: r.city,
+            state: r.state,
+            percentage: r.percentage,
+          })),
+          created_at: event.audienceProfile.createdAt.toISOString(),
+          updated_at: event.audienceProfile.updatedAt.toISOString(),
+        }
+      : null;
 
     return {
       id: event.id,
@@ -553,6 +624,7 @@ export class ManagerDashboardService {
         postal_code: event.address.postalCode,
       } : null,
       sponsorship_tiers: sponsorshipTiers,
+      audience_profile: audienceProfile,
       created_at: event.createdAt.toISOString(),
       updated_at: event.updatedAt.toISOString(),
     };
