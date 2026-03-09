@@ -1,7 +1,7 @@
 import { emailLayout, infoRow, badge, ctaButton } from './email-layout';
 
 export interface InterestExpressedTemplateData {
-  recipientType: 'organizer' | 'brand' | 'manager';
+  recipientType: 'organizer' | 'brand' | 'manager' | 'admin';
   recipientName?: string;
   companyName: string;
   eventTitle: string;
@@ -24,14 +24,20 @@ export function interestExpressedTemplate(data: InterestExpressedTemplateData): 
     brand: {
       headline: '✅ Your sponsorship interest has been recorded',
       body: `Your interest in sponsoring <strong style="color:#f1f5f9;">${data.eventTitle}</strong> has been recorded. The organizer will be informed and our team will review your request.`,
-      url: `${base}/brand/sponsorships/${data.sponsorshipId}`,
+      url: `${base}/brand/proposals`,
       btnText: 'Track Your Interest',
     },
     manager: {
       headline: '📋 New sponsorship interest — action may be required',
       body: `<strong style="color:#f1f5f9;">${data.companyName}</strong> has expressed interest in sponsoring <strong style="color:#f1f5f9;">${data.eventTitle}</strong>. Please review to ensure the pairing meets platform standards.`,
-      url: `${base}/manager/events/${data.eventId}`,
+      url: `${base}/manager/dashboard`,
       btnText: 'Review in Dashboard',
+    },
+    admin: {
+      headline: '📋 New sponsorship interest — for your records',
+      body: `<strong style="color:#f1f5f9;">${data.companyName}</strong> has expressed interest in sponsoring <strong style="color:#f1f5f9;">${data.eventTitle}</strong>. This is logged for administrative tracking.`,
+      url: `${base}/admin`,
+      btnText: 'View in Admin Panel',
     },
   };
 

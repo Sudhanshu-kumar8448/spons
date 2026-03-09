@@ -15,7 +15,7 @@ import {
     IsNumber,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
-import { EventCategory, GenderType, AgeBracket, IncomeBracket } from '@prisma/client';
+import { EventCategory, GenderType, AgeBracket, IncomeBracket ,EventEdition } from '@prisma/client';
 
 /**
  * Address DTO for event location
@@ -131,12 +131,12 @@ export class AudienceRegionDistributionDto {
     @IsString()
     @IsNotEmpty()
     @MaxLength(100)
-    city!: string;
+    stateOrUT!: string;
 
     @IsString()
     @IsNotEmpty()
     @MaxLength(100)
-    state!: string;
+    country!: string;
 
     @IsNumber({}, { message: 'Percentage must be a number' })
     @Min(0)
@@ -190,6 +190,11 @@ export class CreateOrganizerEventDto {
         message: `Category must be one of: ${Object.values(EventCategory).join(', ')}`,
     })
     category!: EventCategory;
+
+    @IsEnum(EventEdition, {
+        message: `Category must be one of : ${Object.values(EventEdition).join(', ')}`
+    })
+    edition!: EventEdition;
 
     // PPT Deck URL (uploaded separately or provided as URL)
     @IsOptional()

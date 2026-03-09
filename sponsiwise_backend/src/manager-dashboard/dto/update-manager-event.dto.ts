@@ -15,7 +15,7 @@ import {
     IsBoolean,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
-import { EventStatus, EventCategory, TierType } from '@prisma/client';
+import { EventStatus, EventCategory, EventEdition, TierType } from '@prisma/client';
 
 export class AddressUpdateDto {
     @IsOptional()
@@ -126,6 +126,12 @@ export class UpdateManagerEventDto {
         message: `Category must be one of: ${Object.values(EventCategory).join(', ')}`,
     })
     category?: EventCategory;
+
+    @IsOptional()
+    @IsEnum(EventEdition, {
+        message: `Edition must be one of: ${Object.values(EventEdition).join(', ')}`,
+    })
+    edition?: EventEdition;
 
     @IsOptional()
     @IsString()

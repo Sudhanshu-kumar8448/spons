@@ -46,6 +46,19 @@ export async function middleware(request: NextRequest) {
     const { payload } = await jwtVerify(token, secret);
 
     const userRole = payload.role as string;
+    const emailVerified = payload.email_verified as boolean | undefined;
+
+    // ── Email verification gate ──────────────────────────────
+    // Unverified users can ONLY access /verify-email-pending (and /verify-email which is public).
+    // All other protected routes redirect to /verify-email-pending.
+    if (emailVerified === false && pathname !== "/verify-email-pending") {
+      return NextResponse.redirect(new URL("/verify-email-pending", request.url));
+    }
+
+    // Already-verified users on /verify-email-pending should go to their default page.
+    if (emailVerified === true && pathname === "/verify-email-pending") {
+      return NextResponse.redirect(new URL(getDefaultPathForRole(userRole), request.url));
+    }
 
     // Non-USER roles should never see onboarding selection/forms.
     if (

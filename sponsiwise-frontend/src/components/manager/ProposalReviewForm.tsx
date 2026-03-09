@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
+import { formatInr } from "@/lib/currency";
 
 type ProposalStatus =
   | "DRAFT"
@@ -117,7 +118,7 @@ export default function ProposalReviewForm({
             htmlFor="proposedAmount"
             className="text-xs font-medium uppercase tracking-wider text-gray-500"
           >
-            Proposed Amount ($)
+            Proposed Amount (INR)
           </label>
           <input
             type="number"
@@ -145,7 +146,7 @@ export default function ProposalReviewForm({
             <option value="">Select Tier...</option>
             {tiers.map((t) => (
               <option key={t.id} value={t.tierType}>
-                {t.tierType} (${Number(t.askingPrice).toLocaleString()})
+                {t.tierType} ({formatInr(Number(t.askingPrice))})
               </option>
             ))}
           </select>

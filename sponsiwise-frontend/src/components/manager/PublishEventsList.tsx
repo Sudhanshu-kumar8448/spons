@@ -52,7 +52,7 @@ const PAGE_SIZE = 12;
 /* ─── Helpers ────────────────────────────────────────────────────────── */
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-US", {
+  return new Date(dateStr).toLocaleDateString("en-IN", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -240,7 +240,7 @@ export default function PublishEventsList() {
                     {event.expected_footfall != null && event.expected_footfall > 0 && (
                       <span className="flex items-center gap-1">
                         <Users className="h-3.5 w-3.5" />
-                        {event.expected_footfall.toLocaleString()} expected
+                        {event.expected_footfall.toLocaleString("en-IN")} expected
                       </span>
                     )}
                   </div>

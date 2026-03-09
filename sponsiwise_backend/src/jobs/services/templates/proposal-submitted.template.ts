@@ -11,7 +11,7 @@ export interface ProposalSubmittedTemplateData {
 
 export function proposalSubmittedTemplate(data: ProposalSubmittedTemplateData): { html: string; text: string; subject: string } {
   const base = data.dashboardUrl || process.env.FRONTEND_URL || 'https://sponsiwise.com';
-  const dashboardUrl = `${base}/organizer/proposals`;
+  const dashboardUrl = `${base}/organizer/events/proposals`;
   const amountStr = data.proposedAmount
     ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(data.proposedAmount)
     : 'Under review';

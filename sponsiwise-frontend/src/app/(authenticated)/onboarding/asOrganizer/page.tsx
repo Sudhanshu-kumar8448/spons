@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Building2,
   Globe,
@@ -207,7 +206,7 @@ function Step1OrganizerIdentity({
                   contactPhone: e.target.value,
                 }))
               }
-              placeholder="+1 (555) 000-0000"
+              placeholder="+91 98765 43210"
               className="w-full pl-14 pr-5 py-5 bg-white border border-slate-200 rounded-2xl text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 transition-all"
             />
           </div>
@@ -482,7 +481,6 @@ function Step3Success({ step1Data, step2Data }: Step3SuccessProps) {
  * Organizer Onboarding Page - 3 Step Flow
  */
 export default function OrganizerOnboardingPage() {
-  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [step1Data, setStep1Data] = useState<Step1Data>({
     entityName: "",
@@ -534,10 +532,10 @@ export default function OrganizerOnboardingPage() {
       const success = await submitOrganizerData();
       if (success) {
         setCurrentStep(3);
-        // Redirect to dashboard after a brief delay
+        // Full navigation ensures role-updated cookies are applied before layout resolution.
         setTimeout(() => {
-          router.push("/organizer/dashboard");
-        }, 2000);
+          window.location.assign("/organizer/dashboard");
+        }, 1000);
       }
     }
   };

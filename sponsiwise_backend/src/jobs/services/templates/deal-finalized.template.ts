@@ -1,7 +1,7 @@
 import { emailLayout, infoRow, badge, ctaButton } from './email-layout';
 
 export interface DealFinalizedTemplateData {
-  recipientType: 'organizer' | 'sponsor' | 'admin';
+  recipientType: 'organizer' | 'sponsor' | 'admin' | 'manager';
   recipientName?: string;
   companyName: string;
   eventTitle: string;
@@ -35,8 +35,14 @@ export function dealFinalizedTemplate(data: DealFinalizedTemplateData): { html: 
     admin: {
       headline: '📋 Deal Finalized — For Your Records',
       body: `A sponsorship deal has been finalized between <strong style="color:#f1f5f9;">${data.companyName}</strong> and the organizer of <strong style="color:#f1f5f9;">${data.eventTitle}</strong>.`,
-      url: `${base}/admin/proposals/${data.proposalId}`,
+      url: `${base}/admin`,
       btnText: 'View in Admin Panel',
+    },
+    manager: {
+      headline: '📋 Deal Finalized — Review Required',
+      body: `A sponsorship deal has been finalized between <strong style="color:#f1f5f9;">${data.companyName}</strong> and the organizer of <strong style="color:#f1f5f9;">${data.eventTitle}</strong>. Please review the deal details.`,
+      url: `${base}/manager/dashboard`,
+      btnText: 'View in Manager Panel',
     },
   };
 

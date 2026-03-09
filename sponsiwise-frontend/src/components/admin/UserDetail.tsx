@@ -127,7 +127,7 @@ export default async function UserDetail({ id }: UserDetailProps) {
                 <dt className="text-xs text-gray-500">Last Login</dt>
                 <dd className="mt-1 text-sm text-gray-900">
                   {user.last_login_at
-                    ? new Date(user.last_login_at).toLocaleDateString("en-US", {
+                    ? new Date(user.last_login_at).toLocaleDateString("en-IN", {
                         month: "long",
                         day: "numeric",
                         year: "numeric",
@@ -149,7 +149,7 @@ export default async function UserDetail({ id }: UserDetailProps) {
               <li>
                 <p className="text-xs text-gray-500">Joined</p>
                 <p className="text-sm text-gray-700">
-                  {new Date(user.created_at).toLocaleDateString("en-US", {
+                  {new Date(user.created_at).toLocaleDateString("en-IN", {
                     month: "long",
                     day: "numeric",
                     year: "numeric",
@@ -159,7 +159,7 @@ export default async function UserDetail({ id }: UserDetailProps) {
               <li>
                 <p className="text-xs text-gray-500">Last updated</p>
                 <p className="text-sm text-gray-700">
-                  {new Date(user.updated_at).toLocaleDateString("en-US", {
+                  {new Date(user.updated_at).toLocaleDateString("en-IN", {
                     month: "long",
                     day: "numeric",
                     year: "numeric",

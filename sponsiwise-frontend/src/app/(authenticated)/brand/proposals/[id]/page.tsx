@@ -1,10 +1,13 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft, CalendarDays, MapPin, FileText } from "lucide-react";
 import { fetchSponsorProposalById } from "@/lib/sponsor-api";
 import type { Proposal } from "@/lib/types/sponsor";
 import { ProposalStatus } from "@/lib/types/sponsor";
 import ProposalStatusBadge from "@/components/shared/ProposalStatusBadge";
 import WithdrawButton from "./WithdrawButton";
+import ResubmitProposalForm from "./ResubmitProposalForm";
+import { formatInr } from "@/lib/currency";
 
 interface ProposalDetailPageProps {
   params: Promise<{ id: string }>;
@@ -21,7 +24,7 @@ function ProposalTimeline({ proposal }: { proposal: Proposal }) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
         Timeline
       </h3>
       <ol className="space-y-3">
@@ -30,19 +33,19 @@ function ProposalTimeline({ proposal }: { proposal: Proposal }) {
             <span
               className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                 step.done
-                  ? "bg-blue-600 text-white"
-                  : "border-2 border-gray-300 text-gray-400"
+                  ? "bg-sky-500 text-white"
+                  : "border border-slate-700 text-slate-500"
               }`}
             >
               {step.done ? "✓" : "·"}
             </span>
             <div>
-              <p className={`text-sm font-medium ${step.done ? "text-gray-900" : "text-gray-400"}`}>
+              <p className={`text-sm font-medium ${step.done ? "text-slate-100" : "text-slate-500"}`}>
                 {step.label}
               </p>
               {step.date && (
-                <p className="text-xs text-gray-500">
-                  {new Date(step.date).toLocaleDateString("en-US", {
+                <p className="text-xs text-slate-400">
+                  {new Date(step.date).toLocaleDateString("en-IN", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
@@ -67,6 +70,21 @@ function canWithdraw(status: ProposalStatus): boolean {
   );
 }
 
+function normalizeStatus(status: string): ProposalStatus {
+  return status.toUpperCase() as ProposalStatus;
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return "Not available";
+  return new Date(value).toLocaleDateString("en-IN", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────
 
 export default async function BrandProposalDetailPage({
@@ -74,76 +92,138 @@ export default async function BrandProposalDetailPage({
 }: ProposalDetailPageProps) {
   const { id } = await params;
 
-  const proposal = await fetchSponsorProposalById(id).catch(() => null);
-  if (!proposal) {
+  let proposal: Proposal | null = null;
+  let fetchError: string | null = null;
+
+  try {
+    proposal = await fetchSponsorProposalById(id);
+  } catch (error) {
+    // Handle different error types
+    if (error && typeof error === 'object' && 'message' in error) {
+      fetchError = (error as { message: string }).message;
+    }
+    // Log for debugging
+    console.error('Error fetching proposal:', error);
+  }
+
+  if (fetchError || !proposal) {
     notFound();
     return null;
   }
+  const status = normalizeStatus(proposal.status);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-7">
       <Link
         href="/brand/proposals"
-        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+        className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300 transition-colors hover:border-slate-600 hover:text-white"
       >
-        ← Back to proposals
+        <ArrowLeft className="h-4 w-4" />
+        Back to proposals
       </Link>
 
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">
-              {proposal.title}
-            </h1>
-            <ProposalStatusBadge status={proposal.status} />
-          </div>
-          <p className="mt-1 text-sm text-gray-500">
-            For{" "}
-            <Link
-              href={`/brand/browseEvents/${proposal.event_id}`}
-              className="font-medium text-blue-600 hover:text-blue-800"
-            >
-              {proposal.event.title}
-            </Link>
-          </p>
-        </div>
-        {canWithdraw(proposal.status) && (
-          <WithdrawButton proposalId={proposal.id} />
-        )}
-      </div>
-
-      <div className="grid gap-8 lg:grid-cols-3">
-        {/* Main content */}
-        <div className="space-y-6 lg:col-span-2">
-          <div className="rounded-xl bg-white p-6 shadow">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Proposal Details
-            </h2>
-            <p className="mt-3 whitespace-pre-line text-sm text-gray-600">
-              {proposal.description}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-xl font-bold text-white sm:text-2xl">
+                {proposal.title || "Untitled Proposal"}
+              </h1>
+              <ProposalStatusBadge status={status} />
+            </div>
+            <p className="text-sm text-slate-400">
+              For{" "}
+              <Link
+                href={`/brand/browseEvents/${proposal.event_id}`}
+                className="font-medium text-blue-400 hover:text-sky-300"
+              >
+                {proposal.event.title}
+              </Link>
             </p>
           </div>
+          {canWithdraw(status) && (
+            <WithdrawButton proposalId={proposal.id} />
+          )}
+        </div>
 
-          <div className="rounded-xl bg-white p-6 shadow">
-            <h2 className="text-lg font-semibold text-gray-900">
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+            <p className="text-xs uppercase tracking-wider text-slate-500">Amount</p>
+            <p className="mt-1 text-sm font-semibold text-white">
+              {formatInr(proposal.amount)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+            <p className="text-xs uppercase tracking-wider text-slate-500">Submitted</p>
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-200">
+              <CalendarDays className="h-4 w-4 text-slate-400" />
+              {formatDateTime(proposal.submitted_at)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+            <p className="text-xs uppercase tracking-wider text-slate-500">Status</p>
+            <div className="mt-1">
+              <ProposalStatusBadge status={status} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-3">
+        {/* Main content */}
+        <div className="space-y-5 lg:col-span-2">
+          {status === ProposalStatus.REQUEST_CHANGES && (
+            <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/15 via-slate-900 to-slate-900 p-5 shadow-lg sm:p-6">
+              <h2 className="text-lg font-semibold text-amber-100">
+                Action Required: Manager Requested Changes
+              </h2>
+              <p className="mt-2 text-sm text-amber-200/90">
+                Update your proposal below and submit the revised version.
+              </p>
+              <div className="mt-5">
+                <ResubmitProposalForm
+                  proposalId={proposal.id}
+                  initialAmount={proposal.amount}
+                  initialTier={proposal.proposedTier ?? proposal.title}
+                  initialMessage={proposal.description}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg sm:p-6">
+            <h2 className="text-lg font-semibold text-white">
+              Previous Proposal Details
+            </h2>
+            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-300">
+              {proposal.description || "No proposal description provided."}
+            </p>
+            <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-sm">
+              <p className="text-xs uppercase tracking-wider text-slate-500">Tier</p>
+              <p className="mt-1 text-slate-200">{proposal.proposedTier || proposal.title || "Not specified"}</p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg sm:p-6">
+            <h2 className="text-lg font-semibold text-white">
               Financial Details
             </h2>
             <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wider text-gray-500">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+                <dt className="text-xs font-medium uppercase tracking-wider text-slate-500">
                   Amount
                 </dt>
-                <dd className="mt-1 text-xl font-bold text-gray-900">
-                  {proposal.currency} {proposal.amount.toLocaleString()}
+                <dd className="mt-1 text-xl font-bold text-white">
+                  {formatInr(proposal.amount)}
                 </dd>
               </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Status
+              <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+                <dt className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                  Current Status
                 </dt>
                 <dd className="mt-1">
-                  <ProposalStatusBadge status={proposal.status} />
+                  <ProposalStatusBadge status={status} />
                 </dd>
               </div>
             </dl>
@@ -152,18 +232,20 @@ export default async function BrandProposalDetailPage({
           {/* Reviewer notes */}
           {proposal.reviewer_notes && (
             <div
-              className={`rounded-xl p-6 shadow ${
-                proposal.status === ProposalStatus.APPROVED
-                  ? "border border-green-200 bg-green-50"
-                  : proposal.status === ProposalStatus.REJECTED
-                    ? "border border-red-200 bg-red-50"
-                    : "bg-white"
+              className={`rounded-2xl border p-5 shadow-lg sm:p-6 ${
+                status === ProposalStatus.APPROVED
+                  ? "border-emerald-500/30 bg-emerald-500/10"
+                  : status === ProposalStatus.REJECTED
+                    ? "border-red-500/30 bg-red-500/10"
+                    : status === ProposalStatus.REQUEST_CHANGES
+                      ? "border-amber-500/30 bg-amber-500/10"
+                      : "border-slate-800 bg-slate-900"
               }`}
             >
-              <h2 className="text-lg font-semibold text-gray-900">
+              <h2 className="text-lg font-semibold text-white">
                 Reviewer Notes
               </h2>
-              <p className="mt-3 whitespace-pre-line text-sm text-gray-700">
+              <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-200">
                 {proposal.reviewer_notes}
               </p>
             </div>
@@ -171,29 +253,44 @@ export default async function BrandProposalDetailPage({
         </div>
 
         {/* Sidebar */}
-        <aside className="space-y-6">
-          <div className="rounded-xl bg-white p-6 shadow">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+        <aside className="space-y-5">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg sm:p-6">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Event
             </h3>
             <div className="mt-4 space-y-2 text-sm">
-              <p className="font-medium text-gray-900">{proposal.event.title}</p>
-              <p className="text-gray-600">📍 {proposal.event.location}</p>
+              <p className="font-medium text-white">{proposal.event.title}</p>
+              <p className="flex items-start gap-1.5 text-slate-300">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                <span>{proposal.event.location || "Location not available"}</span>
+              </p>
               {proposal.event.start_date && (
-                <p className="text-gray-600">
-                  🗓{" "}
-                  {new Date(proposal.event.start_date).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
+                <p className="flex items-start gap-1.5 text-slate-300">
+                  <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                  <span>
+                    {new Date(proposal.event.start_date).toLocaleDateString("en-IN", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </span>
                 </p>
               )}
             </div>
           </div>
 
-          <div className="rounded-xl bg-white p-6 shadow">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg sm:p-6">
             <ProposalTimeline proposal={proposal} />
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg sm:p-6">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Proposal ID
+            </h3>
+            <p className="mt-2 flex items-start gap-1.5 break-all text-sm text-slate-300">
+              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+              {proposal.id}
+            </p>
           </div>
         </aside>
       </div>

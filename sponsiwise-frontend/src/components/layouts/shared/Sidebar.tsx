@@ -3,6 +3,7 @@
 import { useState, createContext, useContext } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import Logo from "@/components/logo/logo";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, X, LogOut } from "lucide-react";
 import * as LucideIcons from "lucide-react";
@@ -104,17 +105,16 @@ export default function Sidebar({
       {/* Brand */}
       <div className="flex h-16 items-center justify-between border-b border-slate-800 px-4">
         <Link href={homePath} className="flex items-center gap-2.5">
-          <Image
-            src="/images/logo-icon.svg"
-            alt="SponsiWise"
-            width={32}
-            height={32}
-            className="h-8 w-8 shrink-0"
-          />
-          {!collapsed && (
-            <span className="text-lg font-bold text-white">
-              Sponsi<span className="text-blue-400">Wise</span>
-            </span>
+          {collapsed ? (
+            <Image
+              src="/images/logo-icon.svg"
+              alt="SponsiWise"
+              width={32}
+              height={32}
+              className="h-8 w-8 shrink-0"
+            />
+          ) : (
+            <Logo variant="light" size={32} />
           )}
         </Link>
 

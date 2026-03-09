@@ -5,6 +5,7 @@ import type {
   CreateProposalPayload,
   Proposal,
   ProposalsResponse,
+  ResubmitProposalPayload,
   SponsorDashboardStats,
 } from "@/lib/types/sponsor";
 
@@ -52,6 +53,16 @@ export async function withdrawProposal(id: string): Promise<Proposal> {
   });
 }
 
+export async function resubmitProposal(
+  id: string,
+  payload: ResubmitProposalPayload,
+): Promise<Proposal> {
+  return authFetch<Proposal>(`/sponsor/proposals/${id}/resubmit`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 // ─── Browsable events ──────────────────────────────────────────────────
 
 export async function fetchBrowsableEvents(params?: {
@@ -76,6 +87,24 @@ export async function fetchBrowsableEventById(
   id: string,
 ): Promise<BrowsableEvent> {
   return authFetch<BrowsableEvent>(`/sponsor/events/${id}`);
+}
+
+// ─── Express Interest ──────────────────────────────────────────────────
+
+export interface ExpressInterestResponse {
+  sponsorship_id: string;
+  event_id: string;
+  message: string;
+  already_expressed: boolean;
+}
+
+export async function expressInterest(
+  eventId: string,
+): Promise<ExpressInterestResponse> {
+  return authFetch<ExpressInterestResponse>(
+    `/sponsor/events/${eventId}/express-interest`,
+    { method: "POST" },
+  );
 }
 
 // ─── Deliverable Types ─────────────────────────────────────────────────

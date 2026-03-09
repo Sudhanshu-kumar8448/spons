@@ -21,13 +21,13 @@ export default async function PastEventDetailPage({
     notFound();
   }
 
-  const startDate = new Date(event.start_date).toLocaleDateString("en-US", {
+  const startDate = new Date(event.start_date).toLocaleDateString("en-IN", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
   });
-  const endDate = new Date(event.end_date).toLocaleDateString("en-US", {
+  const endDate = new Date(event.end_date).toLocaleDateString("en-IN", {
     weekday: "long",
     month: "long",
     day: "numeric",

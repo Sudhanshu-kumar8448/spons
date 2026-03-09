@@ -14,10 +14,20 @@ const statusConfig: Record<
         className:
             "border-blue-500/30 bg-blue-500/10 text-blue-400",
     },
-    under_review: {
+    under_manager_review: {
         label: "Under Review",
         className:
             "border-amber-500/30 bg-amber-500/10 text-amber-400",
+    },
+    forwarded_to_organizer: {
+        label: "Forwarded to Organizer",
+        className:
+            "border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
+    },
+    request_changes: {
+        label: "Changes Requested",
+        className:
+            "border-yellow-500/30 bg-yellow-500/10 text-yellow-300",
     },
     approved: {
         label: "Approved",

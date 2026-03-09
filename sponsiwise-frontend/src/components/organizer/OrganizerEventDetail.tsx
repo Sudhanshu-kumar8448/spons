@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { fetchOrganizerEventById } from "@/lib/organizer-api";
 import type { OrganizerEvent } from "@/lib/types/organizer";
-import { FillDeliverablesButton } from "@/components/organizer/DeliverableFill";
+import { DeliverableFillSection } from "@/components/organizer/DeliverableFill";
+import { formatInr } from "@/lib/currency";
 
 // ─── Event status badge ────────────────────────────────────────────────
 
@@ -38,18 +39,24 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
     notFound();
   }
 
-  const startDate = new Date(event.start_date).toLocaleDateString("en-US", {
+  const startDate = new Date(event.start_date).toLocaleDateString("en-IN", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
   });
-  const endDate = new Date(event.end_date).toLocaleDateString("en-US", {
+  const endDate = new Date(event.end_date).toLocaleDateString("en-IN", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
   });
+
+  // Check if any tier has deliverables for the organizer
+  const tiers = (event as any).sponsorship_tiers ?? event.tiers ?? [];
+  const hasDeliverables = tiers.some((t: any) =>
+    t.deliverable_form_status && ['SENT_TO_ORGANIZER', 'FILLED', 'SUBMITTED'].includes(t.deliverable_form_status)
+  );
 
   return (
     <div className="space-y-8">
@@ -80,6 +87,11 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
             {event.category && (
               <span className="inline-block rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
                 {event.category}
+              </span>
+            )}
+            {event.edition && (
+              <span className="inline-block rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                {event.edition.replace(/_/g, ' ')}
               </span>
             )}
             <Link
@@ -125,7 +137,7 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
                         {tier.name}
                       </h3>
                       <span className="text-sm font-bold text-green-600">
-                        ${tier.amount?.toLocaleString() ?? tier.askingPrice?.toLocaleString() ?? 0}
+                        {formatInr(tier.amount ?? tier.askingPrice ?? 0)}
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-gray-500">
@@ -148,15 +160,15 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
                       {(tier.slots_available ?? 0)} / {(tier.slots_total ?? tier.totalSlots ?? 0)} slot
                       {((tier.slots_total ?? tier.totalSlots ?? 0) !== 1 ? "s" : "")} available
                     </p>
-                    <FillDeliverablesButton
-                      eventId={event.id}
-                      tierName={tier.name ?? tier.tierType}
-                      formStatus={tier.deliverable_form_status}
-                    />
                   </div>
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Deliverables Section — consolidated all-tiers view */}
+          {hasDeliverables && (
+            <DeliverableFillSection eventId={event.id} />
           )}
         </div>
 
@@ -183,9 +195,15 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
               <div>
                 <dt className="font-medium text-gray-700">Expected Footfall</dt>
                 <dd className="text-gray-600">
-                  {event.expected_footfall ? event.expected_footfall.toLocaleString() : 'N/A'}
+                  {event.expected_footfall ? event.expected_footfall.toLocaleString("en-IN") : 'N/A'}
                 </dd>
               </div>
+              {event.edition && (
+                <div>
+                  <dt className="font-medium text-gray-700">Edition</dt>
+                  <dd className="text-gray-600">{event.edition.replace(/_/g, ' ')}</dd>
+                </div>
+              )}
             </dl>
           </div>
 
@@ -210,8 +228,7 @@ export default async function OrganizerEventDetail({ id }: { id: string }) {
               <div className="flex justify-between">
                 <dt className="text-gray-600">Total revenue</dt>
                 <dd className="font-semibold text-green-600">
-                  {event.currency}{" "}
-                  {event.total_sponsorship_amount ? event.total_sponsorship_amount.toLocaleString() : '0'}
+                  {formatInr(event.total_sponsorship_amount ?? 0)}
                 </dd>
               </div>
             </dl>

@@ -149,6 +149,66 @@ export function ManageDeliverablesButton({
   );
 }
 
+// ─── SendAllDeliverablesButton ──────────────────────────────────────────
+
+export function SendAllDeliverablesButton({
+  eventId,
+  hasDraftForms,
+}: {
+  eventId: string;
+  hasDraftForms: boolean;
+}) {
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+
+  if (!hasDraftForms || sent) {
+    if (sent) {
+      return (
+        <div className="inline-flex items-center gap-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40 px-4 py-2.5 text-sm font-semibold text-emerald-300">
+          ✅ All deliverables sent to organizer
+        </div>
+      );
+    }
+    return null;
+  }
+
+  const handleSendAll = async () => {
+    setSending(true);
+    setError(null);
+    try {
+      await apiClient.post(`/manager/events/${eventId}/deliverables/send-all`);
+      setSent(true);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to send deliverables");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <button
+        onClick={handleSendAll}
+        disabled={sending}
+        className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all hover:shadow-xl hover:shadow-emerald-500/30 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+      >
+        {sending ? (
+          <>
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            Sending All…
+          </>
+        ) : (
+          <>📨 Send All Deliverables to Organizer</>
+        )}
+      </button>
+      {error && (
+        <p className="text-xs text-red-400">{error}</p>
+      )}
+    </div>
+  );
+}
+
 // ─── DeliverableFormModal ───────────────────────────────────────────────
 
 function DeliverableFormModal({
@@ -422,7 +482,7 @@ function DeliverableFormModal({
                         </button>
                         <button
                           onClick={async () => {
-                            await apiClient.delete(`/manager/deliverable-templates/${tpl.id}`).catch(() => {});
+                            await apiClient.delete(`/manager/deliverable-templates/${tpl.id}`).catch(() => { });
                             setTemplates((p) => p.filter((t) => t.id !== tpl.id));
                           }}
                           className="rounded bg-red-600/20 px-2 py-1 text-xs text-red-300 hover:bg-red-600/40"

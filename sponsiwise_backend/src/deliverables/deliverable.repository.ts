@@ -19,7 +19,7 @@ interface RowInput {
  */
 @Injectable()
 export class DeliverableRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   // ─── FORMS ──────────────────────────────────────────────────
 
@@ -127,19 +127,71 @@ export class DeliverableRepository {
   }
 
   /**
-   * Find forms that are SENT_TO_ORGANIZER for a given event.
+   * Find forms that are SENT_TO_ORGANIZER, FILLED, or SUBMITTED for a given event.
+   * Used by organizer endpoints to see all forms relevant to them.
    */
   async findPendingFormsByEventId(eventId: string) {
     return this.prisma.tierDeliverableForm.findMany({
       where: {
         tier: { eventId },
-        status: 'SENT_TO_ORGANIZER',
+        status: { in: ['SENT_TO_ORGANIZER', 'FILLED', 'SUBMITTED'] },
       },
       include: {
         rows: { orderBy: { sortOrder: 'asc' } },
         tier: { select: { id: true, tierType: true, askingPrice: true, customName: true } },
       },
       orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /**
+   * Find all DRAFT deliverable forms for a given event.
+   * Used by batch-send operation.
+   */
+  async findDraftFormsByEventId(eventId: string) {
+    return this.prisma.tierDeliverableForm.findMany({
+      where: {
+        tier: { eventId },
+        status: 'DRAFT',
+      },
+      include: {
+        rows: { orderBy: { sortOrder: 'asc' } },
+        tier: {
+          select: {
+            id: true,
+            tierType: true,
+            askingPrice: true,
+            customName: true,
+            event: {
+              select: {
+                id: true,
+                title: true,
+                organizer: {
+                  select: {
+                    id: true,
+                    users: {
+                      where: { role: 'ORGANIZER', isActive: true },
+                      select: { id: true, email: true },
+                      take: 1,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /**
+   * Bulk update status for multiple forms atomically.
+   */
+  async updateManyFormsStatus(formIds: string[], status: DeliverableFormStatus) {
+    return this.prisma.tierDeliverableForm.updateMany({
+      where: { id: { in: formIds } },
+      data: { status },
     });
   }
 

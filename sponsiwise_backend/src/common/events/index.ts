@@ -7,3 +7,6 @@ export { UserRegisteredEvent, USER_REGISTERED_EVENT } from './user-registered.ev
 export { InterestExpressedEvent, INTEREST_EXPRESSED_EVENT } from './interest-expressed.event';
 export { DealFinalizedEvent, DEAL_FINALIZED_EVENT } from './deal-finalized.event';
 export { DeliverablesFormSentEvent, DELIVERABLES_FORM_SENT_EVENT } from './deliverables-form-sent.event';
+export { DeliverablesBatchSentEvent, DELIVERABLES_BATCH_SENT_EVENT } from './deliverables-batch-sent.event';
+export { EmailVerificationRequestedEvent, EMAIL_VERIFICATION_REQUESTED_EVENT } from './email-verification-requested.event';
+export { PasswordResetRequestedEvent, PASSWORD_RESET_REQUESTED_EVENT } from './password-reset-requested.event';

@@ -8,6 +8,7 @@ import {
   DeliverableUnit,
   EmailStatus,
   EventCategory,
+  EventEdition,
   EventStatus,
   GenderType,
   IncomeBracket,
@@ -23,6 +24,7 @@ import {
   VerificationStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { createHash } from 'crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 
@@ -60,6 +62,10 @@ function slugify(value: string): string {
   return value.toLowerCase().replace(/_/g, '-');
 }
 
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
 async function clearDatabase() {
   console.log('🧹 Clearing existing data...');
 
@@ -94,6 +100,10 @@ async function main() {
 
   // Hash password once
   const hashedPassword = await bcrypt.hash(PASSWORD, SALT_ROUNDS);
+  const seedAuthTokens = {
+    standaloneVerification: 'seed-verify-standalone-user',
+    manager3Reset: 'seed-reset-manager3',
+  } as const;
 
   const createUser = (input: {
     email: string;
@@ -101,6 +111,13 @@ async function main() {
     isActive?: boolean;
     companyId?: string;
     organizerId?: string;
+    emailVerified?: boolean;
+    emailVerificationToken?: string | null;
+    emailVerificationExpiry?: Date | null;
+    emailVerificationSentCount?: number;
+    emailVerificationLastSentAt?: Date | null;
+    passwordResetToken?: string | null;
+    passwordResetExpiry?: Date | null;
   }) =>
     prisma.user.create({
       data: {
@@ -110,6 +127,13 @@ async function main() {
         isActive: input.isActive ?? true,
         companyId: input.companyId,
         organizerId: input.organizerId,
+        emailVerified: input.emailVerified ?? true,
+        emailVerificationToken: input.emailVerificationToken ?? null,
+        emailVerificationExpiry: input.emailVerificationExpiry ?? null,
+        emailVerificationSentCount: input.emailVerificationSentCount ?? 0,
+        emailVerificationLastSentAt: input.emailVerificationLastSentAt ?? null,
+        passwordResetToken: input.passwordResetToken ?? null,
+        passwordResetExpiry: input.passwordResetExpiry ?? null,
       },
     });
 
@@ -137,10 +161,17 @@ async function main() {
   const manager3 = await createUser({
     email: 'manager3@spons.com',
     role: Role.MANAGER,
+    passwordResetToken: sha256(seedAuthTokens.manager3Reset),
+    passwordResetExpiry: daysFromNow(1, 11),
   });
   const standaloneUser = await createUser({
     email: 'user1@spons.com',
     role: Role.USER,
+    emailVerified: false,
+    emailVerificationToken: sha256(seedAuthTokens.standaloneVerification),
+    emailVerificationExpiry: daysFromNow(1, 12),
+    emailVerificationSentCount: 1,
+    emailVerificationLastSentAt: daysAgo(0, 9),
   });
 
   const usersByKey: Record<string, { id: string; email: string }> = {
@@ -177,7 +208,7 @@ async function main() {
       type: OrganizerType.INDIVIDUAL,
       pastRecords: 'Runs founder-led startup meetups for 6 years.',
       website: 'https://organizer-individual.example.com',
-      contactPhone: '+1-555-100-0001',
+      contactPhone: '+91-555-100-0001',
       taxId: 'IND-7788',
       socialLinks: {
         linkedin: 'https://linkedin.com/company/organizer-individual',
@@ -191,7 +222,7 @@ async function main() {
       type: OrganizerType.COMPANY,
       pastRecords: 'Enterprise expo organizer with 50+ B2B events.',
       website: 'https://organizer-company.example.com',
-      contactPhone: '+1-555-100-0002',
+      contactPhone: '+91-555-100-0002',
       socialLinks: { linkedin: 'https://linkedin.com/company/organizer-company' },
     },
     {
@@ -201,7 +232,7 @@ async function main() {
       type: OrganizerType.NON_PROFIT,
       pastRecords: 'Community-focused events for underserved groups.',
       website: 'https://organizer-nonprofit.example.org',
-      contactPhone: '+1-555-100-0003',
+      contactPhone: '+91-555-100-0003',
       taxId: 'NPO-5566',
     },
     {
@@ -210,7 +241,7 @@ async function main() {
       name: 'Organizer Government',
       type: OrganizerType.GOVERNMENT,
       pastRecords: 'Public programs and city events.',
-      contactPhone: '+1-555-100-0004',
+      contactPhone: '+91-555-100-0004',
       website: null,
     },
     {
@@ -220,7 +251,7 @@ async function main() {
       type: OrganizerType.EDUCATIONAL_INSTITUTION,
       pastRecords: 'Inter-college fests and academic conclaves.',
       website: 'https://organizer-education.example.edu',
-      contactPhone: '+1-555-100-0005',
+      contactPhone: '+91-555-100-0005',
       taxId: 'EDU-9911',
     },
     {
@@ -230,7 +261,7 @@ async function main() {
       type: OrganizerType.CLUB,
       pastRecords: 'Local city clubs and social chapters.',
       website: null,
-      contactPhone: '+1-555-100-0006',
+      contactPhone: '+91-555-100-0006',
       socialLinks: { instagram: 'https://instagram.com/organizer.club' },
     },
     {
@@ -376,6 +407,7 @@ async function main() {
     status: EventStatus;
     verificationStatus: VerificationStatus;
     category: EventCategory;
+    edition: EventEdition;
     website?: string | null;
     contactPhone?: string | null;
     contactEmail?: string | null;
@@ -396,8 +428,9 @@ async function main() {
       status: EventStatus.PUBLISHED,
       verificationStatus: VerificationStatus.VERIFIED,
       category: EventCategory.TECHNOLOGY,
+      edition: EventEdition.FIFTH,
       website: 'https://global-tech-summit.example.com',
-      contactPhone: '+1-555-210-0001',
+      contactPhone: '+91-555-210-0001',
       contactEmail: 'contact@global-tech-summit.example.com',
       pptDeckUrl: 'https://assets.example.com/decks/tech-summit.pdf',
       approvedById: usersByKey.manager1.id,
@@ -414,8 +447,9 @@ async function main() {
       status: EventStatus.DRAFT,
       verificationStatus: VerificationStatus.PENDING,
       category: EventCategory.MUSIC_ENTERTAINMENT,
+      edition: EventEdition.INAUGURAL,
       website: null,
-      contactPhone: '+1-555-210-0002',
+      contactPhone: '+91-555-210-0002',
       contactEmail: null,
       pptDeckUrl: null,
     },
@@ -430,8 +464,9 @@ async function main() {
       status: EventStatus.UNDER_MANAGER_REVIEW,
       verificationStatus: VerificationStatus.PENDING,
       category: EventCategory.BUSINESS,
+      edition: EventEdition.THIRD,
       website: 'https://sme-growth-expo.example.com',
-      contactPhone: '+1-555-210-0003',
+      contactPhone: '+91-555-210-0003',
       contactEmail: 'ops@sme-growth-expo.example.com',
       pptDeckUrl: 'https://assets.example.com/decks/sme-growth.pdf',
     },
@@ -446,8 +481,9 @@ async function main() {
       status: EventStatus.VERIFIED,
       verificationStatus: VerificationStatus.VERIFIED,
       category: EventCategory.EDUCATION,
+      edition: EventEdition.SECOND,
       website: 'https://future-learning-fair.example.edu',
-      contactPhone: '+1-555-210-0004',
+      contactPhone: '+91-555-210-0004',
       contactEmail: 'hello@future-learning-fair.example.edu',
       approvedById: usersByKey.manager1.id,
       approvedAt: daysAgo(3),
@@ -463,6 +499,7 @@ async function main() {
       status: EventStatus.REJECTED,
       verificationStatus: VerificationStatus.REJECTED,
       category: EventCategory.SPORTS,
+      edition: EventEdition.TENTH,
       website: 'https://city-sports.example.gov',
       approvedById: usersByKey.manager2.id,
       approvedAt: daysAgo(2),
@@ -479,8 +516,9 @@ async function main() {
       status: EventStatus.CANCELLED,
       verificationStatus: VerificationStatus.VERIFIED,
       category: EventCategory.CULTURAL,
+      edition: EventEdition.BI_ANNUAL,
       website: 'https://heritage-carnival.example.com',
-      contactPhone: '+1-555-210-0006',
+      contactPhone: '+91-555-210-0006',
       approvedById: usersByKey.manager1.id,
       approvedAt: daysAgo(5),
     },
@@ -495,6 +533,7 @@ async function main() {
       status: EventStatus.COMPLETED,
       verificationStatus: VerificationStatus.VERIFIED,
       category: EventCategory.ART_CREATIVE,
+      edition: EventEdition.FOURTH,
       website: 'https://urban-art-show.example.com',
       approvedById: usersByKey.manager1.id,
       approvedAt: daysAgo(40),
@@ -511,8 +550,9 @@ async function main() {
       status: EventStatus.PUBLISHED,
       verificationStatus: VerificationStatus.PENDING,
       category: EventCategory.LIFESTYLE,
+      edition: EventEdition.QUATERLY,
       website: 'https://lifestyle-conclave.example.com',
-      contactPhone: '+1-555-210-0008',
+      contactPhone: '+91-555-210-0008',
       contactEmail: 'partner@lifestyle-conclave.example.com',
     },
     {
@@ -526,6 +566,7 @@ async function main() {
       status: EventStatus.DRAFT,
       verificationStatus: VerificationStatus.REJECTED,
       category: EventCategory.OTHER,
+      edition: EventEdition.OTHER,
       website: null,
       approvedById: usersByKey.manager2.id,
       approvedAt: daysAgo(1),
@@ -552,6 +593,7 @@ async function main() {
         pptDeckUrl: seed.pptDeckUrl ?? null,
         contactPhone: seed.contactPhone ?? null,
         contactEmail: seed.contactEmail ?? null,
+        edition: seed.edition,
         approvedById: seed.approvedById ?? null,
         approvedAt: seed.approvedAt ?? null,
         rejectionReason: seed.rejectionReason ?? null,
@@ -676,23 +718,23 @@ async function main() {
 
   await prisma.audienceIncomeGroup.createMany({
     data: [
-      { profileId: techProfile.id, bracket: IncomeBracket.BELOW_2L, percentage: 3 },
-      {
-        profileId: techProfile.id,
-        bracket: IncomeBracket.BETWEEN_2L_5L,
-        percentage: 17,
-      },
-      {
-        profileId: techProfile.id,
-        bracket: IncomeBracket.BETWEEN_5L_10L,
-        percentage: 33,
-      },
+      { profileId: techProfile.id, bracket: IncomeBracket.BELOW_10L, percentage: 20 },
       {
         profileId: techProfile.id,
         bracket: IncomeBracket.BETWEEN_10L_25L,
         percentage: 31,
       },
-      { profileId: techProfile.id, bracket: IncomeBracket.ABOVE_25L, percentage: 16 },
+      {
+        profileId: techProfile.id,
+        bracket: IncomeBracket.BETWEEN_25L_50L,
+        percentage: 25,
+      },
+      {
+        profileId: techProfile.id,
+        bracket: IncomeBracket.BETWEEN_50L_1CR,
+        percentage: 16,
+      },
+      { profileId: techProfile.id, bracket: IncomeBracket.ABOVE_1CR, percentage: 8 },
     ],
   });
 
@@ -700,20 +742,20 @@ async function main() {
     data: [
       {
         profileId: techProfile.id,
-        city: 'San Francisco',
-        state: 'California',
+        stateOrUT: 'California',
+        country: 'United States',
         percentage: 40,
       },
       {
         profileId: techProfile.id,
-        city: 'New York',
-        state: 'New York',
+        stateOrUT: 'New York',
+        country: 'United States',
         percentage: 35,
       },
       {
         profileId: techProfile.id,
-        city: 'Austin',
-        state: 'Texas',
+        stateOrUT: 'Texas',
+        country: 'United States',
         percentage: 25,
       },
     ],
@@ -752,8 +794,8 @@ async function main() {
   await prisma.audienceRegionDistribution.create({
     data: {
       profileId: lifestyleProfile.id,
-      city: 'Los Angeles',
-      state: 'California',
+      stateOrUT: 'California',
+      country: 'United States',
       percentage: 100,
     },
   });
@@ -1634,6 +1676,9 @@ async function main() {
   console.log(`Email Logs: ${emailLogCount}`);
   console.log(`Audit Logs: ${auditLogCount}`);
   console.log(`\n🔑 All passwords: ${PASSWORD}`);
+  console.log('🔐 Seed auth flow test tokens (raw):');
+  console.log(`   - standalone user email verification: ${seedAuthTokens.standaloneVerification}`);
+  console.log(`   - manager3 password reset: ${seedAuthTokens.manager3Reset}`);
   console.log('\n✅ Comprehensive seed completed successfully!');
 }
 

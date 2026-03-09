@@ -9,4 +9,7 @@ export type {
   InterestExpressedEmailPayload,
   DealFinalizedEmailPayload,
   DeliverablesFormSentEmailPayload,
+  DeliverablesBatchSentEmailPayload,
+  VerifyEmailPayload,
+  ResetPasswordEmailPayload,
 } from './job-payloads';

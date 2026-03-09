@@ -152,9 +152,17 @@ function LoginForm() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.22, duration: 0.25 }}
             >
-              <label htmlFor="password" className="mb-2 block text-sm font-bold text-slate-700">
-                Password
-              </label>
+              <div className="mb-2 flex items-center justify-between">
+                <label htmlFor="password" className="block text-sm font-bold text-slate-700">
+                  Password
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-bold text-indigo-600 transition-colors hover:text-indigo-700"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
                 <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input

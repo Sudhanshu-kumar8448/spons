@@ -21,6 +21,11 @@ import {
   DELIVERABLES_FORM_SENT_EVENT,
   DeliverablesFormSentEvent,
 } from '../common/events/deliverables-form-sent.event';
+import {
+  DELIVERABLES_BATCH_SENT_EVENT,
+  DeliverablesBatchSentEvent,
+} from '../common/events/deliverables-batch-sent.event';
+import { PrismaService } from '../common/providers/prisma.service';
 import type { Role } from '@prisma/client';
 
 /**
@@ -49,7 +54,8 @@ export class DeliverableService {
     private readonly auditLog: AuditLogService,
     private readonly notifications: NotificationsService,
     private readonly eventEmitter: EventEmitter2,
-  ) {}
+    private readonly prisma: PrismaService,
+  ) { }
 
   // ═══════════════════════════════════════════════════════════
   // MANAGER — FORM CRUD
@@ -233,6 +239,87 @@ export class DeliverableService {
     return updated;
   }
 
+  /**
+   * Batch-send ALL DRAFT deliverable forms for an event to the organizer.
+   * Transitions all DRAFT forms → SENT_TO_ORGANIZER atomically.
+   * Sends ONE in-app notification and ONE email (batch template).
+   */
+  async sendAllFormsToOrganizer(eventId: string, callerId: string, callerRole: Role) {
+    const draftForms = await this.repo.findDraftFormsByEventId(eventId);
+
+    if (draftForms.length === 0) {
+      throw new BadRequestException('No draft deliverable forms found for this event.');
+    }
+
+    // Validate: all forms must have rows
+    const emptyForms = draftForms.filter(f => !f.rows || f.rows.length === 0);
+    if (emptyForms.length > 0) {
+      const tierNames = emptyForms.map(f => f.tier?.tierType ?? 'Unknown').join(', ');
+      throw new BadRequestException(`The following tiers have empty forms: ${tierNames}. Add at least one deliverable row to each.`);
+    }
+
+    // Get organizer info from first form
+    const firstForm = draftForms[0];
+    const event = firstForm.tier?.event;
+    const organizerUser = event?.organizer?.users?.[0];
+
+    if (!event || !organizerUser) {
+      throw new BadRequestException('Could not resolve organizer for this event');
+    }
+
+    const formIds = draftForms.map(f => f.id);
+    const organizerUserId = organizerUser.id;
+    const organizerEmail = organizerUser.email;
+
+    // Bulk update all forms to SENT_TO_ORGANIZER
+    await this.repo.updateManyFormsStatus(formIds, 'SENT_TO_ORGANIZER');
+
+    const tiers = draftForms.map(f => ({
+      formId: f.id,
+      tierId: f.tier!.id,
+      tierType: f.tier!.tierType,
+    }));
+
+    // Single in-app notification
+    await this.notifications.create({
+      userId: organizerUserId,
+      title: 'Deliverable Forms Ready',
+      message: `Deliverable forms for ${tiers.length} tier${tiers.length > 1 ? 's' : ''} of event "${event.title}" are ready for you to fill.`,
+      severity: 'INFO',
+      link: `/organizer/events/${event.id}`,
+      entityType: 'Event',
+      entityId: event.id,
+    });
+
+    // Single batch email
+    if (organizerEmail) {
+      this.eventEmitter.emit(
+        DELIVERABLES_BATCH_SENT_EVENT,
+        new DeliverablesBatchSentEvent({
+          eventId: event.id,
+          eventName: event.title,
+          organizerEmail,
+          organizerUserId,
+          tiers,
+        }),
+      );
+    }
+
+    this.auditLog.log({
+      actorId: callerId,
+      actorRole: callerRole,
+      action: 'deliverable_form.batch_sent',
+      entityType: 'Event',
+      entityId: event.id,
+      metadata: { formCount: formIds.length, tierTypes: tiers.map(t => t.tierType) },
+    });
+
+    this.logger.log(`${formIds.length} deliverable forms batch-sent to organizer for event ${event.id}`);
+
+    // Return the updated forms
+    return this.repo.findFormsByEventId(eventId);
+  }
+
   // ═══════════════════════════════════════════════════════════
   // ORGANIZER — FILL & SUBMIT
   // ═══════════════════════════════════════════════════════════
@@ -244,7 +331,9 @@ export class DeliverableService {
   }
 
   /**
-   * Get form for organizer to fill (must be SENT_TO_ORGANIZER or FILLED).
+   * Get form for organizer (read or fill).
+   * Accessible when SENT_TO_ORGANIZER, FILLED, or SUBMITTED.
+   * SUBMITTED forms are read-only (enforced by fillForm guard).
    */
   async getFormForOrganizer(formId: string, organizerUserId: string) {
     const form = await this.repo.findFormById(formId);
@@ -255,8 +344,8 @@ export class DeliverableService {
       throw new ForbiddenException('You do not have access to this form');
     }
 
-    if (form.status !== 'SENT_TO_ORGANIZER' && form.status !== 'FILLED') {
-      throw new ForbiddenException('This form is not available for filling (status: ' + form.status + ')');
+    if (form.status !== 'SENT_TO_ORGANIZER' && form.status !== 'FILLED' && form.status !== 'SUBMITTED') {
+      throw new ForbiddenException('This form is not available for viewing (status: ' + form.status + ')');
     }
 
     return form;
@@ -344,6 +433,33 @@ export class DeliverableService {
       entityId: form.id,
       metadata: {},
     });
+
+    // Notify managers about the submission
+    const event = form.tier?.event;
+    const tierType = form.tier?.tierType ?? 'Unknown';
+    const eventTitle = event?.title ?? 'Unknown Event';
+    const eventId = event?.id;
+
+    try {
+      const managers = await this.prisma.user.findMany({
+        where: { role: { in: ['MANAGER', 'ADMIN', 'SUPER_ADMIN'] }, isActive: true },
+        select: { id: true },
+      });
+
+      for (const manager of managers) {
+        await this.notifications.create({
+          userId: manager.id,
+          title: 'Deliverable Form Submitted',
+          message: `The organizer has submitted the deliverable form for tier "${tierType}" of event "${eventTitle}".`,
+          severity: 'INFO',
+          link: eventId ? `/manager/verifyEvents/${eventId}` : undefined,
+          entityType: 'TierDeliverableForm',
+          entityId: form.id,
+        });
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to notify managers about form submission: ${err}`);
+    }
 
     this.logger.log(`Deliverable form ${form.id} submitted by organizer ${organizerUserId}`);
     return updated;

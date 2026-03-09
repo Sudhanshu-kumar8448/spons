@@ -18,6 +18,9 @@ export interface RouteRule {
  * Order does not matter; the first matching rule wins.
  */
 export const protectedRoutes: RouteRule[] = [
+  // Email verification pending — auth required, no role/verification restriction
+  { path: "/verify-email-pending" },
+
   // Onboarding routes — auth required but NO role restriction
   // MUST come before role-specific routes to avoid matching /sponsor or /organizer first
   { path: "/onboarding" },

@@ -46,7 +46,7 @@ export default function EventCard({ event }: EventCardProps) {
           <CategoryBadge category={event.category} />
           <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-400">
             <Users className="h-3.5 w-3.5 text-blue-400" />
-            {event.expectedFootfall.toLocaleString()}
+            {event.expectedFootfall.toLocaleString("en-IN")}
           </span>
         </div>
 
@@ -55,11 +55,16 @@ export default function EventCard({ event }: EventCardProps) {
           {event.title}
         </h3>
 
-        {/* Location */}
+        {/* Location + Edition */}
         <div className="flex items-center gap-1.5 text-sm text-slate-400">
           <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-500" />
           <span className="truncate">{locationLabel}</span>
         </div>
+        {event.edition && (
+          <span className="inline-flex items-center gap-1 self-start rounded-lg border border-slate-700/60 bg-slate-800/80 px-2 py-0.5 text-[11px] font-medium text-blue-300">
+            {event.edition.replace(/_/g, " ")}
+          </span>
+        )}
 
         {/* Available sponsorship tiers */}
         {event.tiers.length > 0 && (

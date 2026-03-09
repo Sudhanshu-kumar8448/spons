@@ -122,11 +122,11 @@ export type AgeBracket =
     | 'AGE_45_PLUS';
 
 export type IncomeBracket =
-    | 'BELOW_2L'
-    | 'BETWEEN_2L_5L'
-    | 'BETWEEN_5L_10L'
+    | 'BELOW_10L'
     | 'BETWEEN_10L_25L'
-    | 'ABOVE_25L';
+    | 'BETWEEN_25L_50L'
+    | 'BETWEEN_50L_1CR'
+    | 'ABOVE_1CR';
 
 export interface AudienceGender {
     id: string;
@@ -148,8 +148,8 @@ export interface AudienceIncomeGroup {
 
 export interface AudienceRegion {
     id: string;
-    city: string;
-    state: string;
+    stateOrUT: string;
+    country: string;
     percentage: number;
 }
 
@@ -237,6 +237,7 @@ export interface VerifiableEvent {
     title: string;
     slug?: string;
     description?: string | null;
+    edition?: string | null;
     location?: string | null;
     venue?: string | null;
     expected_footfall?: number;

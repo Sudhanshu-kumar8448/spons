@@ -340,6 +340,19 @@ enum OrganizerType {
 
 }
 
+// edition of the event 
+enum EventEdition {
+  INAUGURAL
+  SECOND
+  THIRD
+  FOURTH
+  FIFTH
+  TENTH
+  BI_ANNUAL
+  QUATERLY
+  OTHER
+}
+
 enum EventStatus {
   DRAFT
   UNDER_MANAGER_REVIEW
@@ -403,8 +416,20 @@ model User {
   password    String // Stored hashed (bcrypt/argon2)
   role        Role     @default(USER)
   isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Email verification
+  emailVerified              Boolean   @default(false) @map("email_verified")
+  emailVerificationToken     String?   @map("email_verification_token") // SHA-256 hash
+  emailVerificationExpiry    DateTime? @map("email_verification_expiry")
+  emailVerificationSentCount Int       @default(0) @map("email_verification_sent_count")
+  emailVerificationLastSentAt DateTime? @map("email_verification_last_sent_at")
+
+  // Password reset
+  passwordResetToken  String?   @map("password_reset_token") // SHA-256 hash
+  passwordResetExpiry DateTime? @map("password_reset_expiry")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   company        Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
@@ -525,7 +550,8 @@ model Event {
   isActive           Boolean            @default(true) @map("is_active")
 
   // New fields for sponsorship inventory
-  category     EventCategory
+  category     EventCategory @map("category")
+  edition      EventEdition  @map("edition")
   pptDeckUrl   String?       @map("ppt_deck_url") @db.VarChar(500)
   contactPhone String?       @map("contact_phone") @db.VarChar(50)
   contactEmail String?       @map("contact_email") @db.VarChar(255)
@@ -674,11 +700,11 @@ model AudienceAgeGroup {
 
 //Income Distribution
 enum IncomeBracket {
-  BELOW_2L
-  BETWEEN_2L_5L
-  BETWEEN_5L_10L
+  BELOW_10L
   BETWEEN_10L_25L
-  ABOVE_25L
+  BETWEEN_25L_50L
+  BETWEEN_50L_1CR
+  ABOVE_1CR
 }
 
 model AudienceIncomeGroup {
@@ -693,12 +719,12 @@ model AudienceIncomeGroup {
   @@map("audience_income_groups")
 }
 
-//Region / City Distribution
+//Region Distribution (State/UT + Country)
 model AudienceRegionDistribution {
   id         String @id @default(uuid()) @db.Uuid
   profileId  String @map("profile_id") @db.Uuid
-  city       String @db.VarChar(100)
-  state      String @db.VarChar(100)
+  stateOrUT  String @map("state_or_ut") @db.VarChar(100)
+  country    String @db.VarChar(100)
   percentage Float
 
   profile EventAudienceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)

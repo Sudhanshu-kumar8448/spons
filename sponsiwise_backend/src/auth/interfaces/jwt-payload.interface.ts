@@ -9,6 +9,7 @@ export interface JwtPayload {
   role: Role; // USER | SPONSOR | ORGANIZER | MANAGER | ADMIN | SUPER_ADMIN
   company_id?: string; // companyId (UUID) — present for SPONSOR users
   organizer_id?: string; // organizerId (UUID) — present for ORGANIZER users
+  email_verified?: boolean; // true once user verifies their email
 }
 
 /**

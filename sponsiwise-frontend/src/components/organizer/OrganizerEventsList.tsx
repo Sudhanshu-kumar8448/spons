@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Calendar, MapPin, ChevronLeft, ChevronRight, Eye, FileText, Plus } from "lucide-react";
+import { Calendar, MapPin, ChevronLeft, ChevronRight, Eye, FileText, Plus, ClipboardCheck } from "lucide-react";
 import { fetchOrganizerEvents } from "@/lib/organizer-api";
 import type { OrganizerEvent } from "@/lib/types/organizer";
+import { formatInr } from "@/lib/currency";
 
 // ─── Event status badge ────────────────────────────────────────────────
 
@@ -72,7 +73,7 @@ function OrganizerEventCard({ event }: { event: OrganizerEvent }) {
           </span>
           <span className="inline-flex items-center gap-1">
             <Calendar className="h-3 w-3" />
-            {new Date(event.start_date).toLocaleDateString("en-US", {
+            {new Date(event.start_date).toLocaleDateString("en-IN", {
               month: "short",
               day: "numeric",
               year: "numeric",
@@ -97,12 +98,12 @@ function OrganizerEventCard({ event }: { event: OrganizerEvent }) {
           <div>
             <p className="text-xs text-slate-500">Revenue</p>
             <p className="text-sm font-bold text-emerald-400">
-              {event.currency} {event.total_sponsorship_amount.toLocaleString()}
+              {formatInr(event.total_sponsorship_amount)}
             </p>
           </div>
         </div>
 
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           <Link
             href={`/organizer/events/${event.id}`}
             className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white transition-all"
@@ -115,6 +116,28 @@ function OrganizerEventCard({ event }: { event: OrganizerEvent }) {
           >
             <FileText className="h-3 w-3" /> Proposals
           </Link>
+          {(() => {
+            const tiers = (event as any).sponsorship_tiers ?? event.tiers ?? [];
+            const hasDeliverables = tiers.some((t: any) =>
+              t.deliverable_form_status && ['SENT_TO_ORGANIZER', 'FILLED', 'SUBMITTED'].includes(t.deliverable_form_status)
+            );
+            if (!hasDeliverables) return null;
+            const allSubmitted = tiers.every((t: any) =>
+              !t.deliverable_form_status || t.deliverable_form_status === 'SUBMITTED'
+            );
+            return (
+              <Link
+                href={`/organizer/events/${event.id}#deliverables`}
+                className={`inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${allSubmitted
+                    ? 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+                    : 'bg-gradient-to-r from-amber-600 to-orange-500 text-white shadow-lg shadow-amber-500/20 hover:shadow-xl'
+                  }`}
+              >
+                <ClipboardCheck className="h-3 w-3" />
+                {allSubmitted ? 'View Deliverables' : 'Fill Deliverables'}
+              </Link>
+            );
+          })()}
         </div>
       </div>
     </div>

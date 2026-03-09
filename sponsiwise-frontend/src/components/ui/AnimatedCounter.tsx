@@ -50,7 +50,7 @@ export default function AnimatedCounter({
 
     return (
         <span ref={ref} className={className}>
-            {displayValue.toLocaleString()}
+            {displayValue.toLocaleString("en-IN")}
         </span>
     );
 }

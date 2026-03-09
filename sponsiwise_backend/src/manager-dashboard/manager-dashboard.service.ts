@@ -12,6 +12,10 @@ import {
   EVENT_VERIFIED_EVENT,
   EVENT_REJECTED_EVENT,
 } from '../common/events';
+import {
+  PROPOSAL_STATUS_CHANGED_EVENT,
+  ProposalStatusChangedEvent,
+} from '../proposals/events';
 import { AuditLogService } from '../audit-logs/audit-log.service';
 import type {
   ManagerCompaniesQueryDto,
@@ -349,6 +353,7 @@ export class ManagerDashboardService {
           id: true,
           title: true,
           description: true,
+          edition: true,
           startDate: true,
           endDate: true,
           status: true,
@@ -409,6 +414,7 @@ export class ManagerDashboardService {
           venue: '',
           image_url: null,
           category: e.category || '',
+          edition: e.edition || null,
           status: e.status.toLowerCase(),
           verification_status: e.verificationStatus.toLowerCase(),
           verification_notes: null,
@@ -453,6 +459,7 @@ export class ManagerDashboardService {
         id: true,
         title: true,
         description: true,
+        edition: true,
         startDate: true,
         endDate: true,
         status: true,
@@ -529,8 +536,8 @@ export class ManagerDashboardService {
             regions: {
               select: {
                 id: true,
-                city: true,
-                state: true,
+                stateOrUT: true,
+                country: true,
                 percentage: true,
               },
             },
@@ -579,8 +586,8 @@ export class ManagerDashboardService {
           })),
           regions: event.audienceProfile.regions.map((r: any) => ({
             id: r.id,
-            city: r.city,
-            state: r.state,
+            stateOrUT: r.stateOrUT,
+            country: r.country,
             percentage: r.percentage,
           })),
           created_at: event.audienceProfile.createdAt.toISOString(),
@@ -600,6 +607,7 @@ export class ManagerDashboardService {
       image_url: null,
       website: event.website || null,
       category: event.category || '',
+      edition: event.edition || null,
       status: event.status.toLowerCase(),
       verification_status: event.verificationStatus.toLowerCase(),
       verification_notes: null,
@@ -672,6 +680,7 @@ export class ManagerDashboardService {
       if (dto.expectedFootfall !== undefined) coreData.expectedFootfall = dto.expectedFootfall;
       if (dto.website !== undefined) coreData.website = dto.website;
       if (dto.category !== undefined) coreData.category = dto.category;
+      if (dto.edition !== undefined) coreData.edition = dto.edition;
       if (dto.contactPhone !== undefined) coreData.contactPhone = dto.contactPhone;
       if (dto.contactEmail !== undefined) coreData.contactEmail = dto.contactEmail;
       if (dto.pptDeckUrl !== undefined) coreData.pptDeckUrl = dto.pptDeckUrl;
@@ -1318,6 +1327,20 @@ export class ManagerDashboardService {
       entityId: id,
       metadata: { changes: { ...dto } as any },
     });
+
+    // Emit status-change event if the status was updated
+    if (status && status !== proposal.status) {
+      this.eventEmitter.emit(
+        PROPOSAL_STATUS_CHANGED_EVENT,
+        new ProposalStatusChangedEvent({
+          proposalId: id,
+          actorId,
+          actorRole,
+          previousStatus: proposal.status,
+          newStatus: status as any,
+        }),
+      );
+    }
 
     return updated;
   }

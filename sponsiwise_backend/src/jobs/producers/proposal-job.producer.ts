@@ -8,12 +8,17 @@ import {
   QUEUE_EMAIL,
   QUEUE_NOTIFICATIONS,
   JOB_EMAIL_PROPOSAL_SUBMITTED,
+  JOB_EMAIL_PROPOSAL_FORWARDED,
   JOB_EMAIL_PROPOSAL_APPROVED,
   JOB_EMAIL_PROPOSAL_REJECTED,
+  JOB_EMAIL_PROPOSAL_CHANGES_REQUESTED,
   JOB_EMAIL_DEAL_FINALIZED,
   JOB_NOTIFY_PROPOSAL_SUBMITTED,
+  JOB_NOTIFY_PROPOSAL_RESUBMITTED,
+  JOB_NOTIFY_PROPOSAL_FORWARDED,
   JOB_NOTIFY_PROPOSAL_APPROVED,
   JOB_NOTIFY_PROPOSAL_REJECTED,
+  JOB_NOTIFY_PROPOSAL_CHANGES_REQUESTED,
 } from '../constants';
 import type { ProposalEmailPayload, ProposalNotificationPayload, DealFinalizedEmailPayload } from '../constants';
 
@@ -54,16 +59,6 @@ export class ProposalJobProducer {
 
   @OnEvent(PROPOSAL_CREATED_EVENT)
   async onProposalCreated(event: ProposalCreatedEvent): Promise<void> {
-    const emailPayload: ProposalEmailPayload = {
-      proposalId: event.proposalId,
-      actorId: event.actorId,
-      actorRole: event.actorRole,
-      newStatus: event.newStatus,
-      sponsorshipId: event.sponsorshipId,
-      proposedAmount: event.proposedAmount,
-      timestamp: event.timestamp,
-    };
-
     const notifyPayload: ProposalNotificationPayload = {
       proposalId: event.proposalId,
       actorId: event.actorId,
@@ -71,32 +66,25 @@ export class ProposalJobProducer {
       timestamp: event.timestamp,
     };
 
-    const jobId = `${JOB_EMAIL_PROPOSAL_SUBMITTED}:${event.proposalId}`;
-    const notifyJobId = `${JOB_NOTIFY_PROPOSAL_SUBMITTED}:${event.proposalId}`;
+    const notifyJobId = `${JOB_NOTIFY_PROPOSAL_SUBMITTED}--${event.proposalId}`;
 
-    await Promise.all([
-      this.emailQueue.add(JOB_EMAIL_PROPOSAL_SUBMITTED, emailPayload, {
-        ...DEFAULT_JOB_OPTS,
-        jobId,
-      }),
-      this.notificationQueue.add(JOB_NOTIFY_PROPOSAL_SUBMITTED, notifyPayload, {
-        ...DEFAULT_JOB_OPTS,
-        jobId: notifyJobId,
-      }),
-    ]);
+    // Only enqueue notification — email is sent when manager forwards to organizer
+    await this.notificationQueue.add(JOB_NOTIFY_PROPOSAL_SUBMITTED, notifyPayload, {
+      ...DEFAULT_JOB_OPTS,
+      jobId: notifyJobId,
+    });
 
-    this.logger.log(`Enqueued proposal-created jobs for proposal=${event.proposalId}`);
+    this.logger.log(`Enqueued proposal-created notification for proposal=${event.proposalId}`);
   }
 
   // ── proposal.status_changed ──────────────────────────────────────
 
   @OnEvent(PROPOSAL_STATUS_CHANGED_EVENT)
   async onProposalStatusChanged(event: ProposalStatusChangedEvent): Promise<void> {
-    const { jobName, notifyJobName } = this.resolveStatusChangeJobNames(event.newStatus);
+    const { jobName, notifyJobName } = this.resolveStatusChangeJobNames(event.newStatus, event.previousStatus);
 
-    if (!jobName) {
-      // Status transitions like DRAFT → SUBMITTED are already covered
-      // by proposal.created; others we simply skip.
+    if (!jobName && !notifyJobName) {
+      // Non-actionable transitions are skipped.
       return;
     }
 
@@ -117,20 +105,31 @@ export class ProposalJobProducer {
       timestamp: event.timestamp,
     };
 
-    // Deterministic job ID — safe to retry the same event
-    const jobId = `${jobName}:${event.proposalId}:${event.timestamp}`;
-    const notifyJobId = `${notifyJobName}:${event.proposalId}:${event.timestamp}`;
+    const jobs: Promise<unknown>[] = [];
 
-    await Promise.all([
-      this.emailQueue.add(jobName, emailPayload, {
-        ...DEFAULT_JOB_OPTS,
-        jobId,
-      }),
-      this.notificationQueue.add(notifyJobName!, notifyPayload, {
-        ...DEFAULT_JOB_OPTS,
-        jobId: notifyJobId,
-      }),
-    ]);
+    // Enqueue email job if present
+    if (jobName) {
+      const jobId = `${jobName}--${event.proposalId}--${event.timestamp}`;
+      jobs.push(
+        this.emailQueue.add(jobName, emailPayload, {
+          ...DEFAULT_JOB_OPTS,
+          jobId,
+        }),
+      );
+    }
+
+    // Enqueue notification job if present
+    if (notifyJobName) {
+      const notifyJobId = `${notifyJobName}--${event.proposalId}--${event.timestamp}`;
+      jobs.push(
+        this.notificationQueue.add(notifyJobName, notifyPayload, {
+          ...DEFAULT_JOB_OPTS,
+          jobId: notifyJobId,
+        }),
+      );
+    }
+
+    await Promise.all(jobs);
 
     // When a proposal is APPROVED, additionally enqueue the deal.finalized job
     if (event.newStatus === 'APPROVED') {
@@ -141,7 +140,7 @@ export class ProposalJobProducer {
         actorRole: event.actorRole,
         timestamp: event.timestamp,
       };
-      const dealJobId = `${JOB_EMAIL_DEAL_FINALIZED}:${event.proposalId}:${event.timestamp}`;
+      const dealJobId = `${JOB_EMAIL_DEAL_FINALIZED}--${event.proposalId}--${event.timestamp}`;
       await this.emailQueue.add(JOB_EMAIL_DEAL_FINALIZED, dealPayload, {
         ...DEFAULT_JOB_OPTS,
         jobId: dealJobId,
@@ -149,16 +148,33 @@ export class ProposalJobProducer {
       this.logger.log(`Enqueued deal-finalized job for proposal=${event.proposalId}`);
     }
 
-    this.logger.log(`Enqueued status-change jobs [${jobName}] for proposal=${event.proposalId}`);
+    this.logger.log(`Enqueued status-change jobs [email=${jobName ?? 'none'}, notify=${notifyJobName ?? 'none'}] for proposal=${event.proposalId}`);
   }
 
   // ── helpers ──────────────────────────────────────────────────────
 
-  private resolveStatusChangeJobNames(newStatus: string): {
+  private resolveStatusChangeJobNames(
+    newStatus: string,
+    previousStatus?: string,
+  ): {
     jobName: string | null;
     notifyJobName: string | null;
   } {
     switch (newStatus) {
+      case 'SUBMITTED':
+        // No email on SUBMITTED — email is sent when manager forwards to organizer
+        return {
+          jobName: null,
+          notifyJobName:
+            previousStatus === 'REQUEST_CHANGES'
+              ? JOB_NOTIFY_PROPOSAL_RESUBMITTED
+              : JOB_NOTIFY_PROPOSAL_SUBMITTED,
+        };
+      case 'FORWARDED_TO_ORGANIZER':
+        return {
+          jobName: JOB_EMAIL_PROPOSAL_FORWARDED,
+          notifyJobName: JOB_NOTIFY_PROPOSAL_FORWARDED,
+        };
       case 'APPROVED':
         return {
           jobName: JOB_EMAIL_PROPOSAL_APPROVED,
@@ -168,6 +184,11 @@ export class ProposalJobProducer {
         return {
           jobName: JOB_EMAIL_PROPOSAL_REJECTED,
           notifyJobName: JOB_NOTIFY_PROPOSAL_REJECTED,
+        };
+      case 'REQUEST_CHANGES':
+        return {
+          jobName: JOB_EMAIL_PROPOSAL_CHANGES_REQUESTED,
+          notifyJobName: JOB_NOTIFY_PROPOSAL_CHANGES_REQUESTED,
         };
       default:
         return { jobName: null, notifyJobName: null };

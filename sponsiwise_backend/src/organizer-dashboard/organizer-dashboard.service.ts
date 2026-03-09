@@ -123,7 +123,7 @@ export class OrganizerDashboardService {
       pending_proposals: pendingProposals,
       approved_proposals: approvedProposals,
       total_sponsorship_revenue: totalSponsorshipRevenue,
-      currency: 'USD',
+      currency: 'INR',
     };
   }
 
@@ -167,6 +167,7 @@ export class OrganizerDashboardService {
         data: {
           title: dto.title,
           ...(dto.description !== undefined && { description: dto.description }),
+          edition: dto.edition,
           expectedFootfall: dto.expectedFootfall,
           startDate: start,
           endDate: end,
@@ -200,7 +201,7 @@ export class OrganizerDashboardService {
         for (const tier of dto.tiers) {
           // Parse benefits array to JSON string
           const benefitsJson = tier.benefits ? JSON.stringify(tier.benefits) : '[]';
-          
+
           await tx.sponsorshipTier.create({
             data: {
               eventId: event.id,
@@ -269,8 +270,8 @@ export class OrganizerDashboardService {
           await tx.audienceRegionDistribution.create({
             data: {
               profileId: audienceProfile.id,
-              city: region.city,
-              state: region.state,
+              stateOrUT: region.stateOrUT,
+              country: region.country,
               percentage: region.percentage,
             },
           });
@@ -330,6 +331,7 @@ export class OrganizerDashboardService {
           id: true,
           title: true,
           description: true,
+          edition: true,
           startDate: true,
           endDate: true,
           status: true,
@@ -361,6 +363,9 @@ export class OrganizerDashboardService {
               soldSlots: true,
               benefits: true,
               isLocked: true,
+              deliverableForm: {
+                select: { status: true },
+              },
             },
           },
           sponsorships: {
@@ -422,12 +427,14 @@ export class OrganizerDashboardService {
             slots_available: t.totalSlots - t.soldSlots,
             benefits: benefits,
             is_locked: t.isLocked,
+            deliverable_form_status: (t as any).deliverableForm?.status ?? null,
           };
         });
 
         return {
           id: e.id,
           title: e.title,
+          edition: e.edition,
           slug: e.id,
           description: e.description || '',
           start_date: e.startDate.toISOString(),
@@ -452,7 +459,7 @@ export class OrganizerDashboardService {
           total_proposals: totalProposals,
           pending_proposals: pendingProposals,
           total_sponsorship_amount: totalSponsorshipAmount,
-          currency: 'USD',
+          currency: 'INR',
           created_at: e.createdAt.toISOString(),
           updated_at: e.updatedAt.toISOString(),
         };
@@ -479,6 +486,7 @@ export class OrganizerDashboardService {
         id: true,
         title: true,
         description: true,
+        edition: true,
         startDate: true,
         endDate: true,
         website: true,
@@ -577,6 +585,7 @@ export class OrganizerDashboardService {
     return {
       id: e.id,
       title: e.title,
+      edition: e.edition || null,
       slug: e.id,
       description: e.description || '',
       start_date: e.startDate.toISOString(),
@@ -601,7 +610,7 @@ export class OrganizerDashboardService {
       total_proposals: totalProposals,
       pending_proposals: pendingProposals,
       total_sponsorship_amount: totalSponsorshipAmount,
-      currency: 'USD',
+      currency: 'INR',
       created_at: e.createdAt.toISOString(),
       updated_at: e.updatedAt.toISOString(),
     };
@@ -662,6 +671,7 @@ export class OrganizerDashboardService {
       if (dto.expectedFootfall !== undefined) coreData.expectedFootfall = dto.expectedFootfall;
       if (dto.website !== undefined) coreData.website = dto.website;
       if (dto.category !== undefined) coreData.category = dto.category;
+      if (dto.edition !== undefined) coreData.edition = dto.edition;
       if (dto.contactPhone !== undefined) coreData.contactPhone = dto.contactPhone;
       if (dto.contactEmail !== undefined) coreData.contactEmail = dto.contactEmail;
       if (dto.pptDeckUrl !== undefined) coreData.pptDeckUrl = dto.pptDeckUrl;
@@ -729,7 +739,7 @@ export class OrganizerDashboardService {
           } else if (tierDto.tierType && tierDto.askingPrice !== undefined) {
             // Create new tier
             const benefitsJson = tierDto.benefits ? JSON.stringify(tierDto.benefits) : '[]';
-            
+
             await tx.sponsorshipTier.create({
               data: {
                 eventId,
@@ -776,7 +786,7 @@ export class OrganizerDashboardService {
    * GET /organizer/proposals
    *
    * Returns paginated proposals for events owned by this organizer.
-   * Includes nested sponsor and event info.
+   * Includes only list-safe fields needed by organizer proposal views.
    */
   async getProposals(
     organizerId: string | undefined,
@@ -809,25 +819,12 @@ export class OrganizerDashboardService {
           status: true,
           proposedTier: true,
           proposedAmount: true,
-          message: true,
-          notes: true,
-          submittedAt: true,
-          reviewedAt: true,
-          createdAt: true,
-          updatedAt: true,
           sponsorship: {
             select: {
               id: true,
               eventId: true,
               event: {
                 select: { id: true, title: true },
-              },
-              company: {
-                select: {
-                  id: true,
-                  name: true,
-                  // logoUrl removed from schema
-                },
               },
             },
           },
@@ -841,26 +838,14 @@ export class OrganizerDashboardService {
         id: p.id,
         event_id: p.sponsorship.eventId,
         title: p.proposedTier || '',
-        description: p.message || '',
         amount: p.proposedAmount ? Number(p.proposedAmount) : 0,
-        currency: 'USD',
+        currency: 'INR',
         status: p.status.toLowerCase(),
-        sponsor: {
-          id: p.sponsorship.company.id,
-          name: p.sponsorship.company.name,
-          logo_url: null,
-          email: '', // Company doesn't store email directly
-        },
         event: {
           id: p.sponsorship.event.id,
           title: p.sponsorship.event.title,
           slug: p.sponsorship.event.id,
         },
-        submitted_at: p.submittedAt?.toISOString() || null,
-        reviewed_at: p.reviewedAt?.toISOString() || null,
-        reviewer_notes: p.notes || null,
-        created_at: p.createdAt.toISOString(),
-        updated_at: p.updatedAt.toISOString(),
       })),
       total,
       page,
@@ -873,7 +858,7 @@ export class OrganizerDashboardService {
   /**
    * GET /organizer/proposals/:id
    *
-   * Returns a single proposal for an event owned by this organizer.
+   * Returns a single forwarded proposal for an event owned by this organizer.
    */
   async getProposalById(proposalId: string, organizerId?: string) {
     this.assertOrganizerId(organizerId);
@@ -910,13 +895,24 @@ export class OrganizerDashboardService {
       throw new NotFoundException('Proposal not found');
     }
 
+    // Organizer can view proposals once forwarded by manager (or already acted upon)
+    const viewableStatuses: ProposalStatus[] = [
+      ProposalStatus.FORWARDED_TO_ORGANIZER,
+      ProposalStatus.APPROVED,
+      ProposalStatus.REJECTED,
+      ProposalStatus.REQUEST_CHANGES,
+    ];
+    if (!viewableStatuses.includes(p.status)) {
+      throw new NotFoundException('Proposal not found');
+    }
+
     return {
       id: p.id,
       event_id: p.sponsorship.eventId,
       title: p.proposedTier || '',
       description: p.message || '',
       amount: p.proposedAmount ? Number(p.proposedAmount) : 0,
-      currency: 'USD',
+      currency: 'INR',
       status: p.status.toLowerCase(),
       sponsor: {
         id: p.sponsorship.company.id,
@@ -945,7 +941,7 @@ export class OrganizerDashboardService {
    * Allows the organizer to approve or reject a proposal on their events.
    * - Validates ownership: proposal→sponsorship→event.organizerId === JWT organizer_id
    * - Maps action to ProposalStatus (approve → APPROVED, reject → REJECTED)
-   * - Validates status transition (must be UNDER_MANAGER_REVIEW or SUBMITTED; auto-transitions SUBMITTED→UNDER_MANAGER_REVIEW→APPROVED/REJECTED)
+   * - Validates status transition (must be FORWARDED_TO_ORGANIZER)
    * - Records audit log and emits domain event
    */
   async reviewProposal(
@@ -981,20 +977,25 @@ export class OrganizerDashboardService {
     }
 
     // 3. Map action to target status
-    const targetStatus =
-      dto.action === 'approve' ? ProposalStatus.APPROVED : ProposalStatus.REJECTED;
+    let targetStatus: ProposalStatus;
+    if (dto.action === 'approve') {
+      targetStatus = ProposalStatus.APPROVED;
+    } else if (dto.action === 'request_changes') {
+      targetStatus = ProposalStatus.REQUEST_CHANGES;
+    } else {
+      targetStatus = ProposalStatus.REJECTED;
+    }
 
     // 4. Validate status transition
     // If currently SUBMITTED, auto-transition through UNDER_MANAGER_REVIEW first
     const currentStatus = proposal.status;
     const reviewableStatuses: ProposalStatus[] = [
-      ProposalStatus.SUBMITTED,
-      ProposalStatus.UNDER_MANAGER_REVIEW,
+      ProposalStatus.FORWARDED_TO_ORGANIZER,
     ];
 
     if (!reviewableStatuses.includes(currentStatus)) {
       throw new BadRequestException(
-        `Cannot review a proposal with status "${currentStatus}". Only SUBMITTED or UNDER_MANAGER_REVIEW proposals can be reviewed.`,
+        `Cannot review a proposal with status "${currentStatus}". Only FORWARDED_TO_ORGANIZER proposals can be reviewed.`,
       );
     }
 
@@ -1121,7 +1122,7 @@ export class OrganizerDashboardService {
       title: updated.proposedTier || '',
       description: updated.message || '',
       amount: updated.proposedAmount ? Number(updated.proposedAmount) : 0,
-      currency: 'USD',
+      currency: 'INR',
       status: updated.status.toLowerCase(),
       sponsor: {
         id: proposal.sponsorship.company.id,
@@ -1142,4 +1143,3 @@ export class OrganizerDashboardService {
     };
   }
 }
-

@@ -17,6 +17,7 @@ import {
 import type { OrganizerDashboardStats } from "@/lib/types/organizer";
 import type { IncomingProposal } from "@/lib/types/organizer";
 import ProposalStatusBadge from "@/components/shared/ProposalStatusBadge";
+import { formatInr } from "@/lib/currency";
 
 // ─── Stats cards ───────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ function StatsGrid({ stats }: { stats: OrganizerDashboardStats }) {
     },
     {
       label: "Sponsorship Revenue",
-      value: `${stats.currency} ${stats.total_sponsorship_revenue.toLocaleString()}`,
+      value: formatInr(stats.total_sponsorship_revenue),
       icon: Wallet,
       gradient: "from-sky-400 to-blue-500",
       glow: "shadow-sky-500/20",
@@ -96,6 +97,9 @@ function StatsGrid({ stats }: { stats: OrganizerDashboardStats }) {
 // ─── Recent incoming proposals table ───────────────────────────────────
 
 function RecentProposals({ proposals }: { proposals: IncomingProposal[] }) {
+  const isForwardedToOrganizer = (status: string) =>
+    status.toUpperCase() === "FORWARDED_TO_ORGANIZER";
+
   if (proposals.length === 0) {
     return (
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
@@ -117,49 +121,31 @@ function RecentProposals({ proposals }: { proposals: IncomingProposal[] }) {
           <thead className="bg-slate-800/50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Proposal</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Sponsor</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Event</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Amount</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Received</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
             {proposals.map((p) => (
               <tr key={p.id} className="hover:bg-slate-800/50 transition-colors">
                 <td className="px-6 py-4">
-                  <Link
-                    href={`/organizer/events/proposals/${p.id}`}
-                    className="text-sm font-medium text-blue-400 hover:text-sky-300 transition-colors"
-                  >
-                    {p.title}
-                  </Link>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    {p.sponsor.logo_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={p.sponsor.logo_url}
-                        alt={p.sponsor.name}
-                        className="h-6 w-6 rounded-full object-cover ring-1 ring-slate-700"
-                      />
-                    ) : (
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-sky-400 text-xs font-bold text-white">
-                        {p.sponsor.name.charAt(0)}
-                      </span>
-                    )}
-                    <span className="text-sm text-slate-300">{p.sponsor.name}</span>
-                  </div>
+                  {isForwardedToOrganizer(p.status) ? (
+                    <Link
+                      href={`/organizer/events/proposals/${p.id}`}
+                      className="text-sm font-medium text-blue-400 hover:text-sky-300 transition-colors"
+                    >
+                      {p.title}
+                    </Link>
+                  ) : (
+                    <span className="text-sm font-medium text-slate-400">{p.title}</span>
+                  )}
                 </td>
                 <td className="px-6 py-4 text-sm text-slate-400">{p.event.title}</td>
                 <td className="px-6 py-4 text-sm font-medium text-white">
-                  {p.currency} {p.amount.toLocaleString()}
+                  {formatInr(p.amount)}
                 </td>
                 <td className="px-6 py-4"><ProposalStatusBadge status={p.status} /></td>
-                <td className="px-6 py-4 text-sm text-slate-500">
-                  {new Date(p.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </td>
               </tr>
             ))}
           </tbody>

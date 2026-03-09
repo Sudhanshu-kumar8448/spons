@@ -16,6 +16,13 @@ const SAFE_USER_SELECT = {
   email: true,
   role: true,
   isActive: true,
+  emailVerified: true,
+  emailVerificationToken: true,
+  emailVerificationExpiry: true,
+  emailVerificationSentCount: true,
+  emailVerificationLastSentAt: true,
+  passwordResetToken: true,
+  passwordResetExpiry: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.UserSelect;

@@ -4,29 +4,39 @@ import { Job } from 'bullmq';
 import {
   QUEUE_EMAIL,
   JOB_EMAIL_USER_REGISTERED,
+  JOB_EMAIL_VERIFY_EMAIL,
+  JOB_EMAIL_RESET_PASSWORD,
   JOB_EMAIL_INTEREST_EXPRESSED,
   JOB_EMAIL_DEAL_FINALIZED,
   JOB_EMAIL_PROPOSAL_SUBMITTED,
+  JOB_EMAIL_PROPOSAL_FORWARDED,
   JOB_EMAIL_PROPOSAL_APPROVED,
   JOB_EMAIL_PROPOSAL_REJECTED,
+  JOB_EMAIL_PROPOSAL_CHANGES_REQUESTED,
   JOB_EMAIL_COMPANY_VERIFIED,
   JOB_EMAIL_COMPANY_REJECTED,
   JOB_EMAIL_EVENT_VERIFIED,
   JOB_EMAIL_EVENT_REJECTED,
   JOB_EMAIL_DELIVERABLES_FORM_SENT,
+  JOB_EMAIL_DELIVERABLES_BATCH_SENT,
 } from '../constants';
 import type {
   UserRegisteredEmailPayload,
+  VerifyEmailPayload,
+  ResetPasswordEmailPayload,
   InterestExpressedEmailPayload,
   DealFinalizedEmailPayload,
   ProposalEmailPayload,
   VerificationEmailPayload,
   DeliverablesFormSentEmailPayload,
+  DeliverablesBatchSentEmailPayload,
 } from '../constants';
 import { EmailService } from '../services/email.service';
 import { PrismaService } from '../../common/providers';
 import {
   welcomeTemplate,
+  verifyEmailTemplate,
+  resetPasswordTemplate,
   interestExpressedTemplate,
   dealFinalizedTemplate,
   eventVerifiedTemplate,
@@ -34,9 +44,12 @@ import {
   companyVerifiedTemplate,
   companyRejectedTemplate,
   proposalSubmittedTemplate,
+  proposalForwardedTemplate,
   proposalApprovedTemplate,
   proposalRejectedTemplate,
+  proposalChangesRequestedTemplate,
   deliverablesFormSentTemplate,
+  deliverablesBatchSentTemplate,
 } from '../services/templates';
 
 /**
@@ -65,9 +78,15 @@ export class EmailProcessor extends WorkerHost {
     this.logger.log(`Processing email job [${job.name}] id=${job.id}`);
 
     switch (job.name) {
-      // ── New triggers ──────────────────────────────────────────────
+      // ── User lifecycle triggers ───────────────────────────────────
       case JOB_EMAIL_USER_REGISTERED:
         await this.handleUserRegistered(job.name, job.data as UserRegisteredEmailPayload);
+        break;
+      case JOB_EMAIL_VERIFY_EMAIL:
+        await this.handleVerifyEmail(job.name, job.data as VerifyEmailPayload);
+        break;
+      case JOB_EMAIL_RESET_PASSWORD:
+        await this.handleResetPassword(job.name, job.data as ResetPasswordEmailPayload);
         break;
       case JOB_EMAIL_INTEREST_EXPRESSED:
         await this.handleInterestExpressed(job.name, job.data as InterestExpressedEmailPayload);
@@ -80,11 +99,17 @@ export class EmailProcessor extends WorkerHost {
       case JOB_EMAIL_PROPOSAL_SUBMITTED:
         await this.handleProposalSubmitted(job.name, job.data as ProposalEmailPayload);
         break;
+      case JOB_EMAIL_PROPOSAL_FORWARDED:
+        await this.handleProposalForwarded(job.name, job.data as ProposalEmailPayload);
+        break;
       case JOB_EMAIL_PROPOSAL_APPROVED:
         await this.handleProposalApproved(job.name, job.data as ProposalEmailPayload);
         break;
       case JOB_EMAIL_PROPOSAL_REJECTED:
         await this.handleProposalRejected(job.name, job.data as ProposalEmailPayload);
+        break;
+      case JOB_EMAIL_PROPOSAL_CHANGES_REQUESTED:
+        await this.handleProposalChangesRequested(job.name, job.data as ProposalEmailPayload);
         break;
       case JOB_EMAIL_COMPANY_VERIFIED:
         await this.handleCompanyVerification(
@@ -117,6 +142,9 @@ export class EmailProcessor extends WorkerHost {
       case JOB_EMAIL_DELIVERABLES_FORM_SENT:
         await this.handleDeliverablesFormSent(job.name, job.data as DeliverablesFormSentEmailPayload);
         break;
+      case JOB_EMAIL_DELIVERABLES_BATCH_SENT:
+        await this.handleDeliverablesBatchSent(job.name, job.data as DeliverablesBatchSentEmailPayload);
+        break;
       default:
         this.logger.warn(`Unknown email job name: ${job.name}`);
     }
@@ -127,6 +155,38 @@ export class EmailProcessor extends WorkerHost {
   /** User registered → send welcome email. */
   private async handleUserRegistered(jobName: string, data: UserRegisteredEmailPayload): Promise<void> {
     const { subject, html, text } = welcomeTemplate({ userEmail: data.email });
+    await this.emailService.send({
+      to: data.email,
+      subject,
+      html,
+      text,
+      jobName,
+      entityType: 'User',
+      entityId: data.userId,
+    });
+  }
+
+  /** Send email-verification link to the user. */
+  private async handleVerifyEmail(jobName: string, data: VerifyEmailPayload): Promise<void> {
+    const base = process.env.FRONTEND_URL || 'https://sponsiwise.com';
+    const verificationUrl = `${base}/verify-email?token=${data.verificationToken}`;
+    const { subject, html, text } = verifyEmailTemplate({ userEmail: data.email, verificationUrl });
+    await this.emailService.send({
+      to: data.email,
+      subject,
+      html,
+      text,
+      jobName,
+      entityType: 'User',
+      entityId: data.userId,
+    });
+  }
+
+  /** Send password-reset link to the user. */
+  private async handleResetPassword(jobName: string, data: ResetPasswordEmailPayload): Promise<void> {
+    const base = process.env.FRONTEND_URL || 'https://sponsiwise.com';
+    const resetUrl = `${base}/reset-password?token=${data.resetToken}`;
+    const { subject, html, text } = resetPasswordTemplate({ userEmail: data.email, resetUrl });
     await this.emailService.send({
       to: data.email,
       subject,
@@ -205,6 +265,12 @@ export class EmailProcessor extends WorkerHost {
       const { subject, html, text } = interestExpressedTemplate({ ...baseTemplateData, recipientType: 'manager' });
       await this.emailService.send({ to, subject, html, text, jobName, entityType: 'Sponsorship', entityId: data.sponsorshipId });
     }
+
+    // Notify admins
+    for (const to of await this.resolveAdminEmails()) {
+      const { subject, html, text } = interestExpressedTemplate({ ...baseTemplateData, recipientType: 'admin' });
+      await this.emailService.send({ to, subject, html, text, jobName, entityType: 'Sponsorship', entityId: data.sponsorshipId });
+    }
   }
 
   /**
@@ -265,18 +331,34 @@ export class EmailProcessor extends WorkerHost {
       tierType: (proposal.tier?.tierType ?? proposal.proposedTier ?? undefined) as string | undefined,
     };
 
+    // Cross-group deduplication: ensure each email address receives only ONE email
+    const sent = new Set<string>();
+
     for (const to of this.dedupe(proposal.sponsorship.event.organizer.users.map((u) => u.email).filter(Boolean))) {
+      if (sent.has(to)) continue;
+      sent.add(to);
       const { subject, html, text } = dealFinalizedTemplate({ ...baseData, recipientType: 'organizer' });
       await this.emailService.send({ to, subject, html, text, jobName, entityType: 'Proposal', entityId: data.proposalId });
     }
 
     for (const to of this.dedupe(proposal.sponsorship.company.users.map((u) => u.email).filter(Boolean))) {
+      if (sent.has(to)) continue;
+      sent.add(to);
       const { subject, html, text } = dealFinalizedTemplate({ ...baseData, recipientType: 'sponsor' });
       await this.emailService.send({ to, subject, html, text, jobName, entityType: 'Proposal', entityId: data.proposalId });
     }
 
     for (const to of await this.resolveAdminEmails()) {
+      if (sent.has(to)) continue;
+      sent.add(to);
       const { subject, html, text } = dealFinalizedTemplate({ ...baseData, recipientType: 'admin' });
+      await this.emailService.send({ to, subject, html, text, jobName, entityType: 'Proposal', entityId: data.proposalId });
+    }
+
+    for (const to of await this.resolveManagerEmails()) {
+      if (sent.has(to)) continue;
+      sent.add(to);
+      const { subject, html, text } = dealFinalizedTemplate({ ...baseData, recipientType: 'manager' });
       await this.emailService.send({ to, subject, html, text, jobName, entityType: 'Proposal', entityId: data.proposalId });
     }
   }
@@ -313,6 +395,34 @@ export class EmailProcessor extends WorkerHost {
   }
 
   /**
+   * Proposal forwarded to organizer by manager → notify the organizer.
+   */
+  private async handleProposalForwarded(
+    jobName: string,
+    data: ProposalEmailPayload,
+  ): Promise<void> {
+    const [recipients, info] = await Promise.all([
+      this.resolveOrganizerEmailsForProposal(data.proposalId),
+      this.resolveProposalInfo(data.proposalId),
+    ]);
+
+    if (recipients.length === 0) {
+      this.logger.warn(`No organizer email found for proposal ${data.proposalId} — skipping forwarded email`);
+      return;
+    }
+
+    for (const to of recipients) {
+      const { subject, html, text } = proposalForwardedTemplate({
+        eventTitle: info.eventTitle,
+        proposalId: data.proposalId,
+        companyName: info.companyName,
+        proposedAmount: data.proposedAmount ?? info.proposedAmount,
+      });
+      await this.emailService.send({ to, subject, html, text, jobName, entityType: 'Proposal', entityId: data.proposalId });
+    }
+  }
+
+  /**
    * Proposal approved → notify the sponsor who created the proposal.
    */
   private async handleProposalApproved(jobName: string, data: ProposalEmailPayload): Promise<void> {
@@ -331,7 +441,7 @@ export class EmailProcessor extends WorkerHost {
         companyName: info.companyName,
         eventTitle: info.eventTitle,
         proposalId: data.proposalId,
-        proposedAmount: data.proposedAmount,
+        proposedAmount: data.proposedAmount ?? info.proposedAmount,
       });
       await this.emailService.send({ to, subject, html, text, jobName, entityType: 'Proposal', entityId: data.proposalId });
     }
@@ -356,9 +466,47 @@ export class EmailProcessor extends WorkerHost {
         companyName: info.companyName,
         eventTitle: info.eventTitle,
         proposalId: data.proposalId,
-        proposedAmount: data.proposedAmount,
+        proposedAmount: data.proposedAmount ?? info.proposedAmount,
+        notes: info.reviewerNotes ?? undefined,
       });
       await this.emailService.send({ to, subject, html, text, jobName, entityType: 'Proposal', entityId: data.proposalId });
+    }
+  }
+
+  /**
+   * Proposal changes requested by manager → notify sponsor users.
+   */
+  private async handleProposalChangesRequested(
+    jobName: string,
+    data: ProposalEmailPayload,
+  ): Promise<void> {
+    const [recipients, info] = await Promise.all([
+      this.resolveSponsorEmailsForProposal(data.proposalId),
+      this.resolveProposalInfo(data.proposalId),
+    ]);
+
+    if (recipients.length === 0) {
+      this.logger.warn(`No sponsor email found for proposal ${data.proposalId} — skipping`);
+      return;
+    }
+
+    for (const to of recipients) {
+      const { subject, html, text } = proposalChangesRequestedTemplate({
+        companyName: info.companyName,
+        eventTitle: info.eventTitle,
+        proposalId: data.proposalId,
+        proposedAmount: data.proposedAmount ?? info.proposedAmount,
+        notes: info.reviewerNotes ?? undefined,
+      });
+      await this.emailService.send({
+        to,
+        subject,
+        html,
+        text,
+        jobName,
+        entityType: 'Proposal',
+        entityId: data.proposalId,
+      });
     }
   }
 
@@ -465,10 +613,17 @@ export class EmailProcessor extends WorkerHost {
     return [...new Set(emails)];
   }
 
-  private async resolveProposalInfo(proposalId: string): Promise<{ eventTitle: string; companyName: string }> {
+  private async resolveProposalInfo(proposalId: string): Promise<{
+    eventTitle: string;
+    companyName: string;
+    reviewerNotes: string | null;
+    proposedAmount?: number;
+  }> {
     const proposal = await this.prisma.proposal.findUnique({
       where: { id: proposalId },
       select: {
+        proposedAmount: true,
+        notes: true,
         sponsorship: {
           select: {
             company: { select: { name: true } },
@@ -480,6 +635,8 @@ export class EmailProcessor extends WorkerHost {
     return {
       eventTitle: proposal?.sponsorship?.event?.title ?? 'Unknown Event',
       companyName: proposal?.sponsorship?.company?.name ?? 'Unknown Company',
+      reviewerNotes: proposal?.notes ?? null,
+      proposedAmount: proposal?.proposedAmount ? Number(proposal.proposedAmount) : undefined,
     };
   }
 
@@ -589,5 +746,27 @@ export class EmailProcessor extends WorkerHost {
     });
   }
 
-}
+  // ── Deliverables batch sent (all tiers at once) ─────────────────
 
+  private async handleDeliverablesBatchSent(
+    jobName: string,
+    data: DeliverablesBatchSentEmailPayload,
+  ): Promise<void> {
+    const { subject, html, text } = deliverablesBatchSentTemplate({
+      eventName: data.eventName,
+      tiers: data.tiers,
+      eventId: data.eventId,
+    });
+
+    await this.emailService.send({
+      to: data.organizerEmail,
+      subject,
+      html,
+      text,
+      jobName,
+      entityType: 'Event',
+      entityId: data.eventId,
+    });
+  }
+
+}

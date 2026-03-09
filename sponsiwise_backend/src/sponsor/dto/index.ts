@@ -79,3 +79,21 @@ export class CreateProposalDto {
   message?: string;
 }
 
+/**
+ * PATCH /sponsor/proposals/:id/resubmit — revise a requested proposal.
+ */
+export class ResubmitProposalDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  proposedAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  proposedTier?: string;
+
+  @IsOptional()
+  @IsString()
+  message?: string;
+}

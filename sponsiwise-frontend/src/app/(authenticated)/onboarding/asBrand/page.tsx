@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { 
   Building2, 
   Globe, 
@@ -582,8 +581,6 @@ interface Step3VerificationProps {
  * Step 3: Verification Pending Component
  */
 function Step3Verification({ step1Data, step2Data, autoVerified }: Step3VerificationProps) {
-  const router = useRouter();
-
   return (
     <div className="bg-slate-900 p-8 sm:p-12 rounded-[2rem] sm:rounded-[3rem] border border-slate-800 shadow-2xl overflow-hidden relative">
       {/* Background Glow */}
@@ -636,7 +633,7 @@ function Step3Verification({ step1Data, step2Data, autoVerified }: Step3Verifica
 
         {autoVerified ? (
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => window.location.assign('/brand/dashboard')}
             className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all duration-200 mb-6 flex items-center justify-center gap-2"
           >
             Go to Dashboard

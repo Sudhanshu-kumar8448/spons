@@ -5,6 +5,7 @@ import type { IncomingProposal } from "@/lib/types/organizer";
 import { ProposalStatus } from "@/lib/types/sponsor";
 import ProposalStatusBadge from "@/components/shared/ProposalStatusBadge";
 import ReviewProposalButtons from "@/components/organizer/ReviewProposalButtons";
+import { formatInr } from "@/lib/currency";
 
 // ─── Timeline ──────────────────────────────────────────────────────────
 
@@ -51,7 +52,7 @@ function ProposalTimeline({ proposal }: { proposal: IncomingProposal }) {
               </p>
               {step.date && (
                 <p className="text-xs text-gray-500">
-                  {new Date(step.date).toLocaleDateString("en-US", {
+                  {new Date(step.date).toLocaleDateString("en-IN", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
@@ -71,10 +72,8 @@ function ProposalTimeline({ proposal }: { proposal: IncomingProposal }) {
 // ─── Can-review logic ──────────────────────────────────────────────────
 
 function canReview(status: string): boolean {
-  return (
-    status === ProposalStatus.SUBMITTED ||
-    status === ProposalStatus.UNDER_MANAGER_REVIEW
-  );
+  const normalized = status.toUpperCase();
+  return normalized === ProposalStatus.FORWARDED_TO_ORGANIZER;
 }
 
 // ─── Main component ────────────────────────────────────────────────────
@@ -143,7 +142,7 @@ export default async function OrganizerProposalDetail({
                   Amount Offered
                 </dt>
                 <dd className="mt-1 text-xl font-bold text-gray-900">
-                  {proposal.currency} {proposal.amount.toLocaleString()}
+                  {formatInr(proposal.amount)}
                 </dd>
               </div>
               <div>
@@ -158,17 +157,21 @@ export default async function OrganizerProposalDetail({
           </div>
 
           {/* Reviewer notes (shown after review) */}
-          {proposal.reviewer_notes && (
+          {proposal.reviewer_notes && !canReview(proposal.status) && (
             <div
-              className={`rounded-xl p-6 shadow ${proposal.status === ProposalStatus.APPROVED
+              className={`rounded-xl p-6 shadow ${proposal.status.toUpperCase() === ProposalStatus.APPROVED
                   ? "border border-green-200 bg-green-50"
-                  : proposal.status === ProposalStatus.REJECTED
+                  : proposal.status.toUpperCase() === ProposalStatus.REJECTED
                     ? "border border-red-200 bg-red-50"
-                    : "bg-white"
+                    : proposal.status.toUpperCase() === ProposalStatus.REQUEST_CHANGES
+                      ? "border border-amber-200 bg-amber-50"
+                      : "bg-white"
                 }`}
             >
               <h2 className="text-lg font-semibold text-gray-900">
-                Your Review Notes
+                {proposal.status.toUpperCase() === ProposalStatus.REQUEST_CHANGES
+                  ? "Changes Requested"
+                  : "Your Review Notes"}
               </h2>
               <p className="mt-3 whitespace-pre-line text-sm text-gray-700">
                 {proposal.reviewer_notes}
@@ -176,13 +179,35 @@ export default async function OrganizerProposalDetail({
             </div>
           )}
 
+          {/* Approved deal info */}
+          {proposal.status.toUpperCase() === ProposalStatus.APPROVED && (
+            <div className="rounded-xl border border-green-300 bg-green-50 p-6 shadow">
+              <h2 className="text-lg font-semibold text-green-800">
+                Deal Finalized
+              </h2>
+              <p className="mt-2 text-sm text-green-700">
+                This proposal has been approved and the sponsorship deal is now active.
+                The sponsorship tier slot has been reserved.
+              </p>
+            </div>
+          )}
+
           {/* Review form (only for reviewable proposals) */}
           {canReview(proposal.status) && (
             <div className="rounded-xl border-2 border-green-200 bg-green-50 p-6">
-              <h2 className="mb-4 text-lg font-semibold text-gray-900">
+              <h2 className="mb-2 text-lg font-semibold text-gray-900">
                 Review This Proposal
               </h2>
-              <ReviewProposalButtons proposalId={proposal.id} />
+              <p className="mb-4 text-sm text-gray-600">
+                Approve to finalize the deal (tier slot will be reserved), reject to decline,
+                or request changes from the sponsor.
+              </p>
+              <ReviewProposalButtons
+                proposalId={proposal.id}
+                currentAmount={proposal.amount}
+                currentTier={proposal.title || proposal.proposedTier}
+                currentNotes={proposal.reviewer_notes}
+              />
             </div>
           )}
         </div>

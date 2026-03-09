@@ -1,8 +1,11 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createProposal, withdrawProposal } from "@/lib/sponsor-api";
-import type { CreateProposalPayload } from "@/lib/types/sponsor";
+import { createProposal, withdrawProposal, resubmitProposal } from "@/lib/sponsor-api";
+import type {
+  CreateProposalPayload,
+  ResubmitProposalPayload,
+} from "@/lib/types/sponsor";
 
 // ─── Create proposal action ───────────────────────────────────────────
 
@@ -43,14 +46,10 @@ export async function createProposalAction(
     message,
   };
 
+  let proposal;
   try {
-    const proposal = await createProposal(payload);
-    redirect(`/brand/proposals/${proposal.id}`);
-    return { success: true, error: null, proposalId: proposal.id };
+    proposal = await createProposal(payload);
   } catch (err) {
-    if (err instanceof Error && err.message === "NEXT_REDIRECT") {
-      throw err;
-    }
     return {
       success: false,
       error:
@@ -60,6 +59,8 @@ export async function createProposalAction(
       proposalId: null,
     };
   }
+
+  redirect(`/brand/proposals/${proposal.id}`);
 }
 
 // ─── Withdraw proposal action ──────────────────────────────────────────
@@ -81,12 +82,7 @@ export async function withdrawProposalAction(
 
   try {
     await withdrawProposal(id);
-    redirect(`/brand/proposals/${id}`);
-    return { success: true, error: null };
   } catch (err) {
-    if (err instanceof Error && err.message === "NEXT_REDIRECT") {
-      throw err;
-    }
     return {
       success: false,
       error:
@@ -95,4 +91,52 @@ export async function withdrawProposalAction(
           : "Failed to withdraw proposal. Please try again.",
     };
   }
+
+  redirect(`/brand/proposals/${id}`);
+}
+
+// ─── Resubmit proposal action ──────────────────────────────────────────
+
+export interface ResubmitProposalState {
+  success: boolean;
+  error: string | null;
+}
+
+export async function resubmitProposalAction(
+  _prev: ResubmitProposalState,
+  formData: FormData,
+): Promise<ResubmitProposalState> {
+  const id = formData.get("proposal_id") as string;
+  const amountRaw = formData.get("amount") as string;
+  const proposedTier = (formData.get("proposed_tier") as string)?.trim() || undefined;
+  const message = (formData.get("message") as string)?.trim() || undefined;
+
+  if (!id) {
+    return { success: false, error: "Proposal ID is required." };
+  }
+
+  const proposedAmount = amountRaw ? Number(amountRaw) : undefined;
+  if (proposedAmount !== undefined && proposedAmount <= 0) {
+    return { success: false, error: "Amount must be greater than zero." };
+  }
+
+  const payload: ResubmitProposalPayload = {
+    proposedAmount,
+    proposedTier,
+    message,
+  };
+
+  try {
+    await resubmitProposal(id, payload);
+  } catch (err) {
+    return {
+      success: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to resubmit proposal. Please try again.",
+    };
+  }
+
+  redirect(`/brand/proposals/${id}`);
 }

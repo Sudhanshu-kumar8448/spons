@@ -55,7 +55,7 @@ function ProposalTimeline({ proposal }: { proposal: any }) {
                             </p>
                             {step.date && (
                                 <p className="text-xs text-gray-500">
-                                    {new Date(step.date).toLocaleDateString("en-US", {
+                                    {new Date(step.date).toLocaleDateString("en-IN", {
                                         month: "short",
                                         day: "numeric",
                                         year: "numeric",

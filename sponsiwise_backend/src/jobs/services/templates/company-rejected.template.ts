@@ -9,7 +9,7 @@ export interface CompanyRejectedTemplateData {
 
 export function companyRejectedTemplate(data: CompanyRejectedTemplateData): { html: string; text: string; subject: string } {
   const base = data.dashboardUrl || process.env.FRONTEND_URL || 'https://sponsiwise.com';
-  const profileUrl = `${base}/brand/profile`;
+  const profileUrl = `${base}/brand/setting`;
 
   const html = emailLayout(
     `<div style="padding:40px 32px;">

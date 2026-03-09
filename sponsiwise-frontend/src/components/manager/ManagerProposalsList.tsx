@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchManagerProposals } from "@/lib/manager-api";
 import { ProposalStatus } from "@/lib/types/sponsor";
 import ProposalStatusBadge from "@/components/shared/ProposalStatusBadge";
+import { formatInr } from "@/lib/currency";
 
 // ─── Filter tabs ───────────────────────────────────────────────────────
 
@@ -180,13 +181,13 @@ export default async function ManagerProposalsList({
                                             {p.sponsorship.event.title}
                                         </td>
                                         <td className="px-6 py-4 text-sm font-semibold text-green-600">
-                                            ${Number(p.proposedAmount).toLocaleString()}
+                                            {formatInr(Number(p.proposedAmount))}
                                         </td>
                                         <td className="px-6 py-4">
                                             <ProposalStatusBadge status={p.status} />
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-500">
-                                            {new Date(p.createdAt).toLocaleDateString("en-US", {
+                                            {new Date(p.createdAt).toLocaleDateString("en-IN", {
                                                 month: "short",
                                                 day: "numeric",
                                                 year: "numeric",

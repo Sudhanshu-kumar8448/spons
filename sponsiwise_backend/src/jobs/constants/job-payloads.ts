@@ -17,6 +17,20 @@ export interface UserRegisteredEmailPayload {
   timestamp: string;
 }
 
+export interface VerifyEmailPayload {
+  userId: string;
+  email: string;
+  verificationToken: string;
+  timestamp: string;
+}
+
+export interface ResetPasswordEmailPayload {
+  userId: string;
+  email: string;
+  resetToken: string;
+  timestamp: string;
+}
+
 // ── Interest expressed payloads ──────────────────────────────────────
 
 export interface InterestExpressedEmailPayload {
@@ -93,5 +107,14 @@ export interface DeliverablesFormSentEmailPayload {
   tierType: string;
   organizerEmail: string;
   organizerUserId: string;
+  timestamp: string;
+}
+
+export interface DeliverablesBatchSentEmailPayload {
+  eventId: string;
+  eventName: string;
+  organizerEmail: string;
+  organizerUserId: string;
+  tiers: Array<{ formId: string; tierId: string; tierType: string }>;
   timestamp: string;
 }

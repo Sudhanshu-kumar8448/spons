@@ -104,6 +104,7 @@ export interface OrganizerEvent {
     organizerId: string;
     title: string;
     description?: string | null;
+    edition?: string | null;
     location?: string | null;
     venue?: string | null;
     expectedFootfall: number;
@@ -188,8 +189,8 @@ export interface IncomingProposalsResponse {
 // ─── Review Proposal ───────────────────────────────────────────────────
 
 export interface ReviewProposalPayload {
-    decision?: "APPROVED" | "REJECTED";
-    action?: "approve" | "reject";
+    decision?: "APPROVED" | "REJECTED" | "REQUEST_CHANGES";
+    action?: "approve" | "reject" | "request_changes";
     notes?: string;
     reviewer_notes?: string;
 }

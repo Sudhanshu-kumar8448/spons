@@ -55,7 +55,7 @@ const STATUS_TABS = [
 /* ─── Helpers ────────────────────────────────────────────────────────── */
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-US", {
+  return new Date(dateStr).toLocaleDateString("en-IN", {
     month: "short",
     day: "numeric",
     year: "numeric",

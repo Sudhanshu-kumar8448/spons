@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { fetchVerifiableEventById } from "@/lib/manager-api";
+import { authFetch } from "@/lib/auth-fetch";
 import { verifyEventAction } from "@/app/(authenticated)/manager/_actions";
 import {
   VerificationStatus,
@@ -12,13 +13,43 @@ import {
 } from "@/lib/types/manager";
 import VerificationStatusBadge from "@/components/shared/VerificationStatusBadge";
 import VerifyRejectButtons from "@/components/manager/VerifyRejectButtons";
-import { ManageDeliverablesButton, TierCompareButton } from "@/components/manager/DeliverableManager";
+import { ManageDeliverablesButton, TierCompareButton, SendAllDeliverablesButton } from "@/components/manager/DeliverableManager";
+
+interface PresignedDownloadResponse {
+  downloadUrl: string;
+  expiresIn: number;
+}
+
+function extractStorageKey(fileUrl: string): string | null {
+  try {
+    const url = new URL(fileUrl);
+    const path = decodeURIComponent(url.pathname).replace(/^\/+/, "");
+    if (!path) return null;
+
+    // Path-style MinIO URL: /bucket/key
+    const parts = path.split("/");
+    if (
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
+      parts.length > 1
+    ) {
+      return parts.slice(1).join("/");
+    }
+
+    if (path.startsWith("sponsiwise/")) {
+      return path.slice("sponsiwise/".length);
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 // Helper to format currency
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'INR',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
@@ -43,11 +74,11 @@ function getAgeBracketLabel(bracket: AgeBracket): string {
 
 function getIncomeBracketLabel(bracket: IncomeBracket): string {
   const map: Record<IncomeBracket, string> = {
-    BELOW_2L: 'Below ₹2L',
-    BETWEEN_2L_5L: '₹2L – ₹5L',
-    BETWEEN_5L_10L: '₹5L – ₹10L',
+    BELOW_10L: 'Below ₹10L',
     BETWEEN_10L_25L: '₹10L – ₹25L',
-    ABOVE_25L: 'Above ₹25L',
+    BETWEEN_25L_50L: '₹25L – ₹50L',
+    BETWEEN_50L_1CR: '₹50L – ₹1Cr',
+    ABOVE_1CR: 'Above ₹1Cr',
   };
   return map[bracket] ?? bracket;
 }
@@ -138,7 +169,7 @@ function AudienceProfileSection({ profile }: { profile: AudienceProfile }) {
             {profile.regions.map((r) => (
               <DistributionRow
                 key={r.id}
-                label={`${r.city}, ${r.state}`}
+                label={`${r.stateOrUT}, ${r.country}`}
                 percentage={r.percentage}
                 color="bg-cyan-500"
               />
@@ -183,18 +214,37 @@ export default async function EventVerificationDetail({
     ? (verificationStatus as VerificationStatus)
     : VerificationStatus.PENDING;
 
-  const startDate = new Date(event.start_date).toLocaleDateString("en-US", {
+  const startDate = new Date(event.start_date).toLocaleDateString("en-IN", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
   });
-  const endDate = new Date(event.end_date).toLocaleDateString("en-US", {
+  const endDate = new Date(event.end_date).toLocaleDateString("en-IN", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
   });
+
+  let pptDeckDownloadUrl: string | null = null;
+  if (event.ppt_deck_url) {
+    const key = extractStorageKey(event.ppt_deck_url);
+    if (key) {
+      try {
+        const result = await authFetch<PresignedDownloadResponse>(
+          "/upload/presigned-url/download",
+          {
+            method: "POST",
+            body: JSON.stringify({ key }),
+          },
+        );
+        pptDeckDownloadUrl = result.downloadUrl;
+      } catch {
+        pptDeckDownloadUrl = null;
+      }
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -246,28 +296,40 @@ export default async function EventVerificationDetail({
               <p className="mt-1 text-sm text-blue-100/80">
                 The organizer has uploaded a presentation deck for this event.
               </p>
-              <a
-                href={event.ppt_deck_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
-              >
-                📥 Download PPT Deck
-              </a>
+              {pptDeckDownloadUrl ? (
+                <a
+                  href={pptDeckDownloadUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+                >
+                  📥 Download PPT Deck
+                </a>
+              ) : (
+                <p className="mt-3 text-sm text-blue-200/80">
+                  Secure download link is currently unavailable.
+                </p>
+              )}
             </div>
           )}
 
           {/* Sponsorship Tiers Section */}
           {event.sponsorship_tiers && event.sponsorship_tiers.length > 0 && (
             <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-semibold text-white">
                   Sponsorship Tiers
                 </h2>
-                <TierCompareButton
-                  eventId={event.id}
-                  tiers={event.sponsorship_tiers.map((t) => ({ id: t.id, tier_type: getTierDisplayName(t.tier_type) }))}
-                />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <SendAllDeliverablesButton
+                    eventId={event.id}
+                    hasDraftForms={event.sponsorship_tiers.some(t => t.deliverable_form_status === 'DRAFT')}
+                  />
+                  <TierCompareButton
+                    eventId={event.id}
+                    tiers={event.sponsorship_tiers.map((t) => ({ id: t.id, tier_type: getTierDisplayName(t.tier_type) }))}
+                  />
+                </div>
               </div>
               <div className="space-y-4">
                 {event.sponsorship_tiers.map((tier) => (
@@ -407,7 +469,7 @@ export default async function EventVerificationDetail({
                 <dt className="font-medium text-slate-300">Expected Footfall</dt>
                 <dd className="text-slate-100">
                   {event.expected_footfall
-                    ? event.expected_footfall.toLocaleString()
+                    ? event.expected_footfall.toLocaleString("en-IN")
                     : "N/A"}
                 </dd>
               </div>
@@ -415,6 +477,12 @@ export default async function EventVerificationDetail({
                 <div>
                   <dt className="font-medium text-slate-300">Category</dt>
                   <dd className="text-slate-100">{event.category}</dd>
+                </div>
+              )}
+              {event.edition && (
+                <div>
+                  <dt className="font-medium text-slate-300">Edition</dt>
+                  <dd className="text-slate-100">{event.edition.replace(/_/g, ' ')}</dd>
                 </div>
               )}
             </dl>
@@ -495,7 +563,7 @@ export default async function EventVerificationDetail({
               <div>
                 <dt className="text-slate-400">Created</dt>
                 <dd className="font-medium text-slate-100">
-                  {new Date(event.created_at).toLocaleDateString("en-US", {
+                  {new Date(event.created_at).toLocaleDateString("en-IN", {
                     month: "long",
                     day: "numeric",
                     year: "numeric",
@@ -505,7 +573,7 @@ export default async function EventVerificationDetail({
               <div>
                 <dt className="text-slate-400">Last updated</dt>
                 <dd className="font-medium text-slate-100">
-                  {new Date(event.updated_at).toLocaleDateString("en-US", {
+                  {new Date(event.updated_at).toLocaleDateString("en-IN", {
                     month: "long",
                     day: "numeric",
                     year: "numeric",

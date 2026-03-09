@@ -8,7 +8,7 @@ export interface WelcomeTemplateData {
 
 export function welcomeTemplate(data: WelcomeTemplateData): { html: string; text: string; subject: string } {
   const name = data.userName || data.userEmail.split('@')[0];
-  const dashboardUrl = data.dashboardUrl || process.env.FRONTEND_URL || 'https://sponsiwise.com/dashboard';
+  const dashboardUrl = data.dashboardUrl || `${process.env.FRONTEND_URL || 'https://sponsiwise.com'}/onboarding`;
 
   const html = emailLayout(
     `<div style="padding:40px 32px;">

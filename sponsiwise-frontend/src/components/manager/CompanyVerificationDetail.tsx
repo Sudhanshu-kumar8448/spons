@@ -153,7 +153,7 @@ export default function CompanyVerificationDetail({
 
   // Format date helper
   function formatDate(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString("en-US", {
+    return new Date(dateStr).toLocaleDateString("en-IN", {
       month: "long",
       day: "numeric",
       year: "numeric",
@@ -161,7 +161,7 @@ export default function CompanyVerificationDetail({
   }
 
   function formatDateTime(dateStr: string) {
-    return new Date(dateStr).toLocaleString("en-US", {
+    return new Date(dateStr).toLocaleString("en-IN", {
       month: "short",
       day: "numeric",
       year: "numeric",

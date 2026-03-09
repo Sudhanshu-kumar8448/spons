@@ -4,6 +4,7 @@ import { fetchIncomingProposals } from "@/lib/organizer-api";
 import type { IncomingProposal } from "@/lib/types/organizer";
 import { ProposalStatus } from "@/lib/types/sponsor";
 import ProposalStatusBadge from "@/components/shared/ProposalStatusBadge";
+import { formatInr } from "@/lib/currency";
 
 // ─── Filter tabs ───────────────────────────────────────────────────────
 
@@ -11,9 +12,14 @@ const statusFilters: { label: string; value: string }[] = [
   { label: "All", value: "" },
   { label: "Submitted", value: ProposalStatus.SUBMITTED },
   { label: "Under Review", value: ProposalStatus.UNDER_MANAGER_REVIEW },
+  { label: "Forwarded", value: ProposalStatus.FORWARDED_TO_ORGANIZER },
   { label: "Approved", value: ProposalStatus.APPROVED },
   { label: "Rejected", value: ProposalStatus.REJECTED },
 ];
+
+function isForwardedToOrganizer(status: string): boolean {
+  return status.toUpperCase() === ProposalStatus.FORWARDED_TO_ORGANIZER;
+}
 
 // ─── Empty / error states ──────────────────────────────────────────────
 
@@ -148,9 +154,6 @@ export default async function OrganizerProposalsList({
                     Proposal
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Sponsor
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                     Event
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -158,9 +161,6 @@ export default async function OrganizerProposalsList({
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                     Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Received
                   </th>
                 </tr>
               </thead>
@@ -171,47 +171,27 @@ export default async function OrganizerProposalsList({
                     className="hover:bg-slate-800/50 transition-colors"
                   >
                     <td className="px-6 py-4">
-                      <Link
-                        href={`/organizer/events/proposals/${p.id}`}
-                        className="text-sm font-medium text-blue-400 hover:text-sky-300 transition-colors"
-                      >
-                        {p.title}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        {p.sponsor.logo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={p.sponsor.logo_url}
-                            alt={p.sponsor.name}
-                            className="h-6 w-6 rounded-full object-cover"
-                          />
-                        ) : (
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-slate-300">
-                            {p.sponsor.name.charAt(0)}
-                          </span>
-                        )}
-                        <span className="text-sm text-slate-300">
-                          {p.sponsor.name}
+                      {isForwardedToOrganizer(p.status) ? (
+                        <Link
+                          href={`/organizer/events/proposals/${p.id}`}
+                          className="text-sm font-medium text-blue-400 hover:text-sky-300 transition-colors"
+                        >
+                          {p.title}
+                        </Link>
+                      ) : (
+                        <span className="text-sm font-medium text-slate-400">
+                          {p.title}
                         </span>
-                      </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-400">
                       {p.event.title}
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-white">
-                      {p.currency} {p.amount.toLocaleString()}
+                      {formatInr(p.amount)}
                     </td>
                     <td className="px-6 py-4">
                       <ProposalStatusBadge status={p.status} />
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">
-                      {new Date(p.created_at).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
                     </td>
                   </tr>
                 ))}

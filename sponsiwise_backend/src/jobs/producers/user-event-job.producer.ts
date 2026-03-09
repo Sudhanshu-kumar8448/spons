@@ -7,13 +7,24 @@ import {
   USER_REGISTERED_EVENT,
   InterestExpressedEvent,
   INTEREST_EXPRESSED_EVENT,
+  EmailVerificationRequestedEvent,
+  EMAIL_VERIFICATION_REQUESTED_EVENT,
+  PasswordResetRequestedEvent,
+  PASSWORD_RESET_REQUESTED_EVENT,
 } from '../../common/events';
 import {
   QUEUE_EMAIL,
   JOB_EMAIL_USER_REGISTERED,
   JOB_EMAIL_INTEREST_EXPRESSED,
+  JOB_EMAIL_VERIFY_EMAIL,
+  JOB_EMAIL_RESET_PASSWORD,
 } from '../constants';
-import type { UserRegisteredEmailPayload, InterestExpressedEmailPayload } from '../constants';
+import type {
+  UserRegisteredEmailPayload,
+  InterestExpressedEmailPayload,
+  VerifyEmailPayload,
+  ResetPasswordEmailPayload,
+} from '../constants';
 
 const DEFAULT_JOB_OPTS = {
   attempts: 3,
@@ -45,7 +56,7 @@ export class UserEventJobProducer {
       timestamp: event.timestamp,
     };
 
-    const jobId = `${JOB_EMAIL_USER_REGISTERED}:${event.userId}`;
+    const jobId = `${JOB_EMAIL_USER_REGISTERED}--${event.userId}`;
 
     await this.emailQueue.add(JOB_EMAIL_USER_REGISTERED, payload, {
       ...DEFAULT_JOB_OPTS,
@@ -53,6 +64,48 @@ export class UserEventJobProducer {
     });
 
     this.logger.log(`Enqueued welcome email job for user=${event.userId}`);
+  }
+
+  // ── email.verification.requested ─────────────────────────────────
+
+  @OnEvent(EMAIL_VERIFICATION_REQUESTED_EVENT)
+  async onEmailVerificationRequested(event: EmailVerificationRequestedEvent): Promise<void> {
+    const payload: VerifyEmailPayload = {
+      userId: event.userId,
+      email: event.email,
+      verificationToken: event.verificationToken,
+      timestamp: event.timestamp,
+    };
+
+    const jobId = `${JOB_EMAIL_VERIFY_EMAIL}--${event.userId}--${event.timestamp}`;
+
+    await this.emailQueue.add(JOB_EMAIL_VERIFY_EMAIL, payload, {
+      ...DEFAULT_JOB_OPTS,
+      jobId,
+    });
+
+    this.logger.log(`Enqueued verify-email job for user=${event.userId}`);
+  }
+
+  // ── password.reset.requested ─────────────────────────────────────
+
+  @OnEvent(PASSWORD_RESET_REQUESTED_EVENT)
+  async onPasswordResetRequested(event: PasswordResetRequestedEvent): Promise<void> {
+    const payload: ResetPasswordEmailPayload = {
+      userId: event.userId,
+      email: event.email,
+      resetToken: event.resetToken,
+      timestamp: event.timestamp,
+    };
+
+    const jobId = `${JOB_EMAIL_RESET_PASSWORD}--${event.userId}--${event.timestamp}`;
+
+    await this.emailQueue.add(JOB_EMAIL_RESET_PASSWORD, payload, {
+      ...DEFAULT_JOB_OPTS,
+      jobId,
+    });
+
+    this.logger.log(`Enqueued reset-password email job for user=${event.userId}`);
   }
 
   // ── interest.expressed ───────────────────────────────────────────
@@ -67,7 +120,7 @@ export class UserEventJobProducer {
       timestamp: event.timestamp,
     };
 
-    const jobId = `${JOB_EMAIL_INTEREST_EXPRESSED}:${event.sponsorshipId}`;
+    const jobId = `${JOB_EMAIL_INTEREST_EXPRESSED}--${event.sponsorshipId}`;
 
     await this.emailQueue.add(JOB_EMAIL_INTEREST_EXPRESSED, payload, {
       ...DEFAULT_JOB_OPTS,

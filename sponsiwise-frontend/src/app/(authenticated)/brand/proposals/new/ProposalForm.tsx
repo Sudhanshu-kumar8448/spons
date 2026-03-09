@@ -6,6 +6,7 @@ import {
   type CreateProposalState,
 } from "../_actions";
 import type { SponsorshipTier } from "@/lib/types/sponsor";
+import { formatInr } from "@/lib/currency";
 
 interface ProposalFormProps {
   eventId: string;
@@ -79,7 +80,7 @@ export default function ProposalForm({
               <option value="" disabled>Select a tier…</option>
               {availableTiers.map((tier) => (
                 <option key={tier.id} value={tier.id}>
-                  {getTierDisplayName(tier.tierType)} - ${tier.askingPrice.toLocaleString()} ({tier.availableSlots} slots left)
+                  {getTierDisplayName(tier.tierType)} - {formatInr(tier.askingPrice)} ({tier.availableSlots} slots left)
                 </option>
               ))}
             </select>

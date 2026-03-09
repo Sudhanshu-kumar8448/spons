@@ -5,12 +5,18 @@ import { Queue } from 'bullmq';
 import {
   DeliverablesFormSentEvent,
   DELIVERABLES_FORM_SENT_EVENT,
+  DeliverablesBatchSentEvent,
+  DELIVERABLES_BATCH_SENT_EVENT,
 } from '../../common/events';
 import {
   QUEUE_EMAIL,
   JOB_EMAIL_DELIVERABLES_FORM_SENT,
+  JOB_EMAIL_DELIVERABLES_BATCH_SENT,
 } from '../constants';
-import type { DeliverablesFormSentEmailPayload } from '../constants';
+import type {
+  DeliverablesFormSentEmailPayload,
+  DeliverablesBatchSentEmailPayload,
+} from '../constants';
 
 const DEFAULT_JOB_OPTS = {
   attempts: 3,
@@ -44,7 +50,7 @@ export class DeliverableJobProducer {
       timestamp: event.timestamp,
     };
 
-    const jobId = `${JOB_EMAIL_DELIVERABLES_FORM_SENT}:${event.formId}`;
+    const jobId = `${JOB_EMAIL_DELIVERABLES_FORM_SENT}--${event.formId}`;
 
     await this.emailQueue.add(JOB_EMAIL_DELIVERABLES_FORM_SENT, payload, {
       ...DEFAULT_JOB_OPTS,
@@ -52,5 +58,26 @@ export class DeliverableJobProducer {
     });
 
     this.logger.log(`Enqueued deliverables-form-sent email for form=${event.formId}`);
+  }
+
+  @OnEvent(DELIVERABLES_BATCH_SENT_EVENT)
+  async onDeliverablesBatchSent(event: DeliverablesBatchSentEvent): Promise<void> {
+    const payload: DeliverablesBatchSentEmailPayload = {
+      eventId: event.eventId,
+      eventName: event.eventName,
+      organizerEmail: event.organizerEmail,
+      organizerUserId: event.organizerUserId,
+      tiers: event.tiers,
+      timestamp: event.timestamp,
+    };
+
+    const jobId = `${JOB_EMAIL_DELIVERABLES_BATCH_SENT}--${event.eventId}--${Date.now()}`;
+
+    await this.emailQueue.add(JOB_EMAIL_DELIVERABLES_BATCH_SENT, payload, {
+      ...DEFAULT_JOB_OPTS,
+      jobId,
+    });
+
+    this.logger.log(`Enqueued deliverables-batch-sent email for event=${event.eventId} (${event.tiers.length} tiers)`);
   }
 }

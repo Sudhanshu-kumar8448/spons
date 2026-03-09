@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, Body, UseGuards, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Query, Body, UseGuards, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { AuthGuard, RoleGuard } from '../common/guards';
 import { Roles, CurrentUser } from '../common/decorators';
@@ -9,6 +9,7 @@ import {
   SponsorProposalsQueryDto,
   SponsorSponsorshipsQueryDto,
   CreateProposalDto,
+  ResubmitProposalDto,
 } from './dto';
 
 /**
@@ -86,7 +87,20 @@ export class SponsorController {
     @Body() dto: CreateProposalDto,
     @CurrentUser() user: JwtPayloadWithClaims,
   ) {
-    return this.sponsorService.createProposal(user.company_id, dto);
+    return this.sponsorService.createProposal(user.company_id, dto, user.sub);
+  }
+
+  /**
+   * PATCH /sponsor/proposals/:id/resubmit
+   */
+  @Patch('proposals/:id/resubmit')
+  @HttpCode(HttpStatus.OK)
+  async resubmitProposal(
+    @Param('id', ParseUUIDPipe) proposalId: string,
+    @Body() dto: ResubmitProposalDto,
+    @CurrentUser() user: JwtPayloadWithClaims,
+  ) {
+    return this.sponsorService.resubmitProposal(user.company_id, proposalId, dto, user.sub);
   }
 
   /**
@@ -111,5 +125,16 @@ export class SponsorController {
   ) {
     return this.sponsorService.getSponsorships(user.company_id, query);
   }
-}
 
+  /**
+   * POST /sponsor/events/:id/express-interest
+   */
+  @Post('events/:id/express-interest')
+  @HttpCode(HttpStatus.OK)
+  async expressInterest(
+    @Param('id', ParseUUIDPipe) eventId: string,
+    @CurrentUser() user: JwtPayloadWithClaims,
+  ) {
+    return this.sponsorService.expressInterest(user.company_id, eventId, user.sub);
+  }
+}

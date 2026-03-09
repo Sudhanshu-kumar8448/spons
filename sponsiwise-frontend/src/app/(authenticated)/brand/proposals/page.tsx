@@ -11,6 +11,7 @@ import { fetchSponsorProposals } from "@/lib/sponsor-api";
 import type { Proposal } from "@/lib/types/sponsor";
 import { ProposalStatus } from "@/lib/types/sponsor";
 import ProposalStatusBadge from "@/components/shared/ProposalStatusBadge";
+import { formatInr } from "@/lib/currency";
 
 // ─── Filter tabs ───────────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ const statusFilters: { label: string; value: string }[] = [
   { label: "Draft", value: ProposalStatus.DRAFT },
   { label: "Submitted", value: ProposalStatus.SUBMITTED },
   { label: "Under Review", value: ProposalStatus.UNDER_MANAGER_REVIEW },
+  { label: "Changes Requested", value: ProposalStatus.REQUEST_CHANGES },
   { label: "Approved", value: ProposalStatus.APPROVED },
   { label: "Rejected", value: ProposalStatus.REJECTED },
   { label: "Withdrawn", value: ProposalStatus.WITHDRAWN },
@@ -58,6 +60,10 @@ function ErrorState({ message }: { message: string }) {
       <p className="mt-3 text-sm text-red-300">{message}</p>
     </div>
   );
+}
+
+function isRequestChanges(status: string): boolean {
+  return status.toUpperCase() === ProposalStatus.REQUEST_CHANGES;
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────
@@ -154,6 +160,7 @@ export default async function BrandProposalsPage({
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Event</th>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Amount</th>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Action</th>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Created</th>
                   </tr>
                 </thead>
@@ -170,11 +177,23 @@ export default async function BrandProposalsPage({
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-400">{p.event.title}</td>
                       <td className="px-6 py-4 text-sm font-medium text-white">
-                        {p.currency} {p.amount.toLocaleString()}
+                        {formatInr(p.amount)}
                       </td>
                       <td className="px-6 py-4"><ProposalStatusBadge status={p.status} /></td>
+                      <td className="px-6 py-4">
+                        {isRequestChanges(p.status) ? (
+                          <Link
+                            href={`/brand/proposals/${p.id}`}
+                            className="inline-flex items-center rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 transition-colors hover:bg-amber-500/25"
+                          >
+                            Reconsider &amp; Resubmit
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-slate-600">-</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-sm text-slate-500">
-                        {new Date(p.created_at).toLocaleDateString("en-US", {
+                        {new Date(p.created_at).toLocaleDateString("en-IN", {
                           month: "short",
                           day: "numeric",
                           year: "numeric",

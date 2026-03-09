@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -8,8 +8,15 @@ import type { JwtPayload } from './interfaces';
 import type { JwtConfig } from '../common/config';
 import type { StringValue } from 'ms';
 import * as bcrypt from 'bcrypt';
-import { createHash } from 'crypto';
-import { UserRegisteredEvent, USER_REGISTERED_EVENT } from '../common/events';
+import { createHash, randomBytes } from 'crypto';
+import {
+  UserRegisteredEvent,
+  USER_REGISTERED_EVENT,
+  EmailVerificationRequestedEvent,
+  EMAIL_VERIFICATION_REQUESTED_EVENT,
+  PasswordResetRequestedEvent,
+  PASSWORD_RESET_REQUESTED_EVENT,
+} from '../common/events';
 
 /**
  * AuthService handles all authentication-related business logic.
@@ -44,6 +51,7 @@ export class AuthService {
         companyId: true,
         organizerId: true,
         isActive: true,
+        emailVerified: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -80,11 +88,21 @@ export class AuthService {
     // Hash password
     const hashedPassword = await bcrypt.hash(dto.password, this.SALT_ROUNDS);
 
-    // Create user
+    // Generate email verification token
+    const rawVerificationToken = randomBytes(32).toString('hex');
+    const hashedVerificationToken = this.hashToken(rawVerificationToken);
+    const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Create user (unverified by default)
     const user = await this.prisma.user.create({
       data: {
         email: dto.email.toLowerCase(),
         password: hashedPassword,
+        emailVerified: false,
+        emailVerificationToken: hashedVerificationToken,
+        emailVerificationExpiry: verificationExpiry,
+        emailVerificationSentCount: 1,
+        emailVerificationLastSentAt: new Date(),
         // role defaults to USER in schema
         // isActive defaults to true in schema
       },
@@ -92,10 +110,20 @@ export class AuthService {
 
     this.logger.log(`User ${user.id} registered`);
 
-    // Emit domain event — triggers welcome email via BullMQ queue
+    // Emit welcome email event
     this.eventEmitter.emit(
       USER_REGISTERED_EVENT,
       new UserRegisteredEvent({ userId: user.id, email: user.email }),
+    );
+
+    // Emit email verification event — triggers verification email with link
+    this.eventEmitter.emit(
+      EMAIL_VERIFICATION_REQUESTED_EVENT,
+      new EmailVerificationRequestedEvent({
+        userId: user.id,
+        email: user.email,
+        verificationToken: rawVerificationToken,
+      }),
     );
 
     // Generate tokens for auto-login (mirrors login flow)
@@ -109,11 +137,20 @@ export class AuthService {
   }
 
   /**
-   * Remove password from user object for safe responses.
+   * Remove sensitive fields from user object for API responses.
    */
-  private excludePassword<T extends { password: string }>(user: T): Omit<T, 'password'> {
-    const { password: _, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+  private excludePassword<T extends { password: string }>(user: T): Omit<T, 'password' | 'emailVerificationToken' | 'emailVerificationExpiry' | 'emailVerificationSentCount' | 'emailVerificationLastSentAt' | 'passwordResetToken' | 'passwordResetExpiry'> {
+    const {
+      password: _pw,
+      emailVerificationToken: _evt,
+      emailVerificationExpiry: _eve,
+      emailVerificationSentCount: _evsc,
+      emailVerificationLastSentAt: _evla,
+      passwordResetToken: _prt,
+      passwordResetExpiry: _pre,
+      ...safeUser
+    } = user as any;
+    return safeUser;
   }
 
   /**
@@ -252,12 +289,14 @@ export class AuthService {
     role: any;
     companyId: string | null;
     organizerId: string | null;
+    emailVerified: boolean;
   }): Promise<{ accessToken: string; refreshToken: string }> {
     const payload: JwtPayload = {
       sub: user.id,
       role: user.role,
       ...(user.companyId && { company_id: user.companyId }),
       ...(user.organizerId && { organizer_id: user.organizerId }),
+      email_verified: user.emailVerified,
     };
 
     const accessToken = this.jwtService.sign(payload);
@@ -409,5 +448,281 @@ export class AuthService {
     return { message: 'Password changed successfully. All sessions have been revoked.' };
   }
 
-  // Future: validateUser()
+  // ─── EMAIL VERIFICATION ──────────────────────────────────
+
+  /**
+   * Verify a user's email using the token from the email link.
+   * Marks emailVerified = true, clears token fields.
+   */
+  async verifyEmail(token: string): Promise<{ message: string }> {
+    const tokenHash = this.hashToken(token);
+
+    const user = await this.prisma.user.findFirst({
+      where: { emailVerificationToken: tokenHash },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Invalid or expired verification link');
+    }
+
+    if (user.emailVerified) {
+      return { message: 'Email is already verified' };
+    }
+
+    if (user.emailVerificationExpiry && new Date() > user.emailVerificationExpiry) {
+      throw new BadRequestException('Verification link has expired. Please request a new one.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationExpiry: null,
+        emailVerificationSentCount: 0,
+        emailVerificationLastSentAt: null,
+      },
+    });
+
+    this.logger.log(`Email verified for user ${user.id}`);
+    return { message: 'Email verified successfully' };
+  }
+
+  /**
+   * Resend email verification link for a given user.
+   * Enforces:
+   *  - 120-second cooldown between sends
+   *  - Max 3 resend attempts per 24-hour window
+   */
+  async resendVerificationEmail(userId: string): Promise<{
+    message: string;
+    attemptsRemaining: number;
+    cooldownSeconds: number;
+  }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (user.emailVerified) {
+      return { message: 'Email is already verified', attemptsRemaining: 0, cooldownSeconds: 0 };
+    }
+
+    const now = new Date();
+    const COOLDOWN_MS = 120 * 1000; // 2 minutes
+    const MAX_RESENDS = 3;
+    const WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+    let currentCount = user.emailVerificationSentCount;
+    const lastSentAt = user.emailVerificationLastSentAt;
+
+    // Reset the counter if the 24-hour window has elapsed
+    if (lastSentAt && now.getTime() - lastSentAt.getTime() >= WINDOW_MS) {
+      currentCount = 0;
+    }
+
+    // Check 120-second cooldown
+    if (lastSentAt) {
+      const elapsedMs = now.getTime() - lastSentAt.getTime();
+      if (elapsedMs < COOLDOWN_MS) {
+        const remainingSec = Math.ceil((COOLDOWN_MS - elapsedMs) / 1000);
+        throw new BadRequestException(
+          `Please wait ${remainingSec} seconds before requesting another verification email.`,
+        );
+      }
+    }
+
+    // Check daily resend limit
+    if (currentCount >= MAX_RESENDS) {
+      throw new BadRequestException(
+        'You have reached the maximum number of verification emails for today. Please try again tomorrow.',
+      );
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+    const hashedToken = this.hashToken(rawToken);
+    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    const newCount = currentCount + 1;
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        emailVerificationToken: hashedToken,
+        emailVerificationExpiry: expiry,
+        emailVerificationSentCount: newCount,
+        emailVerificationLastSentAt: now,
+      },
+    });
+
+    this.eventEmitter.emit(
+      EMAIL_VERIFICATION_REQUESTED_EVENT,
+      new EmailVerificationRequestedEvent({
+        userId: user.id,
+        email: user.email,
+        verificationToken: rawToken,
+      }),
+    );
+
+    this.logger.log(`Resend verification email #${newCount} for user ${userId}`);
+
+    return {
+      message: 'Verification email sent',
+      attemptsRemaining: MAX_RESENDS - newCount,
+      cooldownSeconds: 120,
+    };
+  }
+
+  /**
+   * Get email verification status for a given user.
+   * Used by the verify-email-pending page for polling.
+   */
+  async getVerificationStatus(userId: string): Promise<{
+    emailVerified: boolean;
+    maskedEmail: string;
+    canResend: boolean;
+    cooldownSeconds: number;
+    attemptsRemaining: number;
+  }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const now = new Date();
+    const COOLDOWN_MS = 120 * 1000;
+    const MAX_RESENDS = 3;
+    const WINDOW_MS = 24 * 60 * 60 * 1000;
+
+    // Mask the email: show first 2 chars + domain
+    const [localPart, domain] = user.email.split('@');
+    const masked = localPart.length > 2
+      ? `${localPart.slice(0, 2)}${'*'.repeat(localPart.length - 2)}@${domain}`
+      : `${localPart}@${domain}`;
+
+    if (user.emailVerified) {
+      return {
+        emailVerified: true,
+        maskedEmail: masked,
+        canResend: false,
+        cooldownSeconds: 0,
+        attemptsRemaining: 0,
+      };
+    }
+
+    let currentCount = user.emailVerificationSentCount;
+    const lastSentAt = user.emailVerificationLastSentAt;
+
+    // Reset counter if 24-hour window has elapsed
+    if (lastSentAt && now.getTime() - lastSentAt.getTime() >= WINDOW_MS) {
+      currentCount = 0;
+    }
+
+    // Calculate cooldown remaining
+    let cooldownSeconds = 0;
+    if (lastSentAt) {
+      const elapsedMs = now.getTime() - lastSentAt.getTime();
+      if (elapsedMs < COOLDOWN_MS) {
+        cooldownSeconds = Math.ceil((COOLDOWN_MS - elapsedMs) / 1000);
+      }
+    }
+
+    const attemptsRemaining = Math.max(0, MAX_RESENDS - currentCount);
+    const canResend = cooldownSeconds === 0 && attemptsRemaining > 0;
+
+    return {
+      emailVerified: false,
+      maskedEmail: masked,
+      canResend,
+      cooldownSeconds,
+      attemptsRemaining,
+    };
+  }
+
+  // ─── FORGOT / RESET PASSWORD ─────────────────────────────
+
+  /**
+   * Request a password reset email.
+   * Always returns a generic success message to prevent email enumeration.
+   */
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    // Generic response regardless of whether user exists (prevents enumeration)
+    const genericResponse = { message: 'If that email is registered, a password reset link has been sent.' };
+
+    if (!user || !user.isActive) {
+      return genericResponse;
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+    const hashedToken = this.hashToken(rawToken);
+    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetToken: hashedToken,
+        passwordResetExpiry: expiry,
+      },
+    });
+
+    this.eventEmitter.emit(
+      PASSWORD_RESET_REQUESTED_EVENT,
+      new PasswordResetRequestedEvent({
+        userId: user.id,
+        email: user.email,
+        resetToken: rawToken,
+      }),
+    );
+
+    this.logger.log(`Password reset requested for user ${user.id}`);
+    return genericResponse;
+  }
+
+  /**
+   * Reset password using a token from the reset email.
+   * Hashes new password, clears reset token, revokes all refresh tokens.
+   */
+  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    const tokenHash = this.hashToken(token);
+
+    const user = await this.prisma.user.findFirst({
+      where: { passwordResetToken: tokenHash },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Invalid or expired reset link');
+    }
+
+    if (user.passwordResetExpiry && new Date() > user.passwordResetExpiry) {
+      throw new BadRequestException('Reset link has expired. Please request a new one.');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, this.SALT_ROUNDS);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          password: hashedPassword,
+          passwordResetToken: null,
+          passwordResetExpiry: null,
+        },
+      });
+
+      // Revoke ALL refresh tokens — forces re-login on all devices
+      await tx.refreshToken.updateMany({
+        where: { userId: user.id, isRevoked: false },
+        data: { isRevoked: true },
+      });
+    });
+
+    this.logger.log(`Password reset completed for user ${user.id}`);
+    return { message: 'Password has been reset successfully. Please login with your new password.' };
+  }
 }

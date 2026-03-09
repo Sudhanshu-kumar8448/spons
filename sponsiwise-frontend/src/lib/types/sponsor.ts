@@ -108,18 +108,24 @@ export interface CreateProposalPayload {
     message?: string;
 }
 
+export interface ResubmitProposalPayload {
+    proposedTier?: string;
+    proposedAmount?: number;
+    message?: string;
+}
+
 // ─── Audience Profile (Sponsor view) ───────────────────────────────────
 
 export type GenderType = 'MALE' | 'FEMALE' | 'OTHER';
 export type AgeBracket = 'AGE_5_12' | 'AGE_12_17' | 'AGE_17_28' | 'AGE_28_45' | 'AGE_45_PLUS';
-export type IncomeBracket = 'BELOW_2L' | 'BETWEEN_2L_5L' | 'BETWEEN_5L_10L' | 'BETWEEN_10L_25L' | 'ABOVE_25L';
+export type IncomeBracket = 'BELOW_10L' | 'BETWEEN_10L_25L' | 'BETWEEN_25L_50L' | 'BETWEEN_50L_1CR' | 'ABOVE_1CR';
 
 export interface SponsorAudienceProfile {
     id: string;
     genders: { gender: GenderType; percentage: number }[];
     ages: { bracket: AgeBracket; percentage: number }[];
     incomes: { bracket: IncomeBracket; percentage: number }[];
-    regions: { city: string; state: string; percentage: number }[];
+    regions: { stateOrUT: string; country: string; percentage: number }[];
 }
 
 // ─── Browsable Events ──────────────────────────────────────────────────
@@ -203,6 +209,7 @@ export interface BrowsableEvent {
     description?: string | null;
     location?: string | null;
     category: EventCategory | string;
+    edition?: string | null;
     expectedFootfall: number;
     startDate: string;
     endDate: string;

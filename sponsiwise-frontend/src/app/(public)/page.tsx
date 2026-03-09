@@ -162,8 +162,8 @@ const App = () => {
                   Don't just partner. Create. We help brands architect and own proprietary IPs from scratch.
                 </p>
               </div>
-              <div className="bg-white/40 rounded-2xl flex items-center justify-center mb-4 sm:mb-6">
-                <Logo />
+              <div className="rounded-2xl flex items-center justify-center mb-4 sm:mb-6">
+                <Logo variant="light" size={32} />
               </div>
             </div>
 

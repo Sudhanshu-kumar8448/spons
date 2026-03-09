@@ -126,11 +126,10 @@ export class S3Service implements OnModuleInit {
         Bucket: this.bucketName,
         Key: key,
         ContentType: contentType,
-        ContentLength: maxSizeBytes, // S3 will reject uploads exceeding this size
       });
 
       const signedUrl = await getSignedUrl(this.s3Client, command, { expiresIn });
-      this.logger.log(`Generated presigned URL for key: ${key} (max ${Math.round(maxSizeBytes / 1024 / 1024)}MB)`);
+      this.logger.log(`Generated presigned URL for key: ${key} (configured max ${Math.round(maxSizeBytes / 1024 / 1024)}MB)`);
       return signedUrl;
     } catch (error: any) {
       this.logger.error(`Failed to generate presigned URL: ${error.message}`);

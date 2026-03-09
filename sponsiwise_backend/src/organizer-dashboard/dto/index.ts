@@ -52,10 +52,10 @@ export class OrganizerProposalsQueryDto extends OrganizerPaginationQueryDto {
  * POST /organizer/proposals/:id/review body.
  */
 export class ReviewProposalDto {
-  @IsIn(['approve', 'reject'], {
-    message: 'action must be either "approve" or "reject"',
+  @IsIn(['approve', 'reject', 'request_changes'], {
+    message: 'action must be "approve", "reject", or "request_changes"',
   })
-  action!: 'approve' | 'reject';
+  action!: 'approve' | 'reject' | 'request_changes';
 
   @IsOptional()
   @IsString()

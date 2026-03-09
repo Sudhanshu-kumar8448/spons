@@ -55,7 +55,7 @@ import {
 @Controller()
 @UseGuards(AuthGuard, RoleGuard)
 export class DeliverablesController {
-  constructor(private readonly service: DeliverableService) {}
+  constructor(private readonly service: DeliverableService) { }
 
   // ═══════════════════════════════════════════════════════════════
   // MANAGER — FORM CRUD
@@ -134,6 +134,15 @@ export class DeliverablesController {
       throw new Error('Both tier1 and tier2 query parameters are required');
     }
     return this.service.compareTiers(tier1Id, tier2Id);
+  }
+
+  @Post('manager/events/:eventId/deliverables/send-all')
+  @Roles(Role.MANAGER, Role.ADMIN)
+  async sendAllToOrganizer(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @CurrentUser() user: JwtPayloadWithClaims,
+  ) {
+    return this.service.sendAllFormsToOrganizer(eventId, user.sub, user.role);
   }
 
   // ═══════════════════════════════════════════════════════════════

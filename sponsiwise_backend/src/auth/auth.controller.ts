@@ -4,6 +4,7 @@ import {
   Get,
   Patch,
   Body,
+  Query,
   HttpCode,
   HttpStatus,
   Req,
@@ -13,9 +14,9 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, ChangePasswordDto } from './dto';
+import { RegisterDto, LoginDto, ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto } from './dto';
 import { AuthGuard } from '../common/guards';
 import { CurrentUser } from '../common/decorators';
 import type { JwtPayloadWithClaims } from './interfaces';
@@ -41,8 +42,10 @@ export class AuthController {
    * GET /auth/me
    * Returns the authenticated user's profile from the access_token cookie.
    * Used by the frontend middleware to verify auth state server-side.
+   * Throttle skipped — called on every page navigation by Next.js middleware.
    */
   @Get('me')
+  @SkipThrottle()
   @UseGuards(AuthGuard)
   async me(@CurrentUser() user: JwtPayloadWithClaims) {
     return this.authService.getMe(user.sub);
@@ -66,6 +69,69 @@ export class AuthController {
       message: 'Registration successful',
       user,
     };
+  }
+
+  /**
+   * GET /auth/verify-email?token=...
+   * Verifies user email via the token sent in the verification email.
+   */
+  @Get('verify-email')
+  @HttpCode(HttpStatus.OK)
+  async verifyEmail(@Query('token') token: string) {
+    if (!token) {
+      throw new UnauthorizedException('Verification token is required');
+    }
+    return this.authService.verifyEmail(token);
+  }
+
+  /**
+   * POST /auth/resend-verification
+   * Resends verification email to the authenticated user.
+   * Rate-limited: 120s cooldown + max 3 per day (enforced in service).
+   */
+  @Post('resend-verification')
+  @UseGuards(AuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  async resendVerification(@CurrentUser() user: JwtPayloadWithClaims) {
+    return this.authService.resendVerificationEmail(user.sub);
+  }
+
+  /**
+   * GET /auth/verification-status
+   * Returns the current email verification status for polling.
+   * Includes cooldown info and remaining resend attempts.
+   * Throttle skipped — lightweight read-only endpoint polled by the pending page.
+   */
+  @Get('verification-status')
+  @SkipThrottle()
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async verificationStatus(@CurrentUser() user: JwtPayloadWithClaims) {
+    return this.authService.getVerificationStatus(user.sub);
+  }
+
+  /**
+   * POST /auth/forgot-password
+   * Sends a password reset link to the user's email.
+   * Always returns a generic success message regardless of whether the email exists.
+   */
+  @Post('forgot-password')
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  /**
+   * POST /auth/reset-password
+   * Resets user password using the token from the reset email.
+   */
+  @Post('reset-password')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token, dto.newPassword);
   }
 
   /**

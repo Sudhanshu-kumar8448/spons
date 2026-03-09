@@ -1,4 +1,5 @@
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventStatus, VerificationStatus, SponsorshipStatus, ProposalStatus } from '@prisma/client';
 import { PrismaService } from '../common/providers/prisma.service';
 import { AuditLogService } from '../audit-logs/audit-log.service';
@@ -8,6 +9,14 @@ import type {
   SponsorSponsorshipsQueryDto,
 } from './dto';
 import type { CreateProposalDto } from './dto';
+import type { ResubmitProposalDto } from './dto';
+import {
+  PROPOSAL_CREATED_EVENT,
+  ProposalCreatedEvent,
+  PROPOSAL_STATUS_CHANGED_EVENT,
+  ProposalStatusChangedEvent,
+} from '../proposals/events';
+import { InterestExpressedEvent, INTEREST_EXPRESSED_EVENT } from '../common/events';
 
 import { CacheService } from '../common/providers/cache.service';
 
@@ -25,6 +34,7 @@ export class SponsorService {
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
     private readonly auditLogService: AuditLogService,
+    private readonly eventEmitter: EventEmitter2,
   ) { }
 
   /**
@@ -168,6 +178,7 @@ export class SponsorService {
           title: true,
           description: true,
           category: true,
+          edition: true,
           startDate: true,
           endDate: true,
           expectedFootfall: true,
@@ -232,6 +243,7 @@ export class SponsorService {
           location: e.address ? `${e.address.addressLine1}, ${e.address.city}, ${e.address.state}, ${e.address.country}` : '',
           expectedFootfall: e.expectedFootfall ?? 0,
           category: e.category || '',
+          edition: e.edition || null,
           organizer: {
             id: e.organizer.id,
             name: e.organizer.name,
@@ -318,7 +330,7 @@ export class SponsorService {
         title: p.proposedTier || '',
         description: p.message || '',
         amount: p.proposedAmount ? Number(p.proposedAmount) : 0,
-        currency: 'USD',
+        currency: 'INR',
         status: p.status.toLowerCase(),
         event: {
           id: p.sponsorship.event.id,
@@ -404,7 +416,7 @@ export class SponsorService {
           company_id: s.companyId,
           tier: s.tier || '',
           amount,
-          currency: 'USD',
+          currency: 'INR',
           status: s.status.toLowerCase(),
           event: {
             id: s.event.id,
@@ -445,6 +457,7 @@ export class SponsorService {
         title: true,
         description: true,
         category: true,
+        edition: true,
         website: true,
         pptDeckUrl: true,
         contactPhone: true,
@@ -486,7 +499,7 @@ export class SponsorService {
             genders: { select: { id: true, gender: true, percentage: true } },
             ages: { select: { id: true, bracket: true, percentage: true } },
             incomes: { select: { id: true, bracket: true, percentage: true } },
-            regions: { select: { id: true, city: true, state: true, percentage: true } },
+            regions: { select: { id: true, stateOrUT: true, country: true, percentage: true } },
           },
         },
       },
@@ -520,6 +533,7 @@ export class SponsorService {
       location: event.address ? `${event.address.addressLine1}, ${event.address.city}, ${event.address.state}, ${event.address.country}` : '',
       expectedFootfall: event.expectedFootfall ?? 0,
       category: event.category || '',
+      edition: event.edition || null,
       website: event.website || null,
       contactPhone: event.contactPhone || null,
       contactEmail: event.contactEmail || null,
@@ -552,8 +566,8 @@ export class SponsorService {
               percentage: i.percentage,
             })),
             regions: event.audienceProfile.regions.map((r: any) => ({
-              city: r.city,
-              state: r.state,
+              stateOrUT: r.stateOrUT,
+              country: r.country,
               percentage: r.percentage,
             })),
           }
@@ -616,7 +630,7 @@ export class SponsorService {
       title: proposal.proposedTier || '',
       description: proposal.message || '',
       amount: proposal.proposedAmount ? Number(proposal.proposedAmount) : 0,
-      currency: 'USD',
+      currency: 'INR',
       status: proposal.status.toLowerCase(),
       event: {
         id: proposal.sponsorship.event.id,
@@ -645,7 +659,7 @@ export class SponsorService {
    * - Sponsor cannot modify tier pricing
    * - proposedAmount defaults to tier's askingPrice if not provided
    */
-  async createProposal(companyId: string | undefined, dto: CreateProposalDto) {
+  async createProposal(companyId: string | undefined, dto: CreateProposalDto, actorId: string) {
     this.assertCompanyId(companyId);
 
     // 1. Verify the event exists, is published/verified
@@ -761,7 +775,7 @@ export class SponsorService {
 
     // 5. Audit log
     this.auditLogService.log({
-      actorId: companyId,
+      actorId,
       actorRole: 'SPONSOR',
       action: 'proposal.submitted',
       entityType: 'Proposal',
@@ -774,6 +788,19 @@ export class SponsorService {
       },
     });
 
+    // 6. Emit proposal-created event → triggers email to organizer, brand, manager
+    this.eventEmitter.emit(
+      PROPOSAL_CREATED_EVENT,
+      new ProposalCreatedEvent({
+        proposalId: result.id,
+        actorId,
+        actorRole: 'SPONSOR',
+        newStatus: ProposalStatus.SUBMITTED,
+        sponsorshipId: result.sponsorship.id,
+        proposedAmount,
+      }),
+    );
+
     this.logger.log(`Proposal ${result.id} created for tier ${tier.tierType} on event ${dto.eventId}`);
 
     return {
@@ -784,7 +811,7 @@ export class SponsorService {
       title: result.proposedTier || '',
       description: result.message || '',
       amount: result.proposedAmount ? Number(result.proposedAmount) : 0,
-      currency: 'USD',
+      currency: 'INR',
       status: result.status.toLowerCase(),
       event: {
         id: result.sponsorship.event.id,
@@ -798,6 +825,144 @@ export class SponsorService {
       reviewer_notes: null,
       created_at: result.createdAt.toISOString(),
       updated_at: result.updatedAt.toISOString(),
+    };
+  }
+
+  // ─── Resubmit Proposal ──────────────────────────────────────
+
+  async resubmitProposal(
+    companyId: string | undefined,
+    proposalId: string,
+    dto: ResubmitProposalDto,
+    actorId: string,
+  ) {
+    this.assertCompanyId(companyId);
+
+    const proposal = await this.prisma.proposal.findFirst({
+      where: {
+        id: proposalId,
+        isActive: true,
+        sponsorship: { companyId },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!proposal) {
+      throw new NotFoundException('Proposal not found');
+    }
+
+    if (proposal.status !== ProposalStatus.REQUEST_CHANGES) {
+      throw new BadRequestException(
+        `Cannot resubmit proposal with status "${proposal.status}". Only REQUEST_CHANGES proposals can be resubmitted.`,
+      );
+    }
+
+    if (dto.proposedAmount !== undefined && dto.proposedAmount <= 0) {
+      throw new BadRequestException('Proposed amount must be greater than zero.');
+    }
+
+    const now = new Date();
+    const updated = await this.prisma.proposal.update({
+      where: { id: proposalId },
+      data: {
+        ...(dto.proposedAmount !== undefined && { proposedAmount: dto.proposedAmount }),
+        ...(dto.proposedTier !== undefined && { proposedTier: dto.proposedTier }),
+        ...(dto.message !== undefined && { message: dto.message }),
+        status: ProposalStatus.SUBMITTED,
+        submittedAt: now,
+        reviewedAt: null,
+      },
+      select: {
+        id: true,
+        status: true,
+        proposedAmount: true,
+        proposedTier: true,
+        message: true,
+        notes: true,
+        submittedAt: true,
+        reviewedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        sponsorship: {
+          select: {
+            id: true,
+            eventId: true,
+            event: {
+              select: {
+                id: true,
+                title: true,
+                startDate: true,
+                address: {
+                  select: {
+                    addressLine1: true,
+                    city: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    this.auditLogService.log({
+      actorId,
+      actorRole: 'SPONSOR',
+      action: 'proposal.resubmitted',
+      entityType: 'Proposal',
+      entityId: proposalId,
+      metadata: {
+        previousStatus: proposal.status,
+        newStatus: ProposalStatus.SUBMITTED,
+        changes: {
+          ...(dto.proposedAmount !== undefined && { proposedAmount: dto.proposedAmount }),
+          ...(dto.proposedTier !== undefined && { proposedTier: dto.proposedTier }),
+          ...(dto.message !== undefined && { message: dto.message }),
+        },
+      },
+    });
+
+    this.eventEmitter.emit(
+      PROPOSAL_STATUS_CHANGED_EVENT,
+      new ProposalStatusChangedEvent({
+        proposalId,
+        actorId,
+        actorRole: 'SPONSOR',
+        previousStatus: proposal.status,
+        newStatus: ProposalStatus.SUBMITTED,
+      }),
+    );
+
+    // Refresh proposal + sponsor dashboard caches.
+    this.cacheService.delByPattern('proposals:list:*');
+    this.cacheService.delByPattern('sponsor:dashboard:*');
+
+    return {
+      id: updated.id,
+      event_id: updated.sponsorship.eventId,
+      sponsorship_id: updated.sponsorship.id,
+      title: updated.proposedTier || '',
+      description: updated.message || '',
+      amount: updated.proposedAmount ? Number(updated.proposedAmount) : 0,
+      currency: 'INR',
+      status: updated.status.toLowerCase(),
+      event: {
+        id: updated.sponsorship.event.id,
+        title: updated.sponsorship.event.title,
+        slug: updated.sponsorship.event.id,
+        start_date: updated.sponsorship.event.startDate.toISOString(),
+        location: updated.sponsorship.event.address
+          ? `${updated.sponsorship.event.address.addressLine1}, ${updated.sponsorship.event.address.city}`
+          : '',
+      },
+      submitted_at: updated.submittedAt?.toISOString() || null,
+      reviewed_at: updated.reviewedAt?.toISOString() || null,
+      reviewer_notes: updated.notes || null,
+      created_at: updated.createdAt.toISOString(),
+      updated_at: updated.updatedAt.toISOString(),
     };
   }
 
@@ -866,7 +1031,7 @@ export class SponsorService {
       title: updated.proposedTier || '',
       description: updated.message || '',
       amount: updated.proposedAmount ? Number(updated.proposedAmount) : 0,
-      currency: 'USD',
+      currency: 'INR',
       status: updated.status.toLowerCase(),
       event: {
         id: updated.sponsorship.event.id,
@@ -880,6 +1045,91 @@ export class SponsorService {
       reviewer_notes: null,
       created_at: updated.createdAt.toISOString(),
       updated_at: updated.updatedAt.toISOString(),
+    };
+  }
+
+  // ─── Express Interest ───────────────────────────────────────
+
+  /**
+   * Express interest in an event by creating or returning an existing sponsorship.
+   * Triggers an INTEREST_EXPRESSED_EVENT which sends emails to
+   * organizer, brand, manager, and admin.
+   */
+  async expressInterest(
+    companyId: string | undefined,
+    eventId: string,
+    actorId: string,
+  ) {
+    this.assertCompanyId(companyId);
+
+    // Validate event exists and is published / active
+    const event = await this.prisma.event.findFirst({
+      where: {
+        id: eventId,
+        status: EventStatus.PUBLISHED,
+        isActive: true,
+        verificationStatus: VerificationStatus.VERIFIED,
+      },
+      select: { id: true, title: true },
+    });
+
+    if (!event) {
+      throw new NotFoundException('Event not found or not available for sponsorship');
+    }
+
+    // Check if sponsorship already exists
+    const existing = await this.prisma.sponsorship.findFirst({
+      where: { companyId: companyId!, eventId },
+    });
+
+    if (existing) {
+      return {
+        sponsorship_id: existing.id,
+        event_id: eventId,
+        message: 'Interest already expressed for this event',
+        already_expressed: true,
+      };
+    }
+
+    // Create sponsorship with INTERESTED status
+    const sponsorship = await this.prisma.sponsorship.create({
+      data: {
+        status: SponsorshipStatus.INTERESTED,
+        company: { connect: { id: companyId! } },
+        event: { connect: { id: eventId } },
+      },
+    });
+
+    this.logger.log(
+      `Interest expressed: company ${companyId} → event ${eventId}, sponsorship ${sponsorship.id}`,
+    );
+
+    // Audit log
+    this.auditLogService.log({
+      actorId,
+      actorRole: 'SPONSOR',
+      action: 'interest.expressed',
+      entityType: 'Sponsorship',
+      entityId: sponsorship.id,
+      metadata: { eventId, companyId },
+    });
+
+    // Emit domain event → triggers emails to organizer, brand, manager, admin
+    this.eventEmitter.emit(
+      INTEREST_EXPRESSED_EVENT,
+      new InterestExpressedEvent({
+        sponsorshipId: sponsorship.id,
+        companyId: companyId!,
+        eventId,
+        actorId,
+      }),
+    );
+
+    return {
+      sponsorship_id: sponsorship.id,
+      event_id: eventId,
+      message: 'Interest expressed successfully',
+      already_expressed: false,
     };
   }
 }

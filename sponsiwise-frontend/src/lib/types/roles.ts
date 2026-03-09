@@ -13,4 +13,5 @@ export interface AuthUser {
     role: UserRole;
     image?: string;
     tenantId?: string;
+    emailVerified?: boolean;
 }

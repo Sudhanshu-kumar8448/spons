@@ -11,7 +11,7 @@ export interface ProposalRejectedTemplateData {
 
 export function proposalRejectedTemplate(data: ProposalRejectedTemplateData): { html: string; text: string; subject: string } {
   const base = data.dashboardUrl || process.env.FRONTEND_URL || 'https://sponsiwise.com';
-  const dashboardUrl = `${base}/brand/events`;
+  const dashboardUrl = `${base}/brand/browseEvents`;
   const amountStr = data.proposedAmount
     ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(data.proposedAmount)
     : 'N/A';

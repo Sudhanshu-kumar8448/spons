@@ -121,8 +121,8 @@ export class VerificationJobProducer {
       timestamp: event.timestamp,
     };
 
-    const emailJobId = `${emailJobName}:${event.entityId}`;
-    const notifyJobId = `${notifyJobName}:${event.entityId}`;
+    const emailJobId = `${emailJobName}--${event.entityId}`;
+    const notifyJobId = `${notifyJobName}--${event.entityId}`;
 
     await Promise.all([
       this.emailQueue.add(emailJobName, emailPayload, {

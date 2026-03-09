@@ -11,12 +11,13 @@ import {
   Mail,
   ArrowLeft,
   Layers,
-  DollarSign,
   Lock,
   BarChart3,
 } from "lucide-react";
 import { CategoryHero, CategoryBadge, getCategoryStyle } from "@/components/sponsor_event_comp";
 import { ViewDeliverablesButton } from "@/components/sponsor/TierDeliverables";
+import { ExpressInterestButton } from "@/components/sponsor/ExpressInterestButton";
+import { formatInr } from "@/lib/currency";
 
 // ─── Audience Profile helpers ──────────────────────────────────────────
 
@@ -27,7 +28,7 @@ function getAgeBracketLabel(b: AgeBracket) {
   return { AGE_5_12: "5–12", AGE_12_17: "12–17", AGE_17_28: "17–28", AGE_28_45: "28–45", AGE_45_PLUS: "45+" }[b] ?? b;
 }
 function getIncomeBracketLabel(b: IncomeBracket) {
-  return { BELOW_2L: "Below ₹2L", BETWEEN_2L_5L: "₹2L–5L", BETWEEN_5L_10L: "₹5L–10L", BETWEEN_10L_25L: "₹10L–25L", ABOVE_25L: "Above ₹25L" }[b] ?? b;
+  return { BELOW_10L: "Below ₹10L", BETWEEN_10L_25L: "₹10L–25L", BETWEEN_25L_50L: "₹25L–50L", BETWEEN_50L_1CR: "₹50L–1Cr", ABOVE_1CR: "Above ₹1Cr" }[b] ?? b;
 }
 
 function DistBar({ label, pct, color = "bg-blue-500" }: { label: string; pct: number; color?: string }) {
@@ -99,7 +100,7 @@ function AudienceProfileSection({ profile }: { profile: NonNullable<BrowsableEve
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">Top Regions</h3>
             <div className="space-y-3">
               {profile.regions.map((r) => (
-                <DistBar key={`${r.city}-${r.state}`} label={`${r.city}, ${r.state}`} pct={r.percentage} color="bg-indigo-500" />
+                <DistBar key={`${r.stateOrUT}-${r.country}`} label={`${r.stateOrUT}, ${r.country}`} pct={r.percentage} color="bg-indigo-500" />
               ))}
             </div>
           </div>
@@ -127,13 +128,13 @@ export default async function BrandEventDetailPage({
 
   const config = getCategoryStyle(event.category);
 
-  const startDate = new Date(event.startDate).toLocaleDateString("en-US", {
+  const startDate = new Date(event.startDate).toLocaleDateString("en-IN", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
   });
-  const endDate = new Date(event.endDate).toLocaleDateString("en-US", {
+  const endDate = new Date(event.endDate).toLocaleDateString("en-IN", {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -156,13 +157,7 @@ export default async function BrandEventDetailPage({
         Back to events
       </Link>
 
-      {/* Hero banner with category visual */}
-      <div className="overflow-hidden rounded-2xl border border-slate-800">
-        <CategoryHero
-          category={event.category}
-          className="aspect-[21/7] w-full"
-        />
-      </div>
+      
 
       <div className="grid gap-8 lg:grid-cols-3">
         {/* ── Main content ── */}
@@ -211,9 +206,8 @@ export default async function BrandEventDetailPage({
                         </p>
                       </div>
                       <div className="text-right">
-                        <div className="flex items-center gap-1 text-lg font-bold text-emerald-400">
-                          <DollarSign className="h-4 w-4" />
-                          {tier.askingPrice.toLocaleString()}
+                        <div className="text-lg font-bold text-emerald-400">
+                          {formatInr(tier.askingPrice)}
                         </div>
                       </div>
                     </div>
@@ -299,86 +293,27 @@ export default async function BrandEventDetailPage({
                     Expected Footfall
                   </dt>
                   <dd className="text-slate-400">
-                    {event.expectedFootfall.toLocaleString()} attendees
+                    {event.expectedFootfall.toLocaleString("en-IN")} attendees
                   </dd>
                 </div>
               </div>
-              {event.website && (
+              {event.edition && (
                 <div className="flex items-start gap-3">
-                  <Globe className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
+                  <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
                   <div>
-                    <dt className="font-medium text-slate-300">Website</dt>
-                    <dd>
-                      <a
-                        href={event.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 transition-colors"
-                      >
-                        {event.website}
-                      </a>
-                    </dd>
+                    <dt className="font-medium text-slate-300">Edition</dt>
+                    <dd className="text-slate-400">{event.edition.replace(/_/g, ' ')}</dd>
                   </div>
                 </div>
               )}
-              {event.contactEmail && (
-                <div className="flex items-start gap-3">
-                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
-                  <div>
-                    <dt className="font-medium text-slate-300">Email</dt>
-                    <dd className="text-slate-400">{event.contactEmail}</dd>
-                  </div>
-                </div>
-              )}
-              {event.contactPhone && (
-                <div className="flex items-start gap-3">
-                  <Phone className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
-                  <div>
-                    <dt className="font-medium text-slate-300">Phone</dt>
-                    <dd className="text-slate-400">{event.contactPhone}</dd>
-                  </div>
-                </div>
-              )}
+              
             </dl>
           </div>
 
-          {/* Organizer card */}
-          {event.organizer && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                Organizer
-              </h2>
-              <div className="mt-4 flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-sky-400 text-sm font-bold text-white">
-                  {event.organizer.name.charAt(0)}
-                </span>
-                <span className="font-semibold text-white">
-                  {event.organizer.name}
-                </span>
-              </div>
-            </div>
-          )}
+          
 
           {/* CTA */}
-          <Link
-            href={`/brand/proposals/new?event_id=${event.id}`}
-            className={`flex items-center justify-center gap-2 w-full rounded-xl bg-gradient-to-r ${config.gradient} px-4 py-3.5 text-sm font-bold text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5`}
-          >
-            Express Interest
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M13 7l5 5m0 0l-5 5m5-5H6"
-              />
-            </svg>
-          </Link>
+          <ExpressInterestButton eventId={event.id} gradient={config.gradient} />
         </aside>
       </div>
     </div>

@@ -153,7 +153,7 @@ export default function NotificationsDropdown() {
                                                     n.severity,
                                                 )}`}
                                             >
-                                                {new Date(n.createdAt).toLocaleDateString("en-US", {
+                                                {new Date(n.createdAt).toLocaleDateString("en-IN", {
                                                     month: "short",
                                                     day: "numeric",
                                                     hour: "2-digit",

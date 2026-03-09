@@ -61,7 +61,7 @@ export default function NotificationList({
                             </p>
                             <p className="mt-0.5 text-sm text-slate-400">{n.message}</p>
                             <p className="mt-1 text-xs text-slate-500">
-                                {new Date(n.createdAt).toLocaleDateString("en-US", {
+                                {new Date(n.createdAt).toLocaleDateString("en-IN", {
                                     month: "short",
                                     day: "numeric",
                                     hour: "2-digit",
@@ -69,14 +69,29 @@ export default function NotificationList({
                                 })}
                             </p>
                         </div>
-                        {!n.read && (
-                            <button
-                                onClick={() => handleMarkRead(n.id)}
-                                className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-blue-400 transition-colors hover:bg-blue-500/10"
-                            >
-                                Mark read
-                            </button>
-                        )}
+                        <div className="flex shrink-0 items-center gap-2">
+                            {n.link && (
+                                <Link
+                                    href={n.link}
+                                    onClick={() => {
+                                        if (!n.read) {
+                                            void handleMarkRead(n.id);
+                                        }
+                                    }}
+                                    className="rounded-lg px-2 py-1 text-xs font-medium text-sky-300 transition-colors hover:bg-sky-500/10"
+                                >
+                                    View
+                                </Link>
+                            )}
+                            {!n.read && (
+                                <button
+                                    onClick={() => handleMarkRead(n.id)}
+                                    className="rounded-lg px-2 py-1 text-xs font-medium text-blue-400 transition-colors hover:bg-blue-500/10"
+                                >
+                                    Mark read
+                                </button>
+                            )}
+                        </div>
                     </div>
                 ))}
             </div>

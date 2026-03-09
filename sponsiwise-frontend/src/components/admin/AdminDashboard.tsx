@@ -137,7 +137,7 @@ export default async function AdminDashboard() {
                     {card.label}
                   </p>
                   <p className="mt-2 text-3xl font-bold text-white">
-                    {card.value.toLocaleString()}
+                    {card.value.toLocaleString("en-IN")}
                   </p>
                 </div>
                 <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${card.gradient} shadow-lg ${card.glow}`}>
@@ -178,7 +178,7 @@ export default async function AdminDashboard() {
                   </p>
                 </div>
                 <p className={`mt-3 text-3xl font-bold text-white`}>
-                  {card.value.toLocaleString()}
+                  {card.value.toLocaleString("en-IN")}
                 </p>
               </div>
             );
@@ -202,7 +202,7 @@ export default async function AdminDashboard() {
                 {role}
               </p>
               <p className="mt-1 text-2xl font-bold text-white">
-                {count.toLocaleString()}
+                {count.toLocaleString("en-IN")}
               </p>
             </Link>
           ))}
@@ -248,14 +248,14 @@ export default async function AdminDashboard() {
           <div className="mt-2 flex justify-between text-[10px] text-slate-500">
             <span>
               {new Date(stats.signup_trend[0].date).toLocaleDateString(
-                "en-US",
+                "en-IN",
                 { month: "short", day: "numeric" },
               )}
             </span>
             <span>
               {new Date(
                 stats.signup_trend[stats.signup_trend.length - 1].date,
-              ).toLocaleDateString("en-US", {
+              ).toLocaleDateString("en-IN", {
                 month: "short",
                 day: "numeric",
               })}

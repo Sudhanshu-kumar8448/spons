@@ -16,6 +16,7 @@ import {
 } from "@/lib/sponsor-api";
 import type { SponsorDashboardStats, Proposal } from "@/lib/types/sponsor";
 import ProposalStatusBadge from "@/components/shared/ProposalStatusBadge";
+import { formatInr } from "@/lib/currency";
 
 // ─── Stats cards ───────────────────────────────────────────────────────
 
@@ -51,7 +52,7 @@ function StatsGrid({ stats }: { stats: SponsorDashboardStats }) {
     },
     {
       label: "Total Invested",
-      value: `${stats.currency} ${stats.total_invested.toLocaleString()}`,
+      value: formatInr(stats.total_invested),
       icon: Wallet,
       gradient: "from-sky-400 to-blue-500",
       glow: "shadow-sky-500/20",
@@ -136,11 +137,11 @@ function RecentProposals({ proposals }: { proposals: Proposal[] }) {
                 </td>
                 <td className="px-4 py-4 text-sm text-slate-400 sm:px-6">{p.event.title}</td>
                 <td className="px-4 py-4 text-sm font-medium text-white sm:px-6">
-                  {p.currency} {p.amount.toLocaleString()}
+                  {formatInr(p.amount)}
                 </td>
                 <td className="px-4 py-4 sm:px-6"><ProposalStatusBadge status={p.status} /></td>
                 <td className="px-4 py-4 text-sm text-slate-500 sm:px-6">
-                  {new Date(p.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  {new Date(p.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
                 </td>
               </tr>
             ))}

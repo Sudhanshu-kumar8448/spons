@@ -40,7 +40,7 @@ export default function RegisterPage() {
       await apiClient.post("/auth/register", { email, password });
       // Force Next.js to re-fetch server components with the new cookies
       router.refresh();
-      router.push("/onboarding");
+      router.push("/verify-email-pending");
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);

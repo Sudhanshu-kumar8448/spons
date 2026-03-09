@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sparkles,
@@ -246,11 +246,21 @@ const GENDER_TYPES = [
 ] as const;
 
 const INCOME_BRACKETS = [
-  { value: "BELOW_2L", label: "Below ₹2L" },
-  { value: "BETWEEN_2L_5L", label: "₹2L – ₹5L" },
-  { value: "BETWEEN_5L_10L", label: "₹5L – ₹10L" },
+  { value: "BELOW_10L", label: "Below ₹10L" },
   { value: "BETWEEN_10L_25L", label: "₹10L – ₹25L" },
-  { value: "ABOVE_25L", label: "Above ₹25L" },
+  { value: "BETWEEN_25L_50L", label: "₹25L – ₹50L" },
+  { value: "BETWEEN_50L_1CR", label: "₹50L – ₹1Cr" },
+  { value: "ABOVE_1CR", label: "Above ₹1Cr" },
+] as const;
+
+const COUNTRIES = [
+  "India", "United States", "United Kingdom", "Canada", "Australia", "Germany", "France",
+  "Japan", "Singapore", "UAE", "Saudi Arabia", "Netherlands", "Switzerland", "South Korea",
+  "Brazil", "Mexico", "South Africa", "New Zealand", "Ireland", "Sweden", "Norway", "Denmark",
+  "Finland", "Belgium", "Austria", "Italy", "Spain", "Portugal", "Poland", "Czech Republic",
+  "Thailand", "Malaysia", "Indonesia", "Philippines", "Vietnam", "China", "Russia", "Israel",
+  "Turkey", "Egypt", "Nigeria", "Kenya", "Ghana", "Bangladesh", "Sri Lanka", "Nepal", "Pakistan",
+  "Argentina", "Chile", "Colombia", "Peru", "Other",
 ] as const;
 
 const PREDEFINED_TIERS = [
@@ -311,6 +321,7 @@ const STEP_LABELS = ["Basic Info", "Details & Location", "Audience Profile", "Sp
 interface Step1Data {
   title: string;
   description: string;
+  edition: string;
   category: string;
   website: string;
 }
@@ -321,9 +332,11 @@ interface Step2Data {
   addressLine1: string;
   addressLine2: string;
   city: string;
+  district: string;
   state: string;
   country: string;
   postalCode: string;
+  locality: string;
   startDate: string;
   endDate: string;
   expectedFootfall: string;
@@ -332,7 +345,7 @@ interface Step2Data {
 interface GenderEntry { gender: string; percentage: string }
 interface AgeEntry { bracket: string; percentage: string }
 interface IncomeEntry { bracket: string; percentage: string }
-interface RegionEntry { city: string; state: string; percentage: string }
+interface RegionEntry { stateOrUT: string; country: string; percentage: string }
 
 interface Step3Data {
   genders: GenderEntry[];
@@ -425,7 +438,7 @@ function Step1BasicInfo({
   onRemoveFile: () => void;
   onNext: () => void;
 }) {
-  const isValid = data.title.trim() !== "" && data.category !== "";
+  const isValid = data.title.trim() !== "" && data.category !== "" && data.edition !== "";
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
@@ -462,6 +475,32 @@ function Step1BasicInfo({
             rows={4}
             className={`${inputClass} resize-none`}
           />
+        </div>
+
+        {/* Edition */}
+        <div>
+          <label className={labelClass}>
+            Edition <span className="text-red-400">*</span>
+          </label>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+            <select
+              value={data.edition}
+              onChange={(e) => setData((p) => ({ ...p, edition: e.target.value }))}
+              className={selectClass}
+            >
+              <option value="">Select edition</option>
+              <option value="INAUGURAL">Inaugural</option>
+              <option value="SECOND">2nd Edition</option>
+              <option value="THIRD">3rd Edition</option>
+              <option value="FOURTH">4th Edition</option>
+              <option value="FIFTH">5th Edition</option>
+              <option value="TENTH">10th Edition</option>
+              <option value="BI_ANNUAL">Bi-Annual</option>
+              <option value="QUATERLY">Quarterly</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
         </div>
 
         {/* Category */}
@@ -568,6 +607,79 @@ function Step2DetailsLocation({
   onBack: () => void;
 }) {
   const today = new Date().toISOString().split("T")[0];
+  const isIndia = data.country === "India";
+
+  /* ── PIN code lookup state ── */
+  const [pinLoading, setPinLoading] = useState(false);
+  const [pinError, setPinError] = useState("");
+  const [localities, setLocalities] = useState<string[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addressLine1Ref = useRef<HTMLInputElement>(null);
+
+  const fetchPinData = useCallback(
+    async (pin: string) => {
+      if (pin.length !== 6 || !/^\d{6}$/.test(pin)) return;
+      setPinLoading(true);
+      setPinError("");
+      setLocalities([]);
+      try {
+        const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+        const json = await res.json();
+        if (!json?.[0] || json[0].Status !== "Success" || !json[0].PostOffice?.length) {
+          setPinError("Invalid PIN code. Please check and try again.");
+          setPinLoading(false);
+          return;
+        }
+        const offices = json[0].PostOffice as { Name: string; District: string; State: string; Country: string }[];
+        const first = offices[0];
+        setData((p) => ({
+          ...p,
+          state: first.State,
+          district: first.District,
+          city: first.District,
+        }));
+        if (offices.length > 1) {
+          setLocalities(offices.map((o) => o.Name));
+          setData((p) => ({ ...p, locality: offices[0].Name }));
+        } else {
+          setLocalities([]);
+          setData((p) => ({ ...p, locality: first.Name }));
+        }
+        // Auto-focus address line after successful PIN lookup
+        setTimeout(() => addressLine1Ref.current?.focus(), 200);
+      } catch {
+        setPinError("Could not fetch address. Please enter details manually.");
+      } finally {
+        setPinLoading(false);
+      }
+    },
+    [setData],
+  );
+
+  function handlePinChange(val: string) {
+    const cleaned = val.replace(/\D/g, "").slice(0, 6);
+    setData((p) => ({ ...p, postalCode: cleaned }));
+    setPinError("");
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (cleaned.length === 6) {
+      debounceRef.current = setTimeout(() => fetchPinData(cleaned), 300);
+    }
+  }
+
+  function handleCountryChange(val: string) {
+    setData((p) => ({
+      ...p,
+      country: val,
+      postalCode: "",
+      state: "",
+      district: "",
+      city: "",
+      locality: "",
+    }));
+    setPinError("");
+    setLocalities([]);
+  }
+
   const isValid =
     data.addressLine1.trim() !== "" &&
     data.city.trim() !== "" &&
@@ -630,38 +742,130 @@ function Step2DetailsLocation({
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-green-500 shadow-lg shadow-emerald-500/20">
             <MapPin className="h-4 w-4 text-white" />
           </div>
-          <h2 className="text-lg font-semibold text-white">Event Location</h2>
+          <div>
+            <h2 className="text-lg font-semibold text-white">Event Location</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Precise location helps sponsors evaluate logistics and regional alignment</p>
+          </div>
         </div>
 
         <div className="space-y-4">
+          {/* Country */}
           <div>
-            <label className={labelClass}>Address Line 1 <span className="text-red-400">*</span></label>
-            <input type="text" value={data.addressLine1} onChange={(e) => setData((p) => ({ ...p, addressLine1: e.target.value }))} placeholder="Street address" maxLength={255} className={inputClass} />
-          </div>
-          <div>
-            <label className={labelClass}>Address Line 2</label>
-            <input type="text" value={data.addressLine2} onChange={(e) => setData((p) => ({ ...p, addressLine2: e.target.value }))} placeholder="Apartment, suite, etc." maxLength={255} className={inputClass} />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={labelClass}>City <span className="text-red-400">*</span></label>
-              <input type="text" value={data.city} onChange={(e) => setData((p) => ({ ...p, city: e.target.value }))} placeholder="City" maxLength={100} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>State / Province <span className="text-red-400">*</span></label>
-              <input type="text" value={data.state} onChange={(e) => setData((p) => ({ ...p, state: e.target.value }))} placeholder="State" maxLength={100} className={inputClass} />
+            <label className={labelClass}>Country <span className="text-red-400">*</span></label>
+            <div className="relative">
+              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+              <select
+                value={data.country}
+                onChange={(e) => handleCountryChange(e.target.value)}
+                className={selectClass}
+              >
+                <option value="">Select country</option>
+                {COUNTRIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={labelClass}>Country <span className="text-red-400">*</span></label>
-              <input type="text" value={data.country} onChange={(e) => setData((p) => ({ ...p, country: e.target.value }))} placeholder="Country" maxLength={100} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Postal Code <span className="text-red-400">*</span></label>
-              <input type="text" value={data.postalCode} onChange={(e) => setData((p) => ({ ...p, postalCode: e.target.value }))} placeholder="Postal Code" maxLength={20} className={inputClass} />
-            </div>
-          </div>
+
+          {/* India flow */}
+          {isIndia && (
+            <>
+              {/* PIN Code */}
+              <div>
+                <label className={labelClass}>PIN Code <span className="text-red-400">*</span></label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={data.postalCode}
+                    onChange={(e) => handlePinChange(e.target.value)}
+                    placeholder="e.g. 110001"
+                    maxLength={6}
+                    className={inputIconClass}
+                  />
+                  {pinLoading && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-400 animate-spin" />
+                  )}
+                </div>
+                {pinError && <p className="mt-1 text-xs font-medium text-red-400">{pinError}</p>}
+                {!pinError && data.postalCode.length === 6 && !pinLoading && data.state && (
+                  <p className="mt-1 text-xs font-medium text-emerald-400">Address auto-filled! You can edit if needed.</p>
+                )}
+              </div>
+
+              {/* Auto-filled fields */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>State <span className="text-red-400">*</span></label>
+                  <input type="text" value={data.state} onChange={(e) => setData((p) => ({ ...p, state: e.target.value }))} placeholder="Auto-filled from PIN" maxLength={100} className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>District <span className="text-red-400">*</span></label>
+                  <input type="text" value={data.district} onChange={(e) => setData((p) => ({ ...p, district: e.target.value }))} placeholder="Auto-filled from PIN" maxLength={100} className={inputClass} />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>City <span className="text-red-400">*</span></label>
+                  <input type="text" value={data.city} onChange={(e) => setData((p) => ({ ...p, city: e.target.value }))} placeholder="Auto-filled from PIN" maxLength={100} className={inputClass} />
+                </div>
+                {localities.length > 1 ? (
+                  <div>
+                    <label className={labelClass}>Locality</label>
+                    <select
+                      value={data.locality}
+                      onChange={(e) => setData((p) => ({ ...p, locality: e.target.value }))}
+                      className={`${inputClass} appearance-none cursor-pointer`}
+                    >
+                      {localities.map((l) => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className={labelClass}>Locality</label>
+                    <input type="text" value={data.locality} onChange={(e) => setData((p) => ({ ...p, locality: e.target.value }))} placeholder="Locality / Area" maxLength={100} className={inputClass} />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* International flow */}
+          {!isIndia && data.country !== "" && (
+            <>
+              <div>
+                <label className={labelClass}>Postal Code <span className="text-red-400">*</span></label>
+                <input type="text" value={data.postalCode} onChange={(e) => setData((p) => ({ ...p, postalCode: e.target.value }))} placeholder="Postal / ZIP code" maxLength={20} className={inputClass} />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>City <span className="text-red-400">*</span></label>
+                  <input type="text" value={data.city} onChange={(e) => setData((p) => ({ ...p, city: e.target.value }))} placeholder="City" maxLength={100} className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>State / Province <span className="text-red-400">*</span></label>
+                  <input type="text" value={data.state} onChange={(e) => setData((p) => ({ ...p, state: e.target.value }))} placeholder="State / Province" maxLength={100} className={inputClass} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Address lines — always shown after country is selected */}
+          {data.country !== "" && (
+            <>
+              <div>
+                <label className={labelClass}>Address Line 1 <span className="text-red-400">*</span></label>
+                <input ref={addressLine1Ref} type="text" value={data.addressLine1} onChange={(e) => setData((p) => ({ ...p, addressLine1: e.target.value }))} placeholder="Street address, venue name" maxLength={255} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Address Line 2</label>
+                <input type="text" value={data.addressLine2} onChange={(e) => setData((p) => ({ ...p, addressLine2: e.target.value }))} placeholder="Apartment, floor, landmark, etc." maxLength={255} className={inputClass} />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -785,7 +989,7 @@ function Step3AudienceProfile({
   function addRegion() {
     setData((p) => ({
       ...p,
-      regions: [...p.regions, { city: "", state: "", percentage: "" }],
+      regions: [...p.regions, { stateOrUT: "", country: "", percentage: "" }],
     }));
   }
   function removeRegion(index: number) {
@@ -802,42 +1006,17 @@ function Step3AudienceProfile({
 
   return (
     <div className="space-y-6">
-      {/* Age Bracket */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <div className="mb-5 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-yellow-500 shadow-lg shadow-amber-500/20">
-            <BarChart3 className="h-4 w-4 text-white" />
-          </div>
-          <h2 className="text-lg font-semibold text-white">Age Bracket</h2>
-        </div>
-        <div className="space-y-3">
-          {data.ages.map((entry, i) => (
-            <div key={entry.bracket} className="flex items-center gap-4">
-              <span className="w-24 text-sm font-medium text-slate-400">
-                {AGE_BRACKETS.find((a) => a.value === entry.bracket)?.label}
-              </span>
-              <input type="number" min={0} max={100} value={entry.percentage} onChange={(e) => updateAge(i, e.target.value)} placeholder="0" className={percentInputClass} />
-              <span className="text-xs text-slate-500">%</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex items-center gap-3">
-          <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all ${barBg(ageTotal)}`} style={{ width: `${Math.min(ageTotal, 100)}%` }} />
-          </div>
-          <span className={`text-xs font-bold ${ageTotal > 100 ? "text-red-400" : "text-slate-500"}`}>{ageTotal}%</span>
-        </div>
-        {ageTotal > 100 && <p className="mt-1 text-xs font-medium text-red-400">Total cannot exceed 100%</p>}
-      </div>
-
       {/* Gender */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <div className="mb-5 flex items-center gap-2">
+        <div className="mb-2 flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-pink-500 to-rose-500 shadow-lg shadow-pink-500/20">
             <Users className="h-4 w-4 text-white" />
           </div>
           <h2 className="text-lg font-semibold text-white">Audience Gender</h2>
         </div>
+        <p className="mb-4 text-xs text-slate-500 leading-relaxed">
+          Brands tailor campaigns by gender demographics. Sharing this helps sponsors craft targeted messaging and connect authentically with your attendees.
+        </p>
         <div className="space-y-3">
           {data.genders.map((entry, i) => (
             <div key={entry.gender} className="flex items-center gap-4">
@@ -858,18 +1037,52 @@ function Step3AudienceProfile({
         {genderTotal > 100 && <p className="mt-1 text-xs font-medium text-red-400">Total cannot exceed 100%</p>}
       </div>
 
+      {/* Age Bracket */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <div className="mb-2 flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-yellow-500 shadow-lg shadow-amber-500/20">
+            <BarChart3 className="h-4 w-4 text-white" />
+          </div>
+          <h2 className="text-lg font-semibold text-white">Age Bracket</h2>
+        </div>
+        <p className="mb-4 text-xs text-slate-500 leading-relaxed">
+          Age distribution is a key factor for sponsors choosing events. It helps brands align their products with the right audience segment and maximise ROI.
+        </p>
+        <div className="space-y-3">
+          {data.ages.map((entry, i) => (
+            <div key={entry.bracket} className="flex items-center gap-4">
+              <span className="w-24 text-sm font-medium text-slate-400">
+                {AGE_BRACKETS.find((a) => a.value === entry.bracket)?.label}
+              </span>
+              <input type="number" min={0} max={100} value={entry.percentage} onChange={(e) => updateAge(i, e.target.value)} placeholder="0" className={percentInputClass} />
+              <span className="text-xs text-slate-500">%</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${barBg(ageTotal)}`} style={{ width: `${Math.min(ageTotal, 100)}%` }} />
+          </div>
+          <span className={`text-xs font-bold ${ageTotal > 100 ? "text-red-400" : "text-slate-500"}`}>{ageTotal}%</span>
+        </div>
+        {ageTotal > 100 && <p className="mt-1 text-xs font-medium text-red-400">Total cannot exceed 100%</p>}
+      </div>
+
       {/* Income */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <div className="mb-5 flex items-center gap-2">
+        <div className="mb-2 flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 shadow-lg shadow-green-500/20">
             <BarChart3 className="h-4 w-4 text-white" />
           </div>
           <h2 className="text-lg font-semibold text-white">Income Bracket</h2>
         </div>
+        <p className="mb-4 text-xs text-slate-500 leading-relaxed">
+          Income data helps brands identify if your audience matches their target market. Premium brands look for higher-income attendees while mass-market brands prefer wider reach.
+        </p>
         <div className="space-y-3">
           {data.incomes.map((entry, i) => (
             <div key={entry.bracket} className="flex items-center gap-4">
-              <span className="w-24 text-sm font-medium text-slate-400">
+              <span className="w-32 text-sm font-medium text-slate-400">
                 {INCOME_BRACKETS.find((inc) => inc.value === entry.bracket)?.label}
               </span>
               <input type="number" min={0} max={100} value={entry.percentage} onChange={(e) => updateIncome(i, e.target.value)} placeholder="0" className={percentInputClass} />
@@ -888,20 +1101,23 @@ function Step3AudienceProfile({
 
       {/* Region */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <div className="mb-5 flex items-center gap-2">
+        <div className="mb-2 flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-blue-500 shadow-lg shadow-sky-500/20">
             <MapPin className="h-4 w-4 text-white" />
           </div>
           <h2 className="text-lg font-semibold text-white">Region Distribution</h2>
         </div>
+        <p className="mb-4 text-xs text-slate-500 leading-relaxed">
+          Regional reach is vital for sponsors planning geo-targeted campaigns. Show where your audience comes from so brands can evaluate market overlap and logistics.
+        </p>
         {data.regions.length === 0 && (
-          <p className="text-sm text-slate-500 mb-3">No regions added yet.</p>
+          <p className="text-sm text-slate-500 mb-3">No regions added yet. Add your audience&apos;s geographic spread below.</p>
         )}
         <div className="space-y-3">
           {data.regions.map((entry, i) => (
             <div key={i} className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-              <input type="text" value={entry.city} onChange={(e) => updateRegion(i, "city", e.target.value)} placeholder="City" className={`flex-1 min-w-[80px] ${inputClass}`} />
-              <input type="text" value={entry.state} onChange={(e) => updateRegion(i, "state", e.target.value)} placeholder="State" className={`flex-1 min-w-[80px] ${inputClass}`} />
+              <input type="text" value={entry.stateOrUT} onChange={(e) => updateRegion(i, "stateOrUT", e.target.value)} placeholder="State / Union Territory" className={`flex-1 min-w-[120px] ${inputClass}`} />
+              <input type="text" value={entry.country} onChange={(e) => updateRegion(i, "country", e.target.value)} placeholder="Country" className={`flex-1 min-w-[100px] ${inputClass}`} />
               <input type="number" min={0} max={100} value={entry.percentage} onChange={(e) => updateRegion(i, "percentage", e.target.value)} placeholder="%" className={percentInputClass} />
               <button type="button" onClick={() => removeRegion(i)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-700 hover:text-red-400">
                 <X className="w-4 h-4" />
@@ -1172,6 +1388,7 @@ export default function NewEventMultiStepForm() {
   const [step1, setStep1] = useState<Step1Data>({
     title: "",
     description: "",
+    edition: "",
     category: "",
     website: "",
   });
@@ -1239,9 +1456,11 @@ export default function NewEventMultiStepForm() {
     addressLine1: "",
     addressLine2: "",
     city: "",
+    district: "",
     state: "",
-    country: "",
+    country: "India",
     postalCode: "",
+    locality: "",
     startDate: "",
     endDate: "",
     expectedFootfall: "",
@@ -1331,8 +1550,8 @@ export default function NewEventMultiStepForm() {
         .filter((inc) => inc.percentage !== "" && Number(inc.percentage) > 0)
         .map((inc) => ({ bracket: inc.bracket, percentage: Number(inc.percentage) }));
       const regions = step3.regions
-        .filter((r) => r.city.trim() && r.state.trim() && r.percentage !== "" && Number(r.percentage) > 0)
-        .map((r) => ({ city: r.city.trim(), state: r.state.trim(), percentage: Number(r.percentage) }));
+        .filter((r) => r.stateOrUT.trim() && r.country.trim() && r.percentage !== "" && Number(r.percentage) > 0)
+        .map((r) => ({ stateOrUT: r.stateOrUT.trim(), country: r.country.trim(), percentage: Number(r.percentage) }));
 
       const audienceProfile =
         genders.length || ages.length || incomes.length || regions.length
@@ -1348,6 +1567,7 @@ export default function NewEventMultiStepForm() {
         title: step1.title.trim(),
         description: step1.description.trim() || undefined,
         category: step1.category,
+        edition: step1.edition,
         website: step1.website.trim() || undefined,
         pptDeckUrl: pptUrl || undefined,
         contactPhone: step2.contactPhone.trim() || undefined,
