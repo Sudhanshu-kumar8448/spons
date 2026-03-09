@@ -80,7 +80,12 @@ async function clientFetch<T>(
         let detail: string | undefined;
         try {
             const data = await res.json();
-            detail = data.message || data.error;
+            const msg = data.message || data.error;
+            if (Array.isArray(msg)) {
+                detail = msg.join('. ');
+            } else {
+                detail = msg;
+            }
         } catch {
             // ignore non-json error
         }

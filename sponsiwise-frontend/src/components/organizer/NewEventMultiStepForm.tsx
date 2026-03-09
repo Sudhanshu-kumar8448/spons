@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sparkles,
@@ -438,7 +438,20 @@ function Step1BasicInfo({
   onRemoveFile: () => void;
   onNext: () => void;
 }) {
-  const isValid = data.title.trim() !== "" && data.category !== "" && data.edition !== "";
+  // Website URL validation
+  const websiteError = useMemo(() => {
+    const w = data.website.trim();
+    if (!w) return "";
+    try {
+      const url = new URL(w);
+      if (!["http:", "https:"].includes(url.protocol)) return "Website must start with http:// or https://";
+      return "";
+    } catch {
+      return "Please enter a valid URL (e.g., https://example.com)";
+    }
+  }, [data.website]);
+
+  const isValid = data.title.trim() !== "" && data.category !== "" && data.edition !== "" && !websiteError;
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
@@ -571,9 +584,10 @@ function Step1BasicInfo({
               onChange={(e) => setData((p) => ({ ...p, website: e.target.value }))}
               placeholder="https://your-event.com"
               maxLength={500}
-              className={inputIconClass}
+              className={`${inputIconClass} ${websiteError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}`}
             />
           </div>
+          {websiteError && <p className="mt-1 text-xs font-medium text-red-400">{websiteError}</p>}
         </div>
       </div>
 
@@ -606,7 +620,8 @@ function Step2DetailsLocation({
   onNext: () => void;
   onBack: () => void;
 }) {
-  const today = new Date().toISOString().split("T")[0];
+  // Events must be listed at least 45 days before they happen
+  const minStartDate = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const isIndia = data.country === "India";
 
   /* ── PIN code lookup state ── */
@@ -615,6 +630,30 @@ function Step2DetailsLocation({
   const [localities, setLocalities] = useState<string[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const addressLine1Ref = useRef<HTMLInputElement>(null);
+
+  // Contact field validation
+  const emailError = useMemo(() => {
+    const e = data.contactEmail.trim();
+    if (!e) return "";
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(e) ? "" : "Please enter a valid email address (e.g., name@example.com)";
+  }, [data.contactEmail]);
+
+  const phoneError = useMemo(() => {
+    const p = data.contactPhone.trim();
+    if (!p) return "";
+    const phoneRegex = /^[+]?[\d\s\-()]{6,50}$/;
+    return phoneRegex.test(p) ? "" : "Please enter a valid phone number (e.g., +91 98765 43210)";
+  }, [data.contactPhone]);
+
+  const footfallError = useMemo(() => {
+    const f = data.expectedFootfall;
+    if (f === "") return "";
+    const num = Number(f);
+    if (isNaN(num) || num < 0) return "Expected footfall must be a non-negative number";
+    if (!Number.isInteger(num)) return "Expected footfall must be a whole number (no decimals)";
+    return "";
+  }, [data.expectedFootfall]);
 
   const fetchPinData = useCallback(
     async (pin: string) => {
@@ -690,8 +729,12 @@ function Step2DetailsLocation({
     data.endDate !== "" &&
     data.expectedFootfall !== "" &&
     Number(data.expectedFootfall) >= 0 &&
-    data.startDate >= today &&
-    data.endDate > data.startDate;
+    Number.isInteger(Number(data.expectedFootfall)) &&
+    data.startDate >= minStartDate &&
+    data.endDate > data.startDate &&
+    !emailError &&
+    !phoneError &&
+    !footfallError;
 
   return (
     <div className="space-y-6">
@@ -715,9 +758,10 @@ function Step2DetailsLocation({
                 onChange={(e) => setData((p) => ({ ...p, contactPhone: e.target.value }))}
                 placeholder="+91 98765 43210"
                 maxLength={50}
-                className={inputIconClass}
+                className={`${inputIconClass} ${phoneError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}`}
               />
             </div>
+            {phoneError && <p className="mt-1 text-xs font-medium text-red-400">{phoneError}</p>}
           </div>
           <div>
             <label className={labelClass}>Contact Email</label>
@@ -729,9 +773,10 @@ function Step2DetailsLocation({
                 onChange={(e) => setData((p) => ({ ...p, contactEmail: e.target.value }))}
                 placeholder="contact@yourevent.com"
                 maxLength={255}
-                className={inputIconClass}
+                className={`${inputIconClass} ${emailError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}`}
               />
             </div>
+            {emailError && <p className="mt-1 text-xs font-medium text-red-400">{emailError}</p>}
           </div>
         </div>
       </div>
@@ -883,17 +928,17 @@ function Step2DetailsLocation({
             <label className={labelClass}>Start Date <span className="text-red-400">*</span></label>
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <input type="date" value={data.startDate} min={today} onChange={(e) => setData((p) => ({ ...p, startDate: e.target.value }))} className={`${inputIconClass} [color-scheme:dark]`} />
+              <input type="date" value={data.startDate} min={minStartDate} onChange={(e) => setData((p) => ({ ...p, startDate: e.target.value }))} className={`${inputIconClass} [color-scheme:dark]`} />
             </div>
-            {data.startDate && data.startDate < today && (
-              <p className="mt-1 text-xs font-medium text-red-400">Must be a future date</p>
+            {data.startDate && data.startDate < minStartDate && (
+              <p className="mt-1 text-xs font-medium text-red-400">Event must be at least 45 days from today</p>
             )}
           </div>
           <div>
             <label className={labelClass}>End Date <span className="text-red-400">*</span></label>
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <input type="date" value={data.endDate} min={data.startDate || today} onChange={(e) => setData((p) => ({ ...p, endDate: e.target.value }))} className={`${inputIconClass} [color-scheme:dark]`} />
+              <input type="date" value={data.endDate} min={data.startDate || minStartDate} onChange={(e) => setData((p) => ({ ...p, endDate: e.target.value }))} className={`${inputIconClass} [color-scheme:dark]`} />
             </div>
             {data.endDate && data.startDate && data.endDate <= data.startDate && (
               <p className="mt-1 text-xs font-medium text-red-400">Must be after start date</p>
@@ -903,8 +948,9 @@ function Step2DetailsLocation({
             <label className={labelClass}>Expected Footfall <span className="text-red-400">*</span></label>
             <div className="relative">
               <Users className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <input type="number" value={data.expectedFootfall} onChange={(e) => setData((p) => ({ ...p, expectedFootfall: e.target.value }))} placeholder="e.g. 5000" min={0} className={inputIconClass} />
+              <input type="number" value={data.expectedFootfall} onChange={(e) => setData((p) => ({ ...p, expectedFootfall: e.target.value }))} placeholder="e.g. 5000" min={0} step={1} className={`${inputIconClass} ${footfallError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}`} />
             </div>
+            {footfallError && <p className="mt-1 text-xs font-medium text-red-400">{footfallError}</p>}
           </div>
         </div>
       </div>
@@ -929,6 +975,18 @@ function Step2DetailsLocation({
     </div>
   );
 }
+
+/* ─── Indian States & Union Territories ──────────────────────────────── */
+
+const INDIA_STATES_UTS = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
+  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
+  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+  "Andaman & Nicobar Islands", "Chandigarh", "Dadra & Nagar Haveli and Daman & Diu",
+  "Delhi", "Jammu & Kashmir", "Ladakh", "Lakshadweep", "Puducherry",
+] as const;
 
 /* ─── Step 3: Audience Profile ───────────────────────────────────────── */
 
@@ -989,7 +1047,7 @@ function Step3AudienceProfile({
   function addRegion() {
     setData((p) => ({
       ...p,
-      regions: [...p.regions, { stateOrUT: "", country: "", percentage: "" }],
+      regions: [...p.regions, { stateOrUT: "", country: "India", percentage: "" }],
     }));
   }
   function removeRegion(index: number) {
@@ -1001,150 +1059,209 @@ function Step3AudienceProfile({
 
   const barBg = (total: number) =>
     total > 100 ? "bg-red-500" : total === 100 ? "bg-emerald-500" : "bg-blue-500";
-  const percentInputClass =
-    "w-20 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  const pctInput =
+    "w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  const cardClass =
+    "rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5";
+
+  /* helper: progress bar */
+  const ProgressBar = ({ total, label }: { total: number; label: string }) => (
+    <div className="mt-4 space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-slate-500">{label}</span>
+        <span className={`font-bold ${total > 100 ? "text-red-400" : total === 100 ? "text-emerald-400" : "text-slate-400"}`}>{total}%</span>
+      </div>
+      <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-300 ${barBg(total)}`} style={{ width: `${Math.min(total, 100)}%` }} />
+      </div>
+      {total > 100 && <p className="text-xs font-medium text-red-400">Total exceeds 100%</p>}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
-      {/* Gender */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <div className="mb-2 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-pink-500 to-rose-500 shadow-lg shadow-pink-500/20">
+      {/* ── Header ── */}
+      <div className="text-center sm:text-left">
+        <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+          Audience Profile
+        </h2>
+        <p className="mt-1 text-xs sm:text-sm text-slate-400 max-w-xl">
+          Help sponsors understand your attendees. Demographic data drives better brand-event matching and higher sponsorship value.
+        </p>
+      </div>
+
+      {/* ── Gender Distribution ── */}
+      <div className={cardClass}>
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-pink-500 to-rose-500 shadow-lg shadow-pink-500/20">
             <Users className="h-4 w-4 text-white" />
           </div>
-          <h2 className="text-lg font-semibold text-white">Audience Gender</h2>
+          <h3 className="text-sm sm:text-base font-semibold text-white">Gender Distribution</h3>
         </div>
-        <p className="mb-4 text-xs text-slate-500 leading-relaxed">
-          Brands tailor campaigns by gender demographics. Sharing this helps sponsors craft targeted messaging and connect authentically with your attendees.
-        </p>
-        <div className="space-y-3">
+        <div className="grid grid-cols-3 gap-3">
           {data.genders.map((entry, i) => (
-            <div key={entry.gender} className="flex items-center gap-4">
-              <span className="w-24 text-sm font-medium text-slate-400">
+            <div key={entry.gender} className="space-y-1.5">
+              <label className="block text-xs font-medium text-slate-400 text-center">
                 {GENDER_TYPES.find((g) => g.value === entry.gender)?.label}
-              </span>
-              <input type="number" min={0} max={100} value={entry.percentage} onChange={(e) => updateGender(i, e.target.value)} placeholder="0" className={percentInputClass} />
-              <span className="text-xs text-slate-500">%</span>
+              </label>
+              <div className="relative">
+                <input type="number" min={0} max={100} value={entry.percentage} onChange={(e) => updateGender(i, e.target.value)} placeholder="0" className={pctInput} />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 pointer-events-none">%</span>
+              </div>
             </div>
           ))}
         </div>
-        <div className="mt-3 flex items-center gap-3">
-          <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all ${barBg(genderTotal)}`} style={{ width: `${Math.min(genderTotal, 100)}%` }} />
-          </div>
-          <span className={`text-xs font-bold ${genderTotal > 100 ? "text-red-400" : "text-slate-500"}`}>{genderTotal}%</span>
-        </div>
-        {genderTotal > 100 && <p className="mt-1 text-xs font-medium text-red-400">Total cannot exceed 100%</p>}
+        <ProgressBar total={genderTotal} label="Gender total" />
       </div>
 
-      {/* Age Bracket */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <div className="mb-2 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-yellow-500 shadow-lg shadow-amber-500/20">
+      {/* ── Age Bracket ── */}
+      <div className={cardClass}>
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-yellow-500 shadow-lg shadow-amber-500/20">
             <BarChart3 className="h-4 w-4 text-white" />
           </div>
-          <h2 className="text-lg font-semibold text-white">Age Bracket</h2>
+          <h3 className="text-sm sm:text-base font-semibold text-white">Age Bracket</h3>
         </div>
-        <p className="mb-4 text-xs text-slate-500 leading-relaxed">
-          Age distribution is a key factor for sponsors choosing events. It helps brands align their products with the right audience segment and maximise ROI.
-        </p>
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           {data.ages.map((entry, i) => (
-            <div key={entry.bracket} className="flex items-center gap-4">
-              <span className="w-24 text-sm font-medium text-slate-400">
+            <div key={entry.bracket} className="space-y-1.5">
+              <label className="block text-xs font-medium text-slate-400 text-center truncate">
                 {AGE_BRACKETS.find((a) => a.value === entry.bracket)?.label}
-              </span>
-              <input type="number" min={0} max={100} value={entry.percentage} onChange={(e) => updateAge(i, e.target.value)} placeholder="0" className={percentInputClass} />
-              <span className="text-xs text-slate-500">%</span>
+              </label>
+              <div className="relative">
+                <input type="number" min={0} max={100} value={entry.percentage} onChange={(e) => updateAge(i, e.target.value)} placeholder="0" className={pctInput} />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 pointer-events-none">%</span>
+              </div>
             </div>
           ))}
         </div>
-        <div className="mt-3 flex items-center gap-3">
-          <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all ${barBg(ageTotal)}`} style={{ width: `${Math.min(ageTotal, 100)}%` }} />
-          </div>
-          <span className={`text-xs font-bold ${ageTotal > 100 ? "text-red-400" : "text-slate-500"}`}>{ageTotal}%</span>
-        </div>
-        {ageTotal > 100 && <p className="mt-1 text-xs font-medium text-red-400">Total cannot exceed 100%</p>}
+        <ProgressBar total={ageTotal} label="Age total" />
       </div>
 
-      {/* Income */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <div className="mb-2 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 shadow-lg shadow-green-500/20">
+      {/* ── Income Bracket ── */}
+      <div className={cardClass}>
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 shadow-lg shadow-green-500/20">
             <BarChart3 className="h-4 w-4 text-white" />
           </div>
-          <h2 className="text-lg font-semibold text-white">Income Bracket</h2>
+          <h3 className="text-sm sm:text-base font-semibold text-white">Income Bracket</h3>
         </div>
-        <p className="mb-4 text-xs text-slate-500 leading-relaxed">
-          Income data helps brands identify if your audience matches their target market. Premium brands look for higher-income attendees while mass-market brands prefer wider reach.
-        </p>
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           {data.incomes.map((entry, i) => (
-            <div key={entry.bracket} className="flex items-center gap-4">
-              <span className="w-32 text-sm font-medium text-slate-400">
+            <div key={entry.bracket} className="space-y-1.5">
+              <label className="block text-xs font-medium text-slate-400 text-center truncate">
                 {INCOME_BRACKETS.find((inc) => inc.value === entry.bracket)?.label}
-              </span>
-              <input type="number" min={0} max={100} value={entry.percentage} onChange={(e) => updateIncome(i, e.target.value)} placeholder="0" className={percentInputClass} />
-              <span className="text-xs text-slate-500">%</span>
+              </label>
+              <div className="relative">
+                <input type="number" min={0} max={100} value={entry.percentage} onChange={(e) => updateIncome(i, e.target.value)} placeholder="0" className={pctInput} />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 pointer-events-none">%</span>
+              </div>
             </div>
           ))}
         </div>
-        <div className="mt-3 flex items-center gap-3">
-          <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all ${barBg(incomeTotal)}`} style={{ width: `${Math.min(incomeTotal, 100)}%` }} />
-          </div>
-          <span className={`text-xs font-bold ${incomeTotal > 100 ? "text-red-400" : "text-slate-500"}`}>{incomeTotal}%</span>
-        </div>
-        {incomeTotal > 100 && <p className="mt-1 text-xs font-medium text-red-400">Total cannot exceed 100%</p>}
+        <ProgressBar total={incomeTotal} label="Income total" />
       </div>
 
-      {/* Region */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <div className="mb-2 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-blue-500 shadow-lg shadow-sky-500/20">
-            <MapPin className="h-4 w-4 text-white" />
-          </div>
-          <h2 className="text-lg font-semibold text-white">Region Distribution</h2>
-        </div>
-        <p className="mb-4 text-xs text-slate-500 leading-relaxed">
-          Regional reach is vital for sponsors planning geo-targeted campaigns. Show where your audience comes from so brands can evaluate market overlap and logistics.
-        </p>
-        {data.regions.length === 0 && (
-          <p className="text-sm text-slate-500 mb-3">No regions added yet. Add your audience&apos;s geographic spread below.</p>
-        )}
-        <div className="space-y-3">
-          {data.regions.map((entry, i) => (
-            <div key={i} className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-              <input type="text" value={entry.stateOrUT} onChange={(e) => updateRegion(i, "stateOrUT", e.target.value)} placeholder="State / Union Territory" className={`flex-1 min-w-[120px] ${inputClass}`} />
-              <input type="text" value={entry.country} onChange={(e) => updateRegion(i, "country", e.target.value)} placeholder="Country" className={`flex-1 min-w-[100px] ${inputClass}`} />
-              <input type="number" min={0} max={100} value={entry.percentage} onChange={(e) => updateRegion(i, "percentage", e.target.value)} placeholder="%" className={percentInputClass} />
-              <button type="button" onClick={() => removeRegion(i)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-700 hover:text-red-400">
-                <X className="w-4 h-4" />
-              </button>
+      {/* ── Geographic Distribution ── */}
+      <div className={cardClass}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-blue-500 shadow-lg shadow-sky-500/20">
+              <MapPin className="h-4 w-4 text-white" />
             </div>
-          ))}
+            <h3 className="text-sm sm:text-base font-semibold text-white">Geographic Reach</h3>
+          </div>
+          <button
+            type="button"
+            onClick={addRegion}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600/20 px-3 py-1.5 text-xs font-medium text-blue-400 ring-1 ring-blue-500/30 hover:bg-blue-600/30 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={addRegion}
-          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-slate-600 px-4 py-2 text-sm text-slate-400 hover:border-slate-500 hover:text-white"
-        >
-          <Plus className="w-4 h-4" /> Add Region
-        </button>
-        {data.regions.length > 0 && (
-          <div className="mt-3 flex items-center gap-3">
-            <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div className={`h-full rounded-full transition-all ${barBg(regionTotal)}`} style={{ width: `${Math.min(regionTotal, 100)}%` }} />
-            </div>
-            <span className={`text-xs font-bold ${regionTotal > 100 ? "text-red-400" : "text-slate-500"}`}>{regionTotal}%</span>
+
+        {data.regions.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-700 bg-slate-800/30 p-6 sm:p-8 text-center">
+            <MapPin className="mx-auto h-8 w-8 text-slate-600 mb-2" />
+            <p className="text-sm text-slate-500">No regions added yet</p>
+            <p className="text-xs text-slate-600 mt-1">Click &quot;Add&quot; to define where your audience comes from</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {data.regions.map((entry, i) => {
+              const isIndiaRegion = entry.country === "India";
+              return (
+                <div key={i} className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-3 sm:p-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                    {/* Country */}
+                    <div className="sm:col-span-4">
+                      <label className="mb-1 block text-xs font-medium text-slate-500">Country</label>
+                      <select
+                        value={entry.country}
+                        onChange={(e) => {
+                          updateRegion(i, "country", e.target.value);
+                          if (e.target.value !== entry.country) updateRegion(i, "stateOrUT", "");
+                        }}
+                        className={`${inputClass} appearance-none cursor-pointer`}
+                      >
+                        <option value="">Select country</option>
+                        {COUNTRIES.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* State / UT — dropdown for India, text input otherwise */}
+                    <div className="sm:col-span-5">
+                      <label className="mb-1 block text-xs font-medium text-slate-500">State / Region</label>
+                      {isIndiaRegion ? (
+                        <select
+                          value={entry.stateOrUT}
+                          onChange={(e) => updateRegion(i, "stateOrUT", e.target.value)}
+                          className={`${inputClass} appearance-none cursor-pointer`}
+                        >
+                          <option value="">Select state / UT</option>
+                          {INDIA_STATES_UTS.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={entry.stateOrUT}
+                          onChange={(e) => updateRegion(i, "stateOrUT", e.target.value)}
+                          placeholder="Enter state / region"
+                          className={inputClass}
+                        />
+                      )}
+                    </div>
+
+                    {/* Percentage */}
+                    <div className="sm:col-span-2">
+                      <label className="mb-1 block text-xs font-medium text-slate-500">Share</label>
+                      <div className="relative">
+                        <input type="number" min={0} max={100} value={entry.percentage} onChange={(e) => updateRegion(i, "percentage", e.target.value)} placeholder="0" className={pctInput} />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 pointer-events-none">%</span>
+                      </div>
+                    </div>
+
+                    {/* Remove */}
+                    <div className="sm:col-span-1 flex justify-end sm:justify-center">
+                      <button type="button" onClick={() => removeRegion(i)} className="rounded-lg p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-colors" title="Remove region">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
-        {regionTotal > 100 && <p className="mt-1 text-xs font-medium text-red-400">Total cannot exceed 100%</p>}
+        {data.regions.length > 0 && <ProgressBar total={regionTotal} label="Region total" />}
       </div>
 
-      {/* Nav */}
-      <div className="flex gap-3">
+      {/* ── Navigation ── */}
+      <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
         <button onClick={onBack} className="rounded-xl border border-slate-700 px-6 py-2.5 text-sm font-medium text-slate-300 transition-all hover:border-slate-600 hover:bg-slate-800 hover:text-white">
           <ChevronLeft className="inline h-4 w-4 mr-1" /> Back
         </button>
@@ -1450,6 +1567,18 @@ export default function NewEventMultiStepForm() {
   }
 
   /* ── Step 2 ── */
+  // Calculate default dates: start = 45 days from today, end = 46 days from today
+  const getDefaultDates = () => {
+    const start = new Date();
+    start.setDate(start.getDate() + 45);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return {
+      startDate: start.toISOString().split("T")[0],
+      endDate: end.toISOString().split("T")[0],
+    };
+  };
+  const defaultDates = getDefaultDates();
   const [step2, setStep2] = useState<Step2Data>({
     contactPhone: "",
     contactEmail: "",
@@ -1461,8 +1590,8 @@ export default function NewEventMultiStepForm() {
     country: "India",
     postalCode: "",
     locality: "",
-    startDate: "",
-    endDate: "",
+    startDate: defaultDates.startDate,
+    endDate: defaultDates.endDate,
     expectedFootfall: "",
   });
 

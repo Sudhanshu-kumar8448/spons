@@ -4,7 +4,7 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiClient, ApiError } from "@/lib/api-client";
-import { ArrowLeft, ArrowRight, Lock, Mail, UserPlus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Lock, Mail, UserPlus, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import Logo from "@/components/logo/logo";
 
@@ -17,6 +17,8 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const isPasswordStrong = PASSWORD_REGEX.test(password);
   const isConfirmPasswordValid = confirmPassword.length > 0 && password === confirmPassword;
 
@@ -123,7 +125,7 @@ export default function RegisterPage() {
                 <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   required
                   value={password}
@@ -131,8 +133,16 @@ export default function RegisterPage() {
                     setPassword(e.target.value);
                     if (error) setError(null);
                   }}
-                  className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white"
+                  className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 py-3 pl-11 pr-11 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="pointer-events-auto absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {password.length > 0 && (
                 <p className={`mt-2 text-xs font-semibold ${isPasswordStrong ? "text-emerald-600" : "text-amber-600"}`}>
@@ -155,7 +165,7 @@ export default function RegisterPage() {
                 <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   id="confirmPassword"
-                  type="password"
+                  type={showConfirmPassword ? "text" : "password"}
                   placeholder="••••••••"
                   required
                   value={confirmPassword}
@@ -163,8 +173,16 @@ export default function RegisterPage() {
                     setConfirmPassword(e.target.value);
                     if (error) setError(null);
                   }}
-                  className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white"
+                  className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 py-3 pl-11 pr-11 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="pointer-events-auto absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {confirmPassword.length > 0 && !isConfirmPasswordValid && (
                 <p className="mt-2 text-xs font-semibold text-red-600">Passwords do not match.</p>

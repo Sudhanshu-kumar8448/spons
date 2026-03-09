@@ -25,14 +25,24 @@ export class AllExceptionsFilter implements ExceptionFilter {
                 ? exception.getStatus()
                 : HttpStatus.INTERNAL_SERVER_ERROR;
 
+        // Extract detailed validation messages when available (e.g. from ValidationPipe)
+        let message: string | string[] = 'Internal server error';
+        if (exception instanceof HttpException) {
+            const response = exception.getResponse();
+            if (typeof response === 'object' && response !== null && 'message' in response) {
+                message = (response as Record<string, any>).message;
+            } else if (typeof response === 'string') {
+                message = response;
+            } else {
+                message = exception.message;
+            }
+        }
+
         const responseBody = {
             statusCode: httpStatus,
             timestamp: new Date().toISOString(),
             path: httpAdapter.getRequestUrl(ctx.getRequest()),
-            message:
-                exception instanceof HttpException
-                    ? exception.message
-                    : 'Internal server error',
+            message,
         };
 
         if (httpStatus === HttpStatus.INTERNAL_SERVER_ERROR) {

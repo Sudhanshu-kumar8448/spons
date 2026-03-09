@@ -24,7 +24,7 @@ export default async function sitemap(): Promise<SitemapEntry[]> {
   // Dynamic blog posts
   let blogEntries: SitemapEntry[] = [];
   try {
-    const res = await fetch(`${PUBLIC_API}/public/blogs?limit=1000`, {
+    const res = await fetch(`${PUBLIC_API}/public/blogs?limit=100`, {
       next: { revalidate: 3600 },
     });
     if (res.ok) {

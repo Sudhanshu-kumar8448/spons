@@ -166,13 +166,13 @@ export default function CreateBlogPage() {
   // ── Render ────────────────────────────────────────────────────
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 px-4 sm:px-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <Link
             href="/manager/blog"
-            className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+            className="rounded-lg border border-slate-600 bg-slate-800/80 p-2 text-slate-300 transition hover:border-slate-500 hover:bg-slate-700 hover:text-white"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
@@ -182,7 +182,7 @@ export default function CreateBlogPage() {
           <button
             onClick={() => handleSave(false)}
             disabled={saving || publishing}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-slate-600 hover:text-white disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl border-2 border-slate-600 bg-slate-800/80 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-50"
           >
             {saving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -194,7 +194,7 @@ export default function CreateBlogPage() {
           <button
             onClick={() => handleSave(true)}
             disabled={saving || publishing}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-500 disabled:opacity-50"
           >
             {publishing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -207,14 +207,14 @@ export default function CreateBlogPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-xl border border-slate-800 bg-slate-900 p-1">
+      <div className="flex gap-1 rounded-xl border-2 border-slate-700 bg-slate-900/80 p-1">
         {(["content", "seo"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
+            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
               activeTab === tab
-                ? "bg-slate-800 text-white shadow-sm"
+                ? "border border-slate-500 bg-slate-700 text-white shadow-sm"
                 : "text-slate-400 hover:text-white"
             }`}
           >
@@ -224,17 +224,17 @@ export default function CreateBlogPage() {
       </div>
 
       {activeTab === "content" ? (
-        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
           {/* Main content */}
           <div className="space-y-6">
             {/* Title */}
-            <div>
-              <input
+            <div >
+              <input 
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Post title"
-                className="w-full border-0 bg-transparent text-2xl font-bold text-white placeholder-slate-600 outline-none"
+                className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3 text-2xl text-white placeholder-slate-500 outline-none transition focus:border-blue-500"
               />
               <div className="mt-2 flex items-center gap-2">
                 <span className="text-xs text-slate-500">Slug:</span>
@@ -274,9 +274,9 @@ export default function CreateBlogPage() {
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Featured image */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+            <div className="rounded-xl border-2 border-slate-600 bg-slate-800/90 p-4 shadow-lg">
               <h3 className="mb-3 text-sm font-semibold text-white">
                 Featured Image
               </h3>
@@ -318,7 +318,7 @@ export default function CreateBlogPage() {
             </div>
 
             {/* Author */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+            <div className="rounded-xl border-2 border-slate-600 bg-slate-800/90 p-4 shadow-lg">
               <h3 className="mb-3 text-sm font-semibold text-white">Author</h3>
               <select
                 value={authorId}
@@ -335,7 +335,7 @@ export default function CreateBlogPage() {
             </div>
 
             {/* Categories */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+            <div className="rounded-xl border-2 border-slate-600 bg-slate-800/90 p-4 shadow-lg">
               <h3 className="mb-3 text-sm font-semibold text-white">
                 Categories
               </h3>
@@ -363,7 +363,7 @@ export default function CreateBlogPage() {
             </div>
 
             {/* Tags */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+            <div className="rounded-xl border-2 border-slate-600 bg-slate-800/90 p-4 shadow-lg">
               <h3 className="mb-3 text-sm font-semibold text-white">Tags</h3>
               {tags.length === 0 ? (
                 <p className="text-xs text-slate-500">
@@ -389,7 +389,7 @@ export default function CreateBlogPage() {
             </div>
 
             {/* Schedule */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+            <div className="rounded-xl border-2 border-slate-600 bg-slate-800/90 p-4 shadow-lg">
               <h3 className="mb-3 text-sm font-semibold text-white">
                 Schedule
               </h3>
@@ -415,7 +415,7 @@ export default function CreateBlogPage() {
             </div>
 
             {/* Flags */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+            <div className="rounded-xl border-2 border-slate-600 bg-slate-800/90 p-4 shadow-lg">
               <h3 className="mb-3 text-sm font-semibold text-white">
                 Options
               </h3>
@@ -444,8 +444,8 @@ export default function CreateBlogPage() {
         </div>
       ) : (
         /* SEO Tab */
-        <div className="mx-auto max-w-2xl space-y-6">
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 space-y-5">
+        <div className="mx-auto max-w-2xl space-y-6 px-4 sm:px-0">
+          <div className="rounded-xl border-2 border-slate-600 bg-slate-800/90 p-6 shadow-lg space-y-5">
             <h3 className="text-lg font-semibold text-white">
               SEO & Meta Settings
             </h3>

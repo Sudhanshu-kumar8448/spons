@@ -4,7 +4,7 @@ import {
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, CreateBucketCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, CreateBucketCommand, HeadBucketCommand, PutBucketCorsCommand, GetBucketCorsCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export interface UploadResult {
@@ -26,12 +26,15 @@ export class S3Service implements OnModuleInit {
     this.bucketName = process.env.S3_BUCKET || process.env.AWS_S3_BUCKET || 'sponsiwise';
     this.publicUrl = process.env.S3_PUBLIC_URL || `http://localhost:9000/${this.bucketName}`;
 
-    // Check if using MinIO/local S3
-    this.isLocal = process.env.S3_ENDPOINT ? process.env.S3_ENDPOINT.includes('localhost') || process.env.S3_ENDPOINT.includes('127.0.0.1') : true;
-
     const accessKeyId = process.env.S3_ACCESS_KEY || process.env.AWS_ACCESS_KEY_ID || '';
     const secretAccessKey = process.env.S3_SECRET_KEY || process.env.AWS_SECRET_ACCESS_KEY || '';
     const endpoint = process.env.S3_ENDPOINT || 'http://localhost:9000';
+
+    // Detect if using a custom S3-compatible provider (R2, MinIO, etc.)
+    const hasCustomEndpoint = !!process.env.S3_ENDPOINT;
+    this.isLocal = hasCustomEndpoint
+      ? endpoint.includes('localhost') || endpoint.includes('127.0.0.1')
+      : true;
 
     if (!accessKeyId || !secretAccessKey) {
       this.logger.error('❌ S3 credentials not configured! Set S3_ACCESS_KEY and S3_SECRET_KEY in .env');
@@ -41,7 +44,7 @@ export class S3Service implements OnModuleInit {
     this.logger.log(`  Bucket: ${this.bucketName}`);
     this.logger.log(`  Region: ${this.region}`);
     this.logger.log(`  Endpoint: ${endpoint}`);
-    this.logger.log(`  IsLocal: ${this.isLocal}`);
+    this.logger.log(`  CustomEndpoint: ${hasCustomEndpoint}`);
     this.logger.log(`  AccessKey: ${accessKeyId.substring(0, 4)}...`);
 
     this.s3Client = new S3Client({
@@ -50,7 +53,9 @@ export class S3Service implements OnModuleInit {
         accessKeyId,
         secretAccessKey,
       },
-      ...(this.isLocal && {
+      // Always pass endpoint & forcePathStyle for custom S3-compatible providers
+      // (Cloudflare R2, MinIO, etc.) — not just localhost
+      ...(hasCustomEndpoint && {
         endpoint,
         forcePathStyle: true,
       }),
@@ -60,9 +65,57 @@ export class S3Service implements OnModuleInit {
   }
 
   async onModuleInit() {
-    // Ensure bucket exists on startup (only for local/MinIO)
+    // Ensure bucket exists on startup (only for local/MinIO, not cloud providers)
     if (this.isLocal) {
       await this.ensureBucketExists();
+    }
+    // Always configure CORS so presigned uploads work from browser
+    await this.ensureCorsConfigured();
+  }
+
+  /**
+   * Ensure CORS is configured on the bucket so browser presigned uploads work.
+   */
+  private async ensureCorsConfigured(): Promise<void> {
+    const allowedOrigins = [
+      process.env.CORS_ORIGIN || 'http://localhost:3001',
+      process.env.FRONTEND_URL || 'http://localhost:3001',
+    ].filter((v, i, a) => a.indexOf(v) === i); // dedupe
+
+    try {
+      // Check if CORS is already configured
+      const existing = await this.s3Client.send(
+        new GetBucketCorsCommand({ Bucket: this.bucketName }),
+      );
+      if (existing.CORSRules && existing.CORSRules.length > 0) {
+        this.logger.log(`CORS already configured on bucket ${this.bucketName}`);
+        return;
+      }
+    } catch {
+      // No CORS config yet — this is expected, we'll set it below
+    }
+
+    try {
+      await this.s3Client.send(
+        new PutBucketCorsCommand({
+          Bucket: this.bucketName,
+          CORSConfiguration: {
+            CORSRules: [
+              {
+                AllowedOrigins: allowedOrigins,
+                AllowedMethods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'],
+                AllowedHeaders: ['*'],
+                ExposeHeaders: ['ETag'],
+                MaxAgeSeconds: 3600,
+              },
+            ],
+          },
+        }),
+      );
+      this.logger.log(`✅ CORS configured on bucket ${this.bucketName} for origins: ${allowedOrigins.join(', ')}`);
+    } catch (error: any) {
+      this.logger.warn(`⚠️ Could not set CORS on bucket ${this.bucketName}: ${error.message}`);
+      this.logger.warn(`   You may need to configure CORS manually in Cloudflare R2 dashboard.`);
     }
   }
 
