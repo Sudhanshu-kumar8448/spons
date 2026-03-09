@@ -100,11 +100,11 @@ export default function VerifyRejectButtons({
       <div>
         <label
           htmlFor="notes"
-          className="mb-1 block text-sm font-medium text-gray-700"
+          className="mb-1 block text-sm font-medium text-amber-100"
         >
           Notes{" "}
           {confirmAction === "reject" && (
-            <span className="text-xs text-red-500">(required)</span>
+            <span className="text-xs text-red-300">(required)</span>
           )}
         </label>
         <textarea
@@ -116,7 +116,7 @@ export default function VerifyRejectButtons({
               ? "Optional notes…"
               : "Reason for rejection…"
           }
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
         />
       </div>
 

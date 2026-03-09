@@ -364,6 +364,7 @@ enum EventStatus {
 }
 
 enum SponsorshipStatus {
+  INTERESTED
   PENDING
   ACTIVE
   PAUSED
@@ -1003,4 +1004,185 @@ model Notification {
   @@index([userId, read])
   @@index([createdAt])
   @@map("notifications")
+}
+
+// ============================================
+// BLOG SYSTEM ENUMS
+// ============================================
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+  SCHEDULED
+  ARCHIVED
+}
+
+// ============================================
+// BLOG AUTHOR
+// ============================================
+
+model BlogAuthor {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(255)
+  bio       String?  @db.Text
+  avatar    String?  @db.VarChar(512)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  posts BlogPost[]
+
+  @@index([name])
+  @@map("blog_authors")
+}
+
+// ============================================
+// BLOG CATEGORY
+// ============================================
+
+model BlogCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(255)
+  slug        String   @unique @db.VarChar(255)
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  posts BlogPostCategory[]
+
+  @@index([slug])
+  @@map("blog_categories")
+}
+
+// ============================================
+// BLOG TAG
+// ============================================
+
+model BlogTag {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(255)
+  slug      String   @unique @db.VarChar(255)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  posts BlogPostTag[]
+
+  @@index([slug])
+  @@map("blog_tags")
+}
+
+// ============================================
+// BLOG POST
+// ============================================
+
+model BlogPost {
+  id            String         @id @default(uuid()) @db.Uuid
+  title         String         @db.VarChar(500)
+  slug          String         @unique @db.VarChar(500)
+  excerpt       String?        @db.Text
+  content       String         @db.Text // Rich text JSON from TipTap
+  featuredImage String?        @map("featured_image") @db.VarChar(512)
+  authorId      String         @map("author_id") @db.Uuid
+  status        BlogPostStatus @default(DRAFT)
+  publishedAt   DateTime?      @map("published_at")
+  scheduledAt   DateTime?      @map("scheduled_at")
+  isFeatured    Boolean        @default(false) @map("is_featured")
+  isPinned      Boolean        @default(false) @map("is_pinned")
+  sortOrder     Int            @default(0) @map("sort_order")
+  viewCount     Int            @default(0) @map("view_count")
+  readingTime   Int            @default(0) @map("reading_time") // minutes
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  author     BlogAuthor       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  seo        BlogSEO?
+  categories BlogPostCategory[]
+  tags       BlogPostTag[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([authorId])
+  @@index([publishedAt])
+  @@index([isFeatured])
+  @@index([isPinned])
+  @@index([status, publishedAt])
+  @@index([status, isFeatured])
+  @@index([status, isPinned])
+  @@map("blog_posts")
+}
+
+// ============================================
+// BLOG SEO
+// ============================================
+
+model BlogSEO {
+  id              String  @id @default(uuid()) @db.Uuid
+  blogId          String  @unique @map("blog_id") @db.Uuid
+  metaTitle       String? @map("meta_title") @db.VarChar(255)
+  metaDescription String? @map("meta_description") @db.VarChar(500)
+  keywords        String? @db.Text
+  canonicalUrl    String? @map("canonical_url") @db.VarChar(512)
+
+  // Relations
+  blog BlogPost @relation(fields: [blogId], references: [id], onDelete: Cascade)
+
+  @@index([blogId])
+  @@map("blog_seo")
+}
+
+// ============================================
+// BLOG POST ↔ CATEGORY (many-to-many)
+// ============================================
+
+model BlogPostCategory {
+  blogId     String @map("blog_id") @db.Uuid
+  categoryId String @map("category_id") @db.Uuid
+
+  blog     BlogPost     @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  category BlogCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([blogId, categoryId])
+  @@index([blogId])
+  @@index([categoryId])
+  @@map("blog_post_categories")
+}
+
+// ============================================
+// BLOG POST ↔ TAG (many-to-many)
+// ============================================
+
+model BlogPostTag {
+  blogId String @map("blog_id") @db.Uuid
+  tagId  String @map("tag_id") @db.Uuid
+
+  blog BlogPost @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  tag  BlogTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([blogId, tagId])
+  @@index([blogId])
+  @@index([tagId])
+  @@map("blog_post_tags")
+}
+
+// ============================================
+// NEWSLETTER SUBSCRIBER
+// ============================================
+
+model NewsletterSubscriber {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique @db.VarChar(320)
+  subscribedAt  DateTime  @default(now()) @map("subscribed_at")
+  unsubscribedAt DateTime? @map("unsubscribed_at")
+  isActive      Boolean   @default(true) @map("is_active")
+
+  @@index([email])
+  @@index([isActive])
+  @@map("newsletter_subscribers")
 }

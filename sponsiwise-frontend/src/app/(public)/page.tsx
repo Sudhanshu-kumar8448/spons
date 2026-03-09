@@ -78,6 +78,7 @@ const App = () => {
           <div className="hidden md:flex items-center gap-8">
             <button onClick={() => handleRegister()} className="text-sm font-bold text-slate-500 hover:text-indigo-600">Join as Brand</button>
             <button onClick={() => handleRegister()} className="text-sm font-bold text-slate-500 hover:text-indigo-600">For Organizers</button>
+            <a href="/blog" className="text-sm font-bold text-slate-500 hover:text-indigo-600">Blog</a>
             <button onClick={() => handleLogin()}
 
             className="px-6 py-3 bg-slate-900 text-white rounded-full font-bold text-sm hover:scale-105 transition-all">Login</button>
@@ -90,6 +91,7 @@ const App = () => {
             <div className="flex flex-col gap-4">
               <button onClick={() => handleRegister()} className="text-sm font-bold text-slate-500 hover:text-indigo-600 py-2 text-left">Join as Brand</button>
               <button onClick={() => handleRegister()} className="text-sm font-bold text-slate-500 hover:text-indigo-600 py-2 text-left">For Organizers</button>
+              <a href="/blog" className="text-sm font-bold text-slate-500 hover:text-indigo-600 py-2 text-left">Blog</a>
               <button onClick={() => handleLogin()} className="px-6 py-3 bg-slate-900 text-white rounded-full font-bold text-sm hover:scale-105 transition-all">Login</button>
             </div>
           </div>

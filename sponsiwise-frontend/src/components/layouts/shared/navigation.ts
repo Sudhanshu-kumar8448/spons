@@ -46,6 +46,7 @@ export const navigationByRole: Record<UserRole | "PUBLIC", NavItem[]> = {
     { label: "Cancel Events", href: "/manager/cancelEvents", icon: "Ban" },
     { label: "Past Events", href: "/manager/pastEvents", icon: "Archive" },
     { label: "Proposals", href: "/manager/proposals", icon: "FileText" },
+    { label: "Blog", href: "/manager/blog", icon: "BookOpen" },
     { label: "Notifications", href: "/manager/notification", icon: "Bell" },
     { label: "Settings", href: "/manager/setting", icon: "Settings" },
   ],

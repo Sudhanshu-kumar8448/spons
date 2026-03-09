@@ -278,12 +278,21 @@ function Step2BusinessCredentials({
   submitError,
 }: Step2BusinessCredentialsProps) {
   /**
+   * GST regex: 2-digit state code + 10-char PAN + entity number + 'Z' + checksum digit/char
+   * Example: 22ABCDE1234F1Z5
+   */
+  const GST_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
+  const isGstValid = step2Data.gstTaxId.trim() === "" || GST_REGEX.test(step2Data.gstTaxId.trim().toUpperCase());
+
+  /**
    * Check if Step 2 is valid
    */
   const isStep2Valid = (): boolean => {
     return (
       step2Data.website.trim() !== "" &&
       step2Data.gstTaxId.trim() !== "" &&
+      isGstValid &&
       step2Data.description.trim() !== ""
     );
   };
@@ -331,11 +340,21 @@ function Step2BusinessCredentials({
             type="text"
             value={step2Data.gstTaxId}
             onChange={(e) =>
-              setStep2Data((prev) => ({ ...prev, gstTaxId: e.target.value }))
+              setStep2Data((prev) => ({ ...prev, gstTaxId: e.target.value.toUpperCase() }))
             }
-            placeholder="Enter your GST or Tax ID"
-            className="w-full p-5 bg-white border border-slate-200 rounded-2xl text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 transition-all"
+            maxLength={15}
+            placeholder="e.g. 22ABCDE1234F1Z5"
+            className={`w-full p-5 bg-white border rounded-2xl text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+              !isGstValid
+                ? "border-red-400 focus:ring-red-500"
+                : "border-slate-200 focus:ring-indigo-600"
+            }`}
           />
+          {!isGstValid && (
+            <p className="mt-2 text-sm text-red-500 font-medium">
+              Invalid GST format. Expected: 22ABCDE1234F1Z5 (2-digit state + PAN + entity + Z + checksum)
+            </p>
+          )}
         </div>
 
         {/* Track Record */}

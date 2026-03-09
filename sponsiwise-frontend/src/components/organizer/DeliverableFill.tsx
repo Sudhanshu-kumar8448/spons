@@ -66,10 +66,10 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "bg-gray-100 text-gray-700",
-  SENT_TO_ORGANIZER: "bg-amber-100 text-amber-700",
-  FILLED: "bg-blue-100 text-blue-700",
-  SUBMITTED: "bg-green-100 text-green-700",
+  DRAFT: "bg-slate-500/10 border border-slate-500/20 text-slate-400",
+  SENT_TO_ORGANIZER: "bg-amber-500/10 border border-amber-500/20 text-amber-400",
+  FILLED: "bg-blue-500/10 border border-blue-500/20 text-blue-400",
+  SUBMITTED: "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400",
 };
 
 const TIER_DISPLAY: Record<string, string> = {
@@ -161,8 +161,8 @@ export function FillDeliverablesButton({
       <button
         onClick={handleOpen}
         className={`mt-2 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${canFill
-            ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
-            : "bg-green-50 text-green-700 hover:bg-green-100"
+            ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+            : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
           }`}
       >
         📋 {canFill ? "Fill Deliverables" : "View Deliverables"}
@@ -329,8 +329,8 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-8">
-        <div className="flex items-center justify-center py-8 text-gray-400">Loading deliverable forms…</div>
+      <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-8">
+        <div className="flex items-center justify-center py-8 text-slate-500">Loading deliverable forms…</div>
       </div>
     );
   }
@@ -341,25 +341,25 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
   const allSubmitted = forms.every(f => f.status === "SUBMITTED");
 
   return (
-    <div id="deliverables" className="rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div id="deliverables" className="rounded-xl border border-slate-800 bg-slate-900/80">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+      <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Deliverable Forms</h2>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h2 className="text-lg font-semibold text-white">Deliverable Forms</h2>
+          <p className="mt-0.5 text-sm text-slate-400">
             {allSubmitted
               ? "All forms have been submitted. These are read-only."
               : "Fill in the deliverables for each sponsorship tier and submit."}
           </p>
         </div>
         {allSubmitted && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400">
             ✅ All Submitted
           </span>
         )}
       </div>
 
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-slate-800/60">
         {forms.map((form) => {
           const rows = formRows[form.id] ?? [];
           const isEditable = form.status === "SENT_TO_ORGANIZER" || form.status === "FILLED";
@@ -369,12 +369,12 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
             <div key={form.id} className="px-6 py-5">
               {/* Tier Header */}
               <div className="mb-3 flex items-center gap-3">
-                <h3 className="text-sm font-semibold text-gray-800">{tierLabel}</h3>
+                <h3 className="text-sm font-semibold text-white">{tierLabel}</h3>
                 <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[form.status] ?? ""}`}>
                   {STATUS_LABELS[form.status] ?? form.status}
                 </span>
                 {form.tier?.askingPrice != null && (
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-slate-500">
                     {formatInr(Number(form.tier.askingPrice))}
                   </span>
                 )}
@@ -384,7 +384,7 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
+                    <tr className="border-b border-slate-700 text-xs uppercase text-slate-500">
                       <th className="px-2 py-2 w-8">#</th>
                       <th className="px-2 py-2">Category</th>
                       <th className="px-2 py-2">Deliverable</th>
@@ -398,25 +398,25 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
                   <tbody>
                     {rows.length === 0 ? (
                       <tr>
-                        <td colSpan={isEditable ? 8 : 7} className="px-2 py-4 text-center text-xs text-gray-400">
+                        <td colSpan={isEditable ? 8 : 7} className="px-2 py-4 text-center text-xs text-slate-500">
                           No deliverables yet.{isEditable && ' Click "+Add Row" below to start.'}
                         </td>
                       </tr>
                     ) : (
                       rows.map((row, idx) => (
-                        <tr key={idx} className="border-b border-gray-50">
-                          <td className="px-2 py-2 text-gray-400">{idx + 1}</td>
+                        <tr key={idx} className="border-b border-slate-800/50">
+                          <td className="px-2 py-2 text-slate-500">{idx + 1}</td>
                           <td className="px-2 py-2">
                             {isEditable ? (
                               <select
                                 value={row.category}
                                 onChange={(e) => updateRow(form.id, idx, "category", e.target.value)}
-                                className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                                className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200"
                               >
                                 {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                               </select>
                             ) : (
-                              <span className="text-gray-700">{CATEGORIES.find(c => c.value === row.category)?.label ?? row.category}</span>
+                              <span className="text-slate-300">{CATEGORIES.find(c => c.value === row.category)?.label ?? row.category}</span>
                             )}
                           </td>
                           <td className="px-2 py-2">
@@ -425,10 +425,10 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
                                 value={row.deliverableName}
                                 onChange={(e) => updateRow(form.id, idx, "deliverableName", e.target.value)}
                                 placeholder="e.g. Main stage banner"
-                                className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder:text-gray-300"
+                                className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
                               />
                             ) : (
-                              <span className="text-gray-700">{row.deliverableName}</span>
+                              <span className="text-slate-300">{row.deliverableName}</span>
                             )}
                           </td>
                           <td className="px-2 py-2">
@@ -436,12 +436,12 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
                               <select
                                 value={row.brandingType}
                                 onChange={(e) => updateRow(form.id, idx, "brandingType", e.target.value)}
-                                className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                                className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200"
                               >
                                 {BRANDING_TYPES.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
                               </select>
                             ) : (
-                              <span className="text-gray-700">{BRANDING_TYPES.find(b => b.value === row.brandingType)?.label ?? row.brandingType}</span>
+                              <span className="text-slate-300">{BRANDING_TYPES.find(b => b.value === row.brandingType)?.label ?? row.brandingType}</span>
                             )}
                           </td>
                           <td className="px-2 py-2">
@@ -451,10 +451,10 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
                                 min={0}
                                 value={row.quantity}
                                 onChange={(e) => updateRow(form.id, idx, "quantity", Number(e.target.value))}
-                                className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                                className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200"
                               />
                             ) : (
-                              <span className="text-gray-700">{row.quantity}</span>
+                              <span className="text-slate-300">{row.quantity}</span>
                             )}
                           </td>
                           <td className="px-2 py-2">
@@ -463,7 +463,7 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
                                 <select
                                   value={row.unit}
                                   onChange={(e) => updateRow(form.id, idx, "unit", e.target.value)}
-                                  className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                                  className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200"
                                 >
                                   {UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
                                 </select>
@@ -472,12 +472,12 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
                                     value={row.otherUnit}
                                     onChange={(e) => updateRow(form.id, idx, "otherUnit", e.target.value)}
                                     placeholder="Custom unit"
-                                    className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder:text-gray-300"
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
                                   />
                                 )}
                               </div>
                             ) : (
-                              <span className="text-gray-700">
+                              <span className="text-slate-300">
                                 {row.unit === "OTHER" ? row.otherUnit || "Other" : UNITS.find(u => u.value === row.unit)?.label ?? row.unit}
                               </span>
                             )}
@@ -488,15 +488,15 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
                                 value={row.remarks}
                                 onChange={(e) => updateRow(form.id, idx, "remarks", e.target.value)}
                                 placeholder="Optional"
-                                className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder:text-gray-300"
+                                className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
                               />
                             ) : (
-                              <span className="text-xs text-gray-400">{row.remarks || "—"}</span>
+                              <span className="text-xs text-slate-500">{row.remarks || "—"}</span>
                             )}
                           </td>
                           {isEditable && (
                             <td className="px-2 py-2">
-                              <button onClick={() => removeRow(form.id, idx)} className="text-red-400 hover:text-red-600" title="Remove">✕</button>
+                              <button onClick={() => removeRow(form.id, idx)} className="text-red-400 hover:text-red-300" title="Remove">✕</button>
                             </td>
                           )}
                         </tr>
@@ -509,7 +509,7 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
               {isEditable && (
                 <button
                   onClick={() => addRow(form.id)}
-                  className="mt-2 inline-flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-200"
+                  className="mt-2 inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
                 >
                   + Add Row
                 </button>
@@ -521,30 +521,30 @@ export function DeliverableFillSection({ eventId }: { eventId: string }) {
 
       {/* Messages */}
       {error && (
-        <div className="mx-6 mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
+        <div className="mx-6 mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400">
           {error}
         </div>
       )}
       {successMsg && (
-        <div className="mx-6 mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-600">
+        <div className="mx-6 mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-400">
           {successMsg}
         </div>
       )}
 
       {/* Footer Actions */}
       {hasEditableForms && (
-        <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-end gap-3 border-t border-slate-800 px-6 py-4">
           <button
             onClick={handleSaveAll}
             disabled={saving}
-            className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-40 transition-colors"
+            className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-5 py-2.5 text-sm font-medium text-blue-400 hover:bg-blue-500/20 disabled:opacity-40 transition-colors"
           >
             {saving ? "Saving…" : "Save All Changes"}
           </button>
           <button
             onClick={handleSubmitAll}
             disabled={submitting}
-            className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-40 transition-colors"
+            className="rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg hover:shadow-xl disabled:opacity-40 transition-all"
           >
             {submitting ? "Submitting…" : "Submit All to Manager"}
           </button>
@@ -651,12 +651,12 @@ function DeliverableFillModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="relative max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="relative max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-900 px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-lg font-semibold text-white">
               Deliverables — {tierName}
             </h2>
             {selectedForm && (
@@ -665,18 +665,18 @@ function DeliverableFillModal({
               </span>
             )}
           </div>
-          <button onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600">✕</button>
+          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">✕</button>
         </div>
 
         <div className="p-6">
           {loading ? (
-            <div className="flex items-center justify-center py-12 text-gray-400">Loading…</div>
+            <div className="flex items-center justify-center py-12 text-slate-500">Loading…</div>
           ) : !selectedForm ? (
-            <div className="py-12 text-center text-gray-400">No deliverable forms found for this event.</div>
+            <div className="py-12 text-center text-slate-500">No deliverable forms found for this event.</div>
           ) : (
             <>
               {error && (
-                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
+                <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400">
                   {error}
                 </div>
               )}
@@ -689,8 +689,8 @@ function DeliverableFillModal({
                       key={f.id}
                       onClick={() => loadForm(f)}
                       className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${selectedForm.id === f.id
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                          ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                          : "bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-300"
                         }`}
                     >
                       {f.tier?.tierType ?? "Tier"} {f.tier?.customName ? `(${f.tier.customName})` : ""}
@@ -703,7 +703,7 @@ function DeliverableFillModal({
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="border-b border-gray-200 text-xs uppercase text-gray-500">
+                    <tr className="border-b border-slate-700 text-xs uppercase text-slate-500">
                       <th className="px-2 py-2 w-8">#</th>
                       <th className="px-2 py-2">Category</th>
                       <th className="px-2 py-2">Deliverable</th>
@@ -716,21 +716,21 @@ function DeliverableFillModal({
                   </thead>
                   <tbody>
                     {rows.map((row, idx) => (
-                      <tr key={idx} className="border-b border-gray-100">
-                        <td className="px-2 py-2 text-gray-400">{idx + 1}</td>
+                      <tr key={idx} className="border-b border-slate-800/50">
+                        <td className="px-2 py-2 text-slate-500">{idx + 1}</td>
                         <td className="px-2 py-2">
                           {isEditable ? (
                             <select
                               value={row.category}
                               onChange={(e) => updateRow(idx, "category", e.target.value)}
-                              className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                              className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200"
                             >
                               {CATEGORIES.map((c) => (
                                 <option key={c.value} value={c.value}>{c.label}</option>
                               ))}
                             </select>
                           ) : (
-                            <span className="text-gray-700">{row.category}</span>
+                            <span className="text-slate-300">{row.category}</span>
                           )}
                         </td>
                         <td className="px-2 py-2">
@@ -739,10 +739,10 @@ function DeliverableFillModal({
                               value={row.deliverableName}
                               onChange={(e) => updateRow(idx, "deliverableName", e.target.value)}
                               placeholder="e.g. Main stage banner"
-                              className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder:text-gray-300"
+                              className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
                             />
                           ) : (
-                            <span className="text-gray-700">{row.deliverableName}</span>
+                            <span className="text-slate-300">{row.deliverableName}</span>
                           )}
                         </td>
                         <td className="px-2 py-2">
@@ -750,14 +750,14 @@ function DeliverableFillModal({
                             <select
                               value={row.brandingType}
                               onChange={(e) => updateRow(idx, "brandingType", e.target.value)}
-                              className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                              className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200"
                             >
                               {BRANDING_TYPES.map((b) => (
                                 <option key={b.value} value={b.value}>{b.label}</option>
                               ))}
                             </select>
                           ) : (
-                            <span className="text-gray-700">{row.brandingType}</span>
+                            <span className="text-slate-300">{row.brandingType}</span>
                           )}
                         </td>
                         <td className="px-2 py-2">
@@ -767,10 +767,10 @@ function DeliverableFillModal({
                               min={0}
                               value={row.quantity}
                               onChange={(e) => updateRow(idx, "quantity", Number(e.target.value))}
-                              className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                              className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200"
                             />
                           ) : (
-                            <span className="text-gray-700">{row.quantity}</span>
+                            <span className="text-slate-300">{row.quantity}</span>
                           )}
                         </td>
                         <td className="px-2 py-2">
@@ -779,7 +779,7 @@ function DeliverableFillModal({
                               <select
                                 value={row.unit}
                                 onChange={(e) => updateRow(idx, "unit", e.target.value)}
-                                className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                                className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200"
                               >
                                 {UNITS.map((u) => (
                                   <option key={u.value} value={u.value}>{u.label}</option>
@@ -790,12 +790,12 @@ function DeliverableFillModal({
                                   value={row.otherUnit}
                                   onChange={(e) => updateRow(idx, "otherUnit", e.target.value)}
                                   placeholder="Custom unit"
-                                  className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder:text-gray-300"
+                                  className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
                                 />
                               )}
                             </div>
                           ) : (
-                            <span className="text-gray-700">{row.unit === "OTHER" ? row.otherUnit || "Other" : UNITS.find(u => u.value === row.unit)?.label ?? row.unit}</span>
+                            <span className="text-slate-300">{row.unit === "OTHER" ? row.otherUnit || "Other" : UNITS.find(u => u.value === row.unit)?.label ?? row.unit}</span>
                           )}
                         </td>
                         <td className="px-2 py-2">
@@ -804,15 +804,15 @@ function DeliverableFillModal({
                               value={row.remarks}
                               onChange={(e) => updateRow(idx, "remarks", e.target.value)}
                               placeholder="Optional"
-                              className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder:text-gray-300"
+                              className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
                             />
                           ) : (
-                            <span className="text-xs text-gray-400">{row.remarks || "—"}</span>
+                            <span className="text-xs text-slate-500">{row.remarks || "—"}</span>
                           )}
                         </td>
                         {isEditable && (
                           <td className="px-2 py-2">
-                            <button onClick={() => removeRow(idx)} className="text-red-400 hover:text-red-600" title="Remove">✕</button>
+                            <button onClick={() => removeRow(idx)} className="text-red-400 hover:text-red-300" title="Remove">✕</button>
                           </td>
                         )}
                       </tr>
@@ -824,7 +824,7 @@ function DeliverableFillModal({
               {isEditable && (
                 <button
                   onClick={addRow}
-                  className="mt-3 inline-flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-200"
+                  className="mt-3 inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
                 >
                   + Add Row
                 </button>
@@ -835,8 +835,8 @@ function DeliverableFillModal({
 
         {/* Footer */}
         {!loading && selectedForm && (
-          <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-gray-200 bg-white px-6 py-4">
-            <button onClick={onClose} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200">
+          <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-slate-800 bg-slate-900 px-6 py-4">
+            <button onClick={onClose} className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors">
               Close
             </button>
             {isEditable && (
@@ -844,14 +844,14 @@ function DeliverableFillModal({
                 <button
                   onClick={handleSave}
                   disabled={saving || rows.every((r) => !r.deliverableName.trim())}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-40"
+                  className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/20 disabled:opacity-40 transition-colors"
                 >
                   {saving ? "Saving…" : "Save Changes"}
                 </button>
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || rows.every((r) => !r.deliverableName.trim())}
-                  className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-40"
+                  className="rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 text-sm font-bold text-white shadow-lg hover:shadow-xl disabled:opacity-40 transition-all"
                 >
                   {submitting ? "Submitting…" : "Submit to Manager"}
                 </button>

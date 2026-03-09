@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { appConfig, redisConfig, jwtConfig } from './common/config';
@@ -30,6 +31,8 @@ import { OnboardingModule } from './onboarding/onboarding.module';
 import { SponsorshipTiersModule } from './sponsorship-tiers/sponsorship-tiers.module';
 import { UploadModule } from './upload/upload.module';
 import { DeliverablesModule } from './deliverables/deliverables.module';
+import { BlogModule } from './blog/blog.module';
+import { NewsletterModule } from './newsletter/newsletter.module';
 
 @Module({
   imports: [
@@ -39,6 +42,7 @@ import { DeliverablesModule } from './deliverables/deliverables.module';
       load: [appConfig, redisConfig, jwtConfig, bullmqConfig],
     }),
     EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
       throttlers: [
         {
@@ -70,6 +74,8 @@ import { DeliverablesModule } from './deliverables/deliverables.module';
     SponsorshipTiersModule,
     UploadModule,
     DeliverablesModule,
+    BlogModule,
+    NewsletterModule,
   ],
   controllers: [AppController],
   providers: [

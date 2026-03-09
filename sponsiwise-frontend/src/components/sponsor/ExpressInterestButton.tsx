@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { expressInterest } from "@/lib/sponsor-api";
+import { apiClient } from "@/lib/api-client";
+
+interface ExpressInterestResponse {
+  sponsorship_id: string;
+  event_id: string;
+  message: string;
+  already_expressed: boolean;
+}
 
 interface ExpressInterestButtonProps {
   eventId: string;
@@ -22,7 +29,9 @@ export function ExpressInterestButton({
   function handleClick() {
     startTransition(async () => {
       try {
-        const res = await expressInterest(eventId);
+        const res = await apiClient.post<ExpressInterestResponse>(
+          `/sponsor/events/${eventId}/express-interest`,
+        );
         setResult({
           success: true,
           message: res.message,
